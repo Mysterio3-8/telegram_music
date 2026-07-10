@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Playlist, User, UserLibrary
@@ -15,11 +16,25 @@ class TelegramProfile:
     language: str | None
 
 
+async def create_user(session: AsyncSession, telegram_id: int) -> User:
+    user = User(telegram_id=telegram_id)
+    session.add(user)
+    try:
+        await session.flush()
+        return user
+    except IntegrityError:
+        # Гонка: параллельный апдейт того же пользователя успел вставить строку
+        # между нашим select и insert — откатываемся и берём его строку.
+        await session.rollback()
+        existing = await session.scalar(select(User).where(User.telegram_id == telegram_id))
+        assert existing is not None
+        return existing
+
+
 async def get_or_create_user(session: AsyncSession, profile: TelegramProfile) -> User:
     user = await session.scalar(select(User).where(User.telegram_id == profile.telegram_id))
     if user is None:
-        user = User(telegram_id=profile.telegram_id)
-        session.add(user)
+        user = await create_user(session, profile.telegram_id)
     user.username = profile.username
     user.first_name = profile.first_name
     user.language = profile.language

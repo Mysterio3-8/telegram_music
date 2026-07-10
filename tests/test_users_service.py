@@ -1,7 +1,11 @@
+from sqlalchemy import select
+
+from app.db.models import User
 from app.services.users import (
     TelegramProfile,
     count_library_tracks,
     count_playlists,
+    create_user,
     get_or_create_user,
     get_user_by_telegram_id,
 )
@@ -29,6 +33,18 @@ async def test_returns_same_user_and_updates_profile_on_repeat_login(session):
 
     assert second.id == first.id
     assert second.username == "ivan_new"
+
+
+async def test_create_user_survives_insert_race(session):
+    # Имитация гонки: строка появилась между select и insert параллельным апдейтом
+    session.add(User(telegram_id=100500))
+    await session.commit()
+
+    user = await create_user(session, 100500)
+
+    assert user.telegram_id == 100500
+    rows = (await session.scalars(select(User).where(User.telegram_id == 100500))).all()
+    assert len(rows) == 1
 
 
 async def test_get_user_by_telegram_id_returns_none_for_unknown(session):
