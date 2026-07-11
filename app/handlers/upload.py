@@ -5,7 +5,9 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 
 from app.db.base import session_factory
 from app.handlers.common import ensure_user, format_duration
+from app.config import settings
 from app.services.library import add_to_library
+from app.services.premium import can_upload
 from app.services.uploads import AudioMeta, create_uploaded_track, find_duplicate, validate_audio
 
 router = Router()
@@ -143,6 +145,15 @@ async def cb_upload_confirm(callback: CallbackQuery, state: FSMContext) -> None:
                 f"Такой трек уже есть:\n{duplicate.artist} — {duplicate.title}\n\n"
                 "Добавить его в вашу библиотеку?",
                 reply_markup=_duplicate_keyboard(duplicate.id),
+            )
+            await callback.answer()
+            return
+        if not await can_upload(session, user):
+            await state.clear()
+            await callback.message.edit_text(
+                f"На бесплатном тарифе можно загрузить {settings.free_upload_limit} треков.\n"
+                "💎 Premium увеличивает лимит — раздел «Купить Premium» в меню.",
+                reply_markup=_menu_keyboard(),
             )
             await callback.answer()
             return

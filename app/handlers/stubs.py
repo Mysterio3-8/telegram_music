@@ -4,7 +4,6 @@ from aiogram.types import CallbackQuery
 router = Router()
 
 STUB_TEXTS = {
-    "menu:premium": "💎 Premium появится на Этапе 3.",
     "menu:miniapp": "Mini App находится в разработке.",
 }
 

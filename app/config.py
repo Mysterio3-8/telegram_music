@@ -10,5 +10,18 @@ class Settings(BaseSettings):
     library_search_limit: int = 10
     max_file_size_mb: int = 50
 
+    # Premium (SPEC §14)
+    premium_price_stars: int = 15
+    premium_price_rub: int = 17
+    premium_duration_days: int = 30
+    payment_provider_token: str = ""  # токен провайдера для карты/СБП; пусто → доступны только Stars
+
+    # Лимиты бесплатного тарифа (Premium снимает)
+    free_playlist_limit: int = 5
+    free_upload_limit: int = 10
+
+    # Реклама (SPEC §24): показ после каждого N-го действия бесплатного пользователя
+    ad_frequency: int = 10
+
 
 settings = Settings()

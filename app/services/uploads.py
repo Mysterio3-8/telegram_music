@@ -57,6 +57,13 @@ def validate_audio(meta: AudioMeta) -> str | None:
     return None
 
 
+async def count_user_uploads(session: AsyncSession, user_id: int) -> int:
+    count = await session.scalar(
+        select(func.count()).select_from(Upload).where(Upload.user_id == user_id)
+    )
+    return count or 0
+
+
 async def find_duplicate(
     session: AsyncSession, title: str, artist: str, duration: int
 ) -> Track | None:

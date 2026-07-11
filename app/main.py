@@ -5,7 +5,8 @@ from aiogram import Bot, Dispatcher
 
 from app.config import settings
 from app.db.base import init_db
-from app.handlers import library, playlists, search, start, stubs, track_actions, upload
+from app.handlers import library, playlists, premium, search, start, stubs, track_actions, upload
+from app.middlewares.ads import AdMiddleware
 
 
 async def main() -> None:
@@ -19,12 +20,18 @@ async def main() -> None:
     await init_db()
     bot = Bot(token=settings.bot_token)
     dp = Dispatcher()
+
+    ad_middleware = AdMiddleware(frequency=settings.ad_frequency)
+    dp.message.middleware(ad_middleware)
+    dp.callback_query.middleware(ad_middleware)
+
     dp.include_routers(
         start.router,
         library.router,
         playlists.router,
         search.router,
         upload.router,
+        premium.router,
         track_actions.router,
         stubs.router,
     )

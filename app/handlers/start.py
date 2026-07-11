@@ -10,6 +10,7 @@ from app.handlers.cards import show_track_card
 from app.handlers.common import ensure_user
 from app.keyboards.main_menu import main_menu_keyboard
 from app.services.library import get_track
+from app.services.premium import is_premium_active
 from app.services.users import count_library_tracks, count_playlists
 
 router = Router()
@@ -18,7 +19,10 @@ router = Router()
 async def build_cabinet_text(session: AsyncSession, user: User) -> str:
     library_count = await count_library_tracks(session, user.id)
     playlist_count = await count_playlists(session, user.id)
-    subscription = "Premium" if user.premium else "Бесплатная"
+    if is_premium_active(user) and user.premium_until is not None:
+        subscription = f"Premium до {user.premium_until.strftime('%d.%m.%Y')}"
+    else:
+        subscription = "Бесплатная"
     return (
         "👋 Добро пожаловать!\n\n"
         f"Имя: {user.first_name or '—'}\n"

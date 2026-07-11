@@ -21,6 +21,7 @@ from app.services.playlists import (
     get_playlist_tracks_page,
     get_playlists_page,
 )
+from app.services.premium import can_create_playlist
 from app.services.users import count_playlists
 
 router = Router()
@@ -96,10 +97,17 @@ async def process_playlist_title(message: Message, state: FSMContext) -> None:
     if not title or len(title) > MAX_PLAYLIST_TITLE_LENGTH:
         await message.answer(f"Название должно быть от 1 до {MAX_PLAYLIST_TITLE_LENGTH} символов. Попробуйте ещё раз.")
         return
-    await state.clear()
     async with session_factory() as session:
         user = await ensure_user(session, message.from_user)
+        if not await can_create_playlist(session, user):
+            await state.clear()
+            await message.answer(
+                f"На бесплатном тарифе доступно {settings.free_playlist_limit} плейлистов.\n"
+                "💎 Premium снимает лимит — раздел «Купить Premium» в меню."
+            )
+            return
         await create_playlist(session, user.id, title)
+    await state.clear()
     await message.answer(f"✅ Плейлист «{title}» создан.")
     await _render_playlists(message, message.from_user, page=1, edit=False)
 
