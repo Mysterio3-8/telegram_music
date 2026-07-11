@@ -47,6 +47,19 @@ class Settings(BaseSettings):
     # chromaprint: имя/путь бинарника fpcalc (пусто → отпечаток не считается)
     fpcalc_path: str = "fpcalc"
 
+    # Публичный API (§27)
+    jwt_secret: str = ""  # пусто → подписываем bot_token
+    jwt_ttl_minutes: int = 1440
+    api_cors_origins: str = ""  # список origin через запятую для Mini App
+
+    @property
+    def effective_jwt_secret(self) -> str:
+        return self.jwt_secret or self.bot_token
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        return [o.strip() for o in self.api_cors_origins.split(",") if o.strip()]
+
     @property
     def effective_celery_broker(self) -> str:
         return self.celery_broker_url or self.redis_url
