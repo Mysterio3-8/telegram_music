@@ -4,7 +4,7 @@ import logging
 from aiogram import Bot, Dispatcher
 
 from app.config import settings
-from app.db.base import init_db
+from app.fsm import build_storage
 from app.handlers import library, playlists, premium, search, start, stubs, track_actions, upload
 from app.middlewares.ads import AdMiddleware
 
@@ -17,9 +17,8 @@ async def main() -> None:
     if not settings.bot_token:
         raise SystemExit("BOT_TOKEN не задан — скопируйте .env.example в .env и впишите токен")
 
-    await init_db()
     bot = Bot(token=settings.bot_token)
-    dp = Dispatcher()
+    dp = Dispatcher(storage=build_storage())
 
     ad_middleware = AdMiddleware(frequency=settings.ad_frequency)
     dp.message.middleware(ad_middleware)

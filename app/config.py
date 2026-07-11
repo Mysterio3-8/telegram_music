@@ -23,5 +23,26 @@ class Settings(BaseSettings):
     # Реклама (SPEC §24): показ после каждого N-го действия бесплатного пользователя
     ad_frequency: int = 10
 
+    # FSM-хранилище: Redis, если задан; иначе in-memory (теряется при рестарте)
+    redis_url: str = ""
+
+    # Фоновая обработка (Celery). Брокер по умолчанию — тот же Redis.
+    celery_broker_url: str = ""
+
+    # Хранилище аудиофайлов
+    storage_dir: str = "storage"  # каталог для локального бэкенда
+    s3_endpoint_url: str = ""  # если задан — используется S3-совместимое хранилище
+    s3_bucket: str = ""
+    s3_access_key: str = ""
+    s3_secret_key: str = ""
+    s3_region: str = "us-east-1"
+
+    # chromaprint: имя/путь бинарника fpcalc (пусто → отпечаток не считается)
+    fpcalc_path: str = "fpcalc"
+
+    @property
+    def effective_celery_broker(self) -> str:
+        return self.celery_broker_url or self.redis_url
+
 
 settings = Settings()

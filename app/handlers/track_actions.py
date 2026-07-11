@@ -108,13 +108,20 @@ async def cb_track_action(callback: CallbackQuery) -> None:
             return
 
         if action == "file":
-            if track.storage_path and track.storage_path.startswith("tg://"):
-                await callback.message.answer_audio(track.storage_path.removeprefix("tg://"))
+            if track.tg_file_id:
+                await callback.message.answer_audio(track.tg_file_id)
+                await callback.answer()
+            elif track.storage_path:
+                from aiogram.types import BufferedInputFile
+
+                from app.storage import get_storage
+
+                data = get_storage().load(f"tracks/{track.id}")
+                filename = f"{track.artist} - {track.title}.{track.format or 'mp3'}"
+                await callback.message.answer_audio(BufferedInputFile(data, filename=filename))
                 await callback.answer()
             else:
-                await callback.answer(
-                    "Файл будет доступен после подключения хранилища (Этап 4)", show_alert=True
-                )
+                await callback.answer("Файл недоступен", show_alert=True)
             return
 
     await callback.answer()

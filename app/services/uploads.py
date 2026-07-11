@@ -82,6 +82,12 @@ async def find_duplicate(
     return await session.scalar(stmt)
 
 
+async def find_by_fingerprint(session: AsyncSession, fingerprint: str) -> Track | None:
+    """Точный дубликат по акустическому отпечатку — независимо от метаданных."""
+    stmt = select(Track).where(Track.fingerprint == fingerprint).limit(1)
+    return await session.scalar(stmt)
+
+
 async def create_uploaded_track(
     session: AsyncSession, user_id: int, meta: AudioMeta, title: str, artist: str
 ) -> Track:
@@ -96,7 +102,7 @@ async def create_uploaded_track(
         bitrate=bitrate,
         file_size=meta.file_size,
         format=detect_format(meta.file_name, meta.mime_type),
-        storage_path=f"tg://{meta.file_id}",
+        tg_file_id=meta.file_id,
     )
     session.add(track)
     await session.flush()

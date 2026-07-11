@@ -23,7 +23,7 @@ def track_card_keyboard(track: Track, ctx: str, in_library: bool) -> InlineKeybo
         rows.append(
             [InlineKeyboardButton(text="🗑 Удалить из плейлиста", callback_data=f"ta:delpl:{track.id}:{ctx}")]
         )
-    if track.storage_path and track.storage_path.startswith("tg://"):
+    if track.tg_file_id or track.storage_path:
         rows.append(
             [InlineKeyboardButton(text="⬇️ Скачать", callback_data=f"ta:file:{track.id}:{ctx}")]
         )

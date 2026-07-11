@@ -31,7 +31,8 @@ class Track(Base):
     bitrate: Mapped[int | None]  # kbps
     file_size: Mapped[int | None]  # байты
     format: Mapped[str | None] = mapped_column(String(8))
-    storage_path: Mapped[str | None] = mapped_column(String(512))
+    storage_path: Mapped[str | None] = mapped_column(String(512))  # архивная копия (local://, s3://)
+    tg_file_id: Mapped[str | None] = mapped_column(String(256))  # для мгновенной пересылки в Telegram
     fingerprint: Mapped[str | None] = mapped_column(String(128), index=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 

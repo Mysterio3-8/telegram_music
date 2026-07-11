@@ -57,7 +57,8 @@ async def test_create_uploaded_track_fills_base_upload_and_library(session):
     track = await create_uploaded_track(session, user.id, GOOD_META, " Believer ", "Imagine Dragons")
 
     assert track.title == "Believer"
-    assert track.storage_path == "tg://FILE123"
+    assert track.tg_file_id == "FILE123"
+    assert track.storage_path is None
     assert track.format == "mp3"
     assert track.bitrate == round(4_000_000 * 8 / 200 / 1000)
     assert await session.get(UserLibrary, (user.id, track.id)) is not None

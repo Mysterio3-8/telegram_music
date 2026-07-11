@@ -9,6 +9,7 @@ from app.config import settings
 from app.services.library import add_to_library
 from app.services.premium import can_upload
 from app.services.uploads import AudioMeta, create_uploaded_track, find_duplicate, validate_audio
+from app.tasks import enqueue_enrich
 
 router = Router()
 
@@ -158,6 +159,7 @@ async def cb_upload_confirm(callback: CallbackQuery, state: FSMContext) -> None:
             await callback.answer()
             return
         track = await create_uploaded_track(session, user.id, meta, data["title"], data["artist"])
+    enqueue_enrich(track.id, meta.file_id)
     await state.clear()
     await callback.message.edit_text(
         f"✅ Трек «{track.artist} — {track.title}» добавлен в общую базу и вашу библиотеку.",
