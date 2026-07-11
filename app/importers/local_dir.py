@@ -13,8 +13,9 @@ logger = logging.getLogger(__name__)
 class LocalDirectorySource:
     """Импорт аудиофайлов из локального каталога (рекурсивно)."""
 
-    def __init__(self, directory: str) -> None:
+    def __init__(self, directory: str, default_artist: str = "Unknown") -> None:
         self._directory = Path(directory)
+        self._default_artist = default_artist
 
     def items(self) -> Iterator[ImportItem]:
         for path in sorted(self._directory.rglob("*")):
@@ -35,7 +36,7 @@ class LocalDirectorySource:
             return None
 
         title = (audio.get("title") or [path.stem])[0]
-        artist = (audio.get("artist") or ["Unknown"])[0]
+        artist = (audio.get("artist") or [self._default_artist])[0]
         return ImportItem(
             title=title,
             artist=artist,

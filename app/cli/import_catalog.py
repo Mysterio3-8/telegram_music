@@ -15,8 +15,8 @@ from app.storage import get_storage
 logger = logging.getLogger("import")
 
 
-async def run(directory: str, as_instrumental: bool) -> None:
-    source = LocalDirectorySource(directory)
+async def run(directory: str, as_instrumental: bool, default_artist: str) -> None:
+    source = LocalDirectorySource(directory, default_artist=default_artist)
     storage = get_storage()
     importer = import_instrumental if as_instrumental else import_track
 
@@ -41,8 +41,11 @@ def main() -> None:
     parser.add_argument(
         "--instrumental", action="store_true", help="Импортировать как минусы (instrumentals)"
     )
+    parser.add_argument(
+        "--artist", default="Unknown", help="Исполнитель для файлов без ID3-тега artist"
+    )
     args = parser.parse_args()
-    asyncio.run(run(args.directory, args.instrumental))
+    asyncio.run(run(args.directory, args.instrumental, args.artist))
 
 
 if __name__ == "__main__":
