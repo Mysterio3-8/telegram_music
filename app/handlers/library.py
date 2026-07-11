@@ -8,10 +8,9 @@ from aiogram.types import User as TelegramUser
 
 from app.config import settings
 from app.db.base import session_factory
-from app.handlers.cards import show_track_card
 from app.handlers.common import ensure_user
 from app.keyboards.library import library_keyboard, search_results_keyboard
-from app.services.library import get_library_page, get_random_track, search_library
+from app.services.library import get_library_page, search_library
 from app.services.users import count_library_tracks
 
 router = Router()
@@ -42,14 +41,14 @@ async def show_library_page(message: Message, tg_user: TelegramUser, page: int) 
 
 @router.callback_query(F.data == "menu:library")
 async def cb_library(callback: CallbackQuery, state: FSMContext) -> None:
-    await state.clear()
+    await state.set_state(None)  # данные поиска сохраняем — экраны выше остаются рабочими
     await show_library_page(callback.message, callback.from_user, page=1)
     await callback.answer()
 
 
 @router.callback_query(F.data.startswith("lib:page:"))
 async def cb_library_page(callback: CallbackQuery, state: FSMContext) -> None:
-    await state.clear()
+    await state.set_state(None)
     page = int(callback.data.split(":")[2])
     await show_library_page(callback.message, callback.from_user, page)
     await callback.answer()
@@ -64,7 +63,7 @@ async def cb_library_search(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.message(LibrarySearch.waiting_query, F.text)
 async def process_search_query(message: Message, state: FSMContext) -> None:
-    await state.clear()
+    await state.set_state(None)
     async with session_factory() as session:
         user = await ensure_user(session, message.from_user)
         tracks = await search_library(session, user.id, message.text)
@@ -80,13 +79,4 @@ async def process_search_query(message: Message, state: FSMContext) -> None:
     )
 
 
-@router.callback_query(F.data == "lib:random")
-async def cb_random_track(callback: CallbackQuery) -> None:
-    async with session_factory() as session:
-        user = await ensure_user(session, callback.from_user)
-        track = await get_random_track(session, user.id)
-    if track is None:
-        await callback.answer("Библиотека пуста", show_alert=True)
-        return
-    await show_track_card(callback.message, track, ctx="lib.1", in_library=True)
-    await callback.answer()
+# «Случайный трек» стал режимом «Микс» — обрабатывается в handlers/player.py (q:mix)

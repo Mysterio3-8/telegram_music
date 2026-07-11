@@ -31,7 +31,9 @@ def library_keyboard(tracks: list[Track], page: int, total_pages: int) -> Inline
     rows.append(nav)
 
     rows.append([InlineKeyboardButton(text="🔍 Найти в библиотеке", callback_data="lib:search")])
-    rows.append([InlineKeyboardButton(text="🎲 Случайный трек", callback_data="lib:random")])
+    if tracks:
+        rows.append([InlineKeyboardButton(text="▶️ Слушать всё", callback_data="q:lib:0")])
+    rows.append([InlineKeyboardButton(text="🎲 Микс", callback_data="q:mix")])
     rows.append([InlineKeyboardButton(text="◀️ Назад", callback_data="menu:main")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 

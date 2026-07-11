@@ -23,6 +23,13 @@ class Settings(BaseSettings):
     # Реклама (SPEC §24): показ после каждого N-го действия бесплатного пользователя
     ad_frequency: int = 10
 
+    # Администраторы (Telegram ID через запятую): /admin, правка метаданных треков
+    admin_ids: str = ""
+
+    # Очередь воспроизведения: сколько аудио отправляется одной пачкой
+    # (Telegram-клиент сам проигрывает следующее аудио в чате — пачка = непрерывная очередь)
+    queue_batch_size: int = 5
+
     # FSM-хранилище: Redis, если задан; иначе in-memory (теряется при рестарте)
     redis_url: str = ""
 
@@ -43,6 +50,10 @@ class Settings(BaseSettings):
     @property
     def effective_celery_broker(self) -> str:
         return self.celery_broker_url or self.redis_url
+
+    @property
+    def admin_id_set(self) -> set[int]:
+        return {int(part) for part in self.admin_ids.split(",") if part.strip().isdigit()}
 
 
 settings = Settings()

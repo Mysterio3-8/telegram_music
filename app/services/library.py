@@ -43,6 +43,27 @@ async def get_track(session: AsyncSession, track_id: int) -> Track | None:
     return await session.get(Track, track_id)
 
 
+async def update_track_meta(
+    session: AsyncSession, track_id: int, title: str | None, artist: str | None
+) -> Track | None:
+    """Правка метаданных трека (админ). Сбрасывает meta_synced — при следующей
+    выдаче файл будет перетегирован и переотправлен с новым именем."""
+    track = await session.get(Track, track_id)
+    if track is None:
+        return None
+    changed = False
+    if title and title.strip() and title.strip() != track.title:
+        track.title = title.strip()
+        changed = True
+    if artist and artist.strip() and artist.strip() != track.artist:
+        track.artist = artist.strip()
+        changed = True
+    if changed:
+        track.meta_synced = False
+        await session.commit()
+    return track
+
+
 async def add_to_library(session: AsyncSession, user_id: int, track_id: int) -> bool:
     """Возвращает False, если трек уже был в библиотеке."""
     existing = await session.get(UserLibrary, (user_id, track_id))

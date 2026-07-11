@@ -33,6 +33,9 @@ class Track(Base):
     format: Mapped[str | None] = mapped_column(String(8))
     storage_path: Mapped[str | None] = mapped_column(String(512))  # архивная копия (local://, s3://)
     tg_file_id: Mapped[str | None] = mapped_column(String(256))  # для мгновенной пересылки в Telegram
+    # True — tg_file_id указывает на файл с актуальными ID3-тегами и именем «Исполнитель — Название».
+    # Сбрасывается при правке метаданных; выставляется после перетегированной переотправки.
+    meta_synced: Mapped[bool] = mapped_column(default=False, server_default="0")
     fingerprint: Mapped[str | None] = mapped_column(String(128), index=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
@@ -82,6 +85,18 @@ class PremiumSubscription(Base):
     start_date: Mapped[datetime]
     end_date: Mapped[datetime]
     payment_id: Mapped[str | None] = mapped_column(String(128))
+
+
+class TrackEvent(Base):
+    """События прослушивания/скачивания — сырьё для статистики админ-панели."""
+
+    __tablename__ = "track_events"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    track_id: Mapped[int] = mapped_column(ForeignKey("tracks.id"), index=True)
+    event: Mapped[str] = mapped_column(String(16), index=True)  # listen | download
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
 
 class Upload(Base):

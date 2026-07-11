@@ -1,11 +1,13 @@
 from aiogram import F, Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 
 from app.db.base import session_factory
 from app.db.models import UserLibrary
-from app.handlers.cards import show_track_card
+from app.handlers.cards import build_card_keyboard, show_track_card
 from app.handlers.common import ensure_user
+from app.handlers.delivery import send_track_audio
 from app.keyboards.track_card import pick_playlist_keyboard
 from app.services.library import add_to_library, get_track, remove_from_library
 from app.services.playlists import (
@@ -22,6 +24,19 @@ async def _is_in_library(session, user_id: int, track_id: int) -> bool:
     return await session.get(UserLibrary, (user_id, track_id)) is not None
 
 
+async def _refresh_card_keyboard(
+    callback: CallbackQuery, track, ctx: str, in_library: bool
+) -> None:
+    """Обновляет кнопки карточки на месте — само аудиосообщение не трогаем."""
+    keyboard = await build_card_keyboard(
+        callback.message, track, ctx, in_library, callback.from_user.id
+    )
+    try:
+        await callback.message.edit_reply_markup(reply_markup=keyboard)
+    except TelegramBadRequest:
+        pass  # разметка не изменилась — не страшно
+
+
 @router.callback_query(F.data.startswith("trk:"))
 async def cb_open_card(callback: CallbackQuery) -> None:
     _, track_id, ctx = callback.data.split(":", 2)
@@ -32,7 +47,7 @@ async def cb_open_card(callback: CallbackQuery) -> None:
             await callback.answer("Трек не найден", show_alert=True)
             return
         in_library = await _is_in_library(session, user.id, track.id)
-    await show_track_card(callback.message, track, ctx, in_library)
+        await show_track_card(callback.message, session, user, track, ctx, in_library)
     await callback.answer()
 
 
@@ -50,13 +65,19 @@ async def cb_track_action(callback: CallbackQuery) -> None:
         if action == "addlib":
             added = await add_to_library(session, user.id, track_id)
             await callback.answer("Добавлено в библиотеку" if added else "Уже в библиотеке")
-            await show_track_card(callback.message, track, ctx, in_library=True)
+            await _refresh_card_keyboard(callback, track, ctx, in_library=True)
             return
 
         if action == "dellib":
             await remove_from_library(session, user.id, track_id)
             await callback.answer("Удалено из библиотеки")
-            await show_track_card(callback.message, track, ctx, in_library=False)
+            await _refresh_card_keyboard(callback, track, ctx, in_library=False)
+            return
+
+        if action == "card":  # возврат из выбора плейлиста к кнопкам карточки
+            in_library = await _is_in_library(session, user.id, track_id)
+            await _refresh_card_keyboard(callback, track, ctx, in_library)
+            await callback.answer()
             return
 
         if action == "plmenu":
@@ -67,9 +88,8 @@ async def cb_track_action(callback: CallbackQuery) -> None:
                     show_alert=True,
                 )
                 return
-            await callback.message.edit_text(
-                "Выберите плейлист:",
-                reply_markup=pick_playlist_keyboard(playlists, track_id, ctx),
+            await callback.message.edit_reply_markup(
+                reply_markup=pick_playlist_keyboard(playlists, track_id, ctx)
             )
             await callback.answer()
             return
@@ -84,7 +104,7 @@ async def cb_track_action(callback: CallbackQuery) -> None:
                 f"Добавлено в «{playlist.title}»" if added else "Трек уже в этом плейлисте"
             )
             in_library = await _is_in_library(session, user.id, track_id)
-            await show_track_card(callback.message, track, ctx, in_library)
+            await _refresh_card_keyboard(callback, track, ctx, in_library)
             return
 
         if action == "delpl" and ctx.startswith("pl."):
@@ -93,12 +113,16 @@ async def cb_track_action(callback: CallbackQuery) -> None:
             if playlist is not None and playlist.user_id == user.id:
                 await remove_track_from_playlist(session, playlist_id, track_id)
             await callback.answer("Удалено из плейлиста")
+            try:
+                await callback.message.delete()
+            except TelegramBadRequest:
+                pass
             from app.handlers.playlists import show_playlist_view
 
-            await show_playlist_view(callback, playlist_id, page=1)
+            await show_playlist_view(callback, playlist_id, page=1, as_new_message=True)
             return
 
-        if action == "share":
+        if action == "share":  # легаси-кнопка в старых сообщениях; новая — url-кнопка
             me = await callback.bot.me()
             await callback.message.answer(
                 f"Поделитесь треком «{track.artist} — {track.title}»:\n"
@@ -108,27 +132,40 @@ async def cb_track_action(callback: CallbackQuery) -> None:
             return
 
         if action == "file":
-            if track.tg_file_id:
-                await callback.message.answer_audio(track.tg_file_id)
-                await callback.answer()
-            elif track.storage_path:
-                from aiogram.types import BufferedInputFile
-
-                from app.storage import get_storage
-
-                data = get_storage().load(f"tracks/{track.id}")
-                filename = f"{track.artist} - {track.title}.{track.format or 'mp3'}"
-                await callback.message.answer_audio(BufferedInputFile(data, filename=filename))
-                await callback.answer()
-            else:
+            sent = await send_track_audio(
+                callback.bot,
+                callback.message.chat.id,
+                session,
+                user,
+                track,
+                event="download",
+            )
+            if sent is None:
                 await callback.answer("Файл недоступен", show_alert=True)
+            else:
+                await callback.answer()
             return
 
     await callback.answer()
 
 
+@router.callback_query(F.data == "back:del")
+async def cb_card_close(callback: CallbackQuery) -> None:
+    """«Назад» карточки: удаляем её сообщение — предыдущий экран остаётся выше в чате."""
+    try:
+        await callback.message.delete()
+    except TelegramBadRequest:
+        # сообщение старше 48 часов удалить нельзя — хотя бы убираем кнопки
+        try:
+            await callback.message.edit_reply_markup(reply_markup=None)
+        except TelegramBadRequest:
+            pass
+    await callback.answer()
+
+
 @router.callback_query(F.data.startswith("back:"))
 async def cb_card_back(callback: CallbackQuery, state: FSMContext) -> None:
+    """Легаси-навигация из карточек, отправленных до перехода на back:del."""
     ctx = callback.data.split(":", 1)[1]
     # Локальные импорты — back-навигация ведёт в модули, которые сами открывают карточки
     if ctx.startswith("lib."):
@@ -146,6 +183,8 @@ async def cb_card_back(callback: CallbackQuery, state: FSMContext) -> None:
         from app.handlers.search import rerender_track_results
 
         if not await rerender_track_results(callback, state):
-            await callback.answer("Повторите поиск — запрос устарел", show_alert=True)
-            return
+            # Запрос не восстановился — вместо алерта возвращаем в главное меню
+            from app.handlers.start import render_main_menu
+
+            await render_main_menu(callback)
     await callback.answer()

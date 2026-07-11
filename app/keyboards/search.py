@@ -28,6 +28,8 @@ def track_results_keyboard(
         for number, track in enumerate(tracks, start=first_number)
     ]
     rows.append(_nav_row(page, total_pages, prefix="st"))
+    if tracks:
+        rows.append([InlineKeyboardButton(text="▶️ Слушать всё", callback_data="q:srch:0")])
     rows.append([InlineKeyboardButton(text="◀️ Назад", callback_data="menu:main")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
