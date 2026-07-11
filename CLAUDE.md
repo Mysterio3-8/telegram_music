@@ -1,6 +1,6 @@
 # Telegram Music Bot
 
-**Статус:** 🟢 прод (Этапы 1-2 из 5 задеплоены)
+**Статус:** 🟢 прод (Этапы 1-3 из 5 задеплоены)
 **Что это:** Telegram-бот [@tgram_music_bot](https://t.me/tgram_music_bot) — музыкальная платформа: библиотека, плейлисты, поиск, загрузка треков, Premium. Полное ТЗ — в [SPEC.md](SPEC.md).
 
 ## Прод
@@ -25,18 +25,22 @@ app/
 │   ├── library.py   # страницы, поиск, random, add/remove
 │   ├── playlists.py # CRUD плейлистов, треки с позициями
 │   ├── search.py    # поиск по общей базе (tracks + instrumentals)
-│   └── uploads.py   # валидация аудио, дубликаты по метаданным, создание трека
-├── keyboards/     # inline-разметка, без логики (library, playlists, search, track_card)
+│   ├── uploads.py   # валидация аудио, дубликаты по метаданным, создание трека
+│   └── premium.py   # активация/продление, is_premium_active, лимиты (playlist/upload)
+├── keyboards/     # inline-разметка, без логики (library, playlists, search, track_card, premium)
+├── middlewares/
+│   └── ads.py     # AdMiddleware: реклама каждое N-е действие бесплатных (SPEC §24)
 └── handlers/      # роутинг апдейтов → вызов services
-    ├── common.py        # ensure_user, format_duration
+    ├── common.py        # ensure_user (+авто-снятие истёкшего Premium), format_duration
     ├── start.py         # /start (+deep-link track_{id}), кабинет, menu:main, noop
     ├── library.py       # экран библиотеки, FSM-поиск, random
     ├── playlists.py     # список/просмотр/создание/удаление плейлистов
     ├── search.py        # поиск треков и минусов, пагинация из FSM data
     ├── upload.py        # мастер загрузки (файл→название→исполнитель→подтверждение)
+    ├── premium.py       # экран Premium, invoice/pre_checkout/successful_payment
     ├── cards.py         # карточка трека (без роутера, общая для разделов)
     ├── track_actions.py # trk:/ta:/back: — открытие карточки и действия с треком
-    └── stubs.py         # Premium (Этап 3), Mini App (скрыта из меню)
+    └── stubs.py         # Mini App (кнопка скрыта из меню)
 tests/             # pytest + pytest-asyncio, in-memory sqlite
 ```
 
@@ -69,7 +73,7 @@ tests/             # pytest + pytest-asyncio, in-memory sqlite
 
 1. ~~Backend, БД, бот, авторизация, библиотека~~ ✅
 2. ~~Поиск по общей базе, плейлисты, загрузка треков, дубликаты по метаданным~~ ✅ (Redis FSM и chromaprint-отпечатки отложены)
-3. Premium (Stars + карта/СБП), реклама
+3. ~~Premium (Stars + карта/СБП), реклама~~ ✅ (карта/СБП ждёт `payment_provider_token`; логи оплаты — в journalctl)
 4. Модуль импорта каталога, S3, Celery, Alembic-миграции вместо create_all, настоящий аудиоотпечаток
 5. Mini App (кнопка скрыта в main_menu.py), FastAPI публичный API
 
@@ -81,7 +85,7 @@ tests/             # pytest + pytest-asyncio, in-memory sqlite
 
 ## Checkpoint (2026-07-11)
 
-- Сделано: Этап 2 целиком и задеплоен — поиск по общей базе (треки+минусы), плейлисты (CRUD, подтверждение удаления), мастер загрузки с валидацией и проверкой дубликатов по метаданным, общая карточка трека, скачивание по tg file_id, шеринг deep-link `/start track_{id}`; кнопка Mini App скрыта; 26 тестов
+- Сделано: Этап 3 целиком и задеплоен — Premium через Telegram Stars (работает без провайдера) и карту/СБП (при `payment_provider_token`), полный цикл invoice→pre_checkout→successful_payment→активация, продление прибавляется к остатку срока, авто-снятие истёкшего Premium в ensure_user, лимиты бесплатного тарифа (5 плейлистов / 10 загрузок, настраиваемо), реклама через AdMiddleware каждое 10-е действие; 35 тестов
 - Активно: нет
-- Следующий шаг: Этап 3 — Premium (Telegram Stars, затем карта/СБП), счётчик действий и реклама для бесплатных
-- Блокеры: нет. Замечание: BOT_TOKEN засветился в переписке — при желании сменить через /revoke у BotFather и обновить `.env` локально и на VPS
+- Следующий шаг: Этап 4 — модуль импорта каталога, S3-хранилище, Celery, Alembic вместо create_all, настоящий аудиоотпечаток (chromaprint). ВАЖНО перед §4: уточнить у пользователя разрешённые источники для импорта (SPEC §23 — «источники, на которые есть права»)
+- Блокеры: нет. Для карты/СБП нужен платёжный провайдер в BotFather → токен в `.env` (`PAYMENT_PROVIDER_TOKEN`). Stars работают уже сейчас
