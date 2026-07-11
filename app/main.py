@@ -5,7 +5,7 @@ from aiogram import Bot, Dispatcher
 
 from app.config import settings
 from app.db.base import init_db
-from app.handlers import library, start, stubs
+from app.handlers import library, playlists, search, start, stubs, track_actions, upload
 
 
 async def main() -> None:
@@ -19,7 +19,15 @@ async def main() -> None:
     await init_db()
     bot = Bot(token=settings.bot_token)
     dp = Dispatcher()
-    dp.include_routers(start.router, library.router, stubs.router)
+    dp.include_routers(
+        start.router,
+        library.router,
+        playlists.router,
+        search.router,
+        upload.router,
+        track_actions.router,
+        stubs.router,
+    )
     await dp.start_polling(bot)
 
 

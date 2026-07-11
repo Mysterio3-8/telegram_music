@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     database_url: str = "sqlite+aiosqlite:///music_bot.db"
     page_size: int = 5
     library_search_limit: int = 10
+    max_file_size_mb: int = 50
 
 
 settings = Settings()

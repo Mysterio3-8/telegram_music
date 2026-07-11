@@ -1,0 +1,56 @@
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+from app.config import settings
+from app.db.models import Instrumental, Track
+
+
+def _nav_row(page: int, total_pages: int, prefix: str) -> list[InlineKeyboardButton]:
+    nav: list[InlineKeyboardButton] = []
+    if page > 1:
+        nav.append(InlineKeyboardButton(text="⬅️", callback_data=f"{prefix}:page:{page - 1}"))
+    nav.append(InlineKeyboardButton(text=f"Страница {page} / {total_pages}", callback_data="noop"))
+    if page < total_pages:
+        nav.append(InlineKeyboardButton(text="➡️", callback_data=f"{prefix}:page:{page + 1}"))
+    return nav
+
+
+def track_results_keyboard(
+    tracks: list[Track], page: int, total_pages: int
+) -> InlineKeyboardMarkup:
+    first_number = (page - 1) * settings.page_size + 1
+    rows = [
+        [
+            InlineKeyboardButton(
+                text=f"{number}. {track.artist} — {track.title}",
+                callback_data=f"trk:{track.id}:srch",
+            )
+        ]
+        for number, track in enumerate(tracks, start=first_number)
+    ]
+    rows.append(_nav_row(page, total_pages, prefix="st"))
+    rows.append([InlineKeyboardButton(text="◀️ Назад", callback_data="menu:main")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def instrumental_results_keyboard(
+    instrumentals: list[Instrumental], page: int, total_pages: int
+) -> InlineKeyboardMarkup:
+    first_number = (page - 1) * settings.page_size + 1
+    rows = [
+        [
+            InlineKeyboardButton(
+                text=f"{number}. {item.artist} — {item.title}",
+                callback_data=f"ins:{item.id}",
+            )
+        ]
+        for number, item in enumerate(instrumentals, start=first_number)
+    ]
+    rows.append(_nav_row(page, total_pages, prefix="si"))
+    rows.append([InlineKeyboardButton(text="◀️ Назад", callback_data="menu:main")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def instrumental_card_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text="◀️ Назад", callback_data="si:back")]]
+    )

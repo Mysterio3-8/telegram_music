@@ -8,16 +8,10 @@ from aiogram.types import User as TelegramUser
 
 from app.config import settings
 from app.db.base import session_factory
-from app.db.models import Track
-from app.handlers.common import ensure_user, format_duration
-from app.keyboards.library import library_keyboard, search_results_keyboard, track_card_keyboard
-from app.services.library import (
-    get_library_page,
-    get_random_track,
-    get_track,
-    remove_from_library,
-    search_library,
-)
+from app.handlers.cards import show_track_card
+from app.handlers.common import ensure_user
+from app.keyboards.library import library_keyboard, search_results_keyboard
+from app.services.library import get_library_page, get_random_track, search_library
 from app.services.users import count_library_tracks
 
 router = Router()
@@ -31,14 +25,6 @@ def _library_text(track_count: int) -> str:
     if track_count == 0:
         return "🎵 Библиотека\n\nВсего треков: 0\n\nБиблиотека пуста — добавьте треки через поиск или загрузку."
     return f"🎵 Библиотека\n\nВсего треков: {track_count}"
-
-
-def _track_card_text(track: Track) -> str:
-    return (
-        f"🎧 {track.title}\n\n"
-        f"Исполнитель: {track.artist}\n"
-        f"Длительность: {format_duration(track.duration)}"
-    )
 
 
 async def show_library_page(message: Message, tg_user: TelegramUser, page: int) -> None:
@@ -102,33 +88,5 @@ async def cb_random_track(callback: CallbackQuery) -> None:
     if track is None:
         await callback.answer("Библиотека пуста", show_alert=True)
         return
-    await callback.message.edit_text(
-        _track_card_text(track),
-        reply_markup=track_card_keyboard(track.id, back_page=1),
-    )
+    await show_track_card(callback.message, track, ctx="lib.1", in_library=True)
     await callback.answer()
-
-
-@router.callback_query(F.data.startswith("lib:track:"))
-async def cb_track_card(callback: CallbackQuery) -> None:
-    _, _, track_id, back_page = callback.data.split(":")
-    async with session_factory() as session:
-        track = await get_track(session, int(track_id))
-    if track is None:
-        await callback.answer("Трек не найден", show_alert=True)
-        return
-    await callback.message.edit_text(
-        _track_card_text(track),
-        reply_markup=track_card_keyboard(track.id, int(back_page)),
-    )
-    await callback.answer()
-
-
-@router.callback_query(F.data.startswith("lib:del:"))
-async def cb_remove_track(callback: CallbackQuery) -> None:
-    track_id = int(callback.data.split(":")[2])
-    async with session_factory() as session:
-        user = await ensure_user(session, callback.from_user)
-        await remove_from_library(session, user.id, track_id)
-    await callback.answer("Удалено из библиотеки")
-    await show_library_page(callback.message, callback.from_user, page=1)

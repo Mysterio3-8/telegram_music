@@ -9,6 +9,7 @@ def main_menu_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="🎼 Поиск минусов", callback_data="menu:instrumentals")],
         [InlineKeyboardButton(text="⬆️ Загрузить трек", callback_data="menu:upload")],
         [InlineKeyboardButton(text="💎 Купить Premium", callback_data="menu:premium")],
-        [InlineKeyboardButton(text="🌐 Mini App", callback_data="menu:miniapp")],
+        # 🌐 Mini App скрыта до готовности (SPEC §15); menu:miniapp в stubs.py оставлен,
+        # чтобы кнопка в старых сообщениях не была мёртвой
     ]
     return InlineKeyboardMarkup(inline_keyboard=rows)

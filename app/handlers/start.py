@@ -1,13 +1,15 @@
 from aiogram import F, Router
-from aiogram.filters import CommandStart
+from aiogram.filters import CommandObject, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.base import session_factory
-from app.db.models import User
+from app.db.models import User, UserLibrary
+from app.handlers.cards import show_track_card
 from app.handlers.common import ensure_user
 from app.keyboards.main_menu import main_menu_keyboard
+from app.services.library import get_track
 from app.services.users import count_library_tracks, count_playlists
 
 router = Router()
@@ -28,12 +30,29 @@ async def build_cabinet_text(session: AsyncSession, user: User) -> str:
     )
 
 
+async def _show_shared_track(message: Message, user: User, args: str) -> bool:
+    """Обрабатывает deep-link /start track_{id}. True — карточка показана."""
+    track_id_raw = args.removeprefix("track_")
+    if not track_id_raw.isdigit():
+        return False
+    async with session_factory() as session:
+        track = await get_track(session, int(track_id_raw))
+        if track is None:
+            return False
+        in_library = await session.get(UserLibrary, (user.id, track.id)) is not None
+    await show_track_card(message, track, ctx="srch", in_library=in_library, edit=False)
+    return True
+
+
 @router.message(CommandStart())
-async def cmd_start(message: Message, state: FSMContext) -> None:
+async def cmd_start(message: Message, state: FSMContext, command: CommandObject) -> None:
     await state.clear()
     async with session_factory() as session:
         user = await ensure_user(session, message.from_user)
         text = await build_cabinet_text(session, user)
+    if command.args and command.args.startswith("track_"):
+        if await _show_shared_track(message, user, command.args):
+            return
     await message.answer(text, reply_markup=main_menu_keyboard())
 
 
