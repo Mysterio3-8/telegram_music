@@ -51,6 +51,10 @@ def playlist_view_keyboard(
         )
     rows.append(nav)
 
+    if tracks:
+        rows.append(
+            [InlineKeyboardButton(text="▶️ Слушать всё", callback_data=f"q:pl:{playlist_id}:0")]
+        )
     rows.append(
         [InlineKeyboardButton(text="🗑 Удалить плейлист", callback_data=f"pl:delask:{playlist_id}")]
     )

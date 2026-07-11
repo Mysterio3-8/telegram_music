@@ -3,6 +3,7 @@ SQLAlchemy>=2.0,<3
 aiosqlite>=0.20
 pydantic-settings>=2.4
 alembic>=1.13
+mutagen>=1.47
 redis>=5.0
 celery[redis]>=5.3
 boto3>=1.34

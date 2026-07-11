@@ -44,7 +44,7 @@ async def _show_shared_track(message: Message, user: User, args: str) -> bool:
         if track is None:
             return False
         in_library = await session.get(UserLibrary, (user.id, track.id)) is not None
-    await show_track_card(message, track, ctx="srch", in_library=in_library, edit=False)
+        await show_track_card(message, session, user, track, ctx="srch", in_library=in_library)
     return True
 
 
@@ -60,13 +60,20 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
     await message.answer(text, reply_markup=main_menu_keyboard())
 
 
-@router.callback_query(F.data == "menu:main")
-async def cb_main_menu(callback: CallbackQuery, state: FSMContext) -> None:
-    await state.clear()
+async def render_main_menu(callback: CallbackQuery) -> None:
+    """Рисует главное меню на месте сообщения callback-а. Не answer-ит."""
     async with session_factory() as session:
         user = await ensure_user(session, callback.from_user)
         text = await build_cabinet_text(session, user)
     await callback.message.edit_text(text, reply_markup=main_menu_keyboard())
+
+
+@router.callback_query(F.data == "menu:main")
+async def cb_main_menu(callback: CallbackQuery, state: FSMContext) -> None:
+    # set_state(None) вместо clear() — сохраняем данные поиска, чтобы пагинация
+    # и «Слушать всё» в оставшихся выше сообщениях продолжали работать (доработки, п.2)
+    await state.set_state(None)
+    await render_main_menu(callback)
     await callback.answer()
 
 

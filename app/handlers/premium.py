@@ -2,6 +2,7 @@ import logging
 from datetime import datetime
 
 from aiogram import F, Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import (
     CallbackQuery,
@@ -50,7 +51,7 @@ def _premium_text(active: bool, premium_until: datetime | None) -> str:
 
 @router.callback_query(F.data == "menu:premium")
 async def cb_premium(callback: CallbackQuery, state: FSMContext) -> None:
-    await state.clear()
+    await state.set_state(None)  # данные поиска сохраняем — экраны выше остаются рабочими
     async with session_factory() as session:
         user = await ensure_user(session, callback.from_user)
         active = is_premium_active(user)
@@ -64,36 +65,63 @@ async def cb_premium(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(F.data == "prem:stars")
 async def cb_pay_stars(callback: CallbackQuery) -> None:
-    await callback.message.answer_invoice(
-        title=f"Premium на {settings.premium_duration_days} дней",
-        description="Отключение рекламы, безлимит плейлистов, увеличенный лимит загрузок.",
-        payload=PAYLOAD_STARS,
-        currency="XTR",
-        prices=[LabeledPrice(label="Premium", amount=settings.premium_price_stars)],
-    )
+    try:
+        await callback.message.answer_invoice(
+            title=f"Premium на {settings.premium_duration_days} дней",
+            description="Отключение рекламы, безлимит плейлистов, увеличенный лимит загрузок.",
+            payload=PAYLOAD_STARS,
+            currency="XTR",
+            prices=[LabeledPrice(label="Premium", amount=settings.premium_price_stars)],
+        )
+    except TelegramBadRequest:
+        logger.exception("Не удалось выставить счёт Stars user=%s", callback.from_user.id)
+        await callback.answer("Не удалось выставить счёт — попробуйте позже", show_alert=True)
+        return
     await callback.answer()
 
 
 @router.callback_query(F.data == "prem:card")
 async def cb_pay_card(callback: CallbackQuery) -> None:
+    """Оплата банковской картой / СБП через платёжного провайдера Telegram Payments.
+
+    Провайдер подключается токеном PAYMENT_PROVIDER_TOKEN из BotFather (ЮKassa,
+    Сбербанк и др.) — без изменения кода. Payload различает тарифы, что оставляет
+    задел под новые виды подписок.
+    """
     if not settings.payment_provider_token:
         await callback.answer("Оплата картой пока недоступна", show_alert=True)
         return
-    await callback.message.answer_invoice(
-        title=f"Premium на {settings.premium_duration_days} дней",
-        description="Отключение рекламы, безлимит плейлистов, увеличенный лимит загрузок.",
-        payload=PAYLOAD_CARD,
-        provider_token=settings.payment_provider_token,
-        currency="RUB",
-        prices=[LabeledPrice(label="Premium", amount=settings.premium_price_rub * 100)],
-    )
+    try:
+        await callback.message.answer_invoice(
+            title=f"Premium на {settings.premium_duration_days} дней",
+            description="Отключение рекламы, безлимит плейлистов, увеличенный лимит загрузок.",
+            payload=PAYLOAD_CARD,
+            provider_token=settings.payment_provider_token,
+            currency="RUB",
+            prices=[LabeledPrice(label="Premium", amount=settings.premium_price_rub * 100)],
+        )
+    except TelegramBadRequest:
+        # Типовые причины: неверный/тестовый токен провайдера, сумма ниже минимальной
+        logger.exception("Не удалось выставить счёт (карта) user=%s", callback.from_user.id)
+        await callback.answer(
+            "Не удалось выставить счёт — попробуйте позже или оплатите Stars", show_alert=True
+        )
+        return
     await callback.answer()
 
 
 @router.pre_checkout_query()
 async def cb_pre_checkout(pre_checkout_query: PreCheckoutQuery) -> None:
     ok = pre_checkout_query.invoice_payload in (PAYLOAD_STARS, PAYLOAD_CARD)
-    await pre_checkout_query.answer(ok=ok, error_message=None if ok else "Некорректный платёж")
+    if not ok:
+        logger.warning(
+            "Отклонён pre_checkout user=%s payload=%r",
+            pre_checkout_query.from_user.id,
+            pre_checkout_query.invoice_payload,
+        )
+    await pre_checkout_query.answer(
+        ok=ok, error_message=None if ok else "Некорректный платёж — попробуйте оформить заново"
+    )
 
 
 @router.message(F.successful_payment)

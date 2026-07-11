@@ -5,7 +5,18 @@ from aiogram import Bot, Dispatcher
 
 from app.config import settings
 from app.fsm import build_storage
-from app.handlers import library, playlists, premium, search, start, stubs, track_actions, upload
+from app.handlers import (
+    admin,
+    library,
+    player,
+    playlists,
+    premium,
+    search,
+    start,
+    stubs,
+    track_actions,
+    upload,
+)
 from app.middlewares.ads import AdMiddleware
 
 
@@ -31,6 +42,8 @@ async def main() -> None:
         search.router,
         upload.router,
         premium.router,
+        player.router,
+        admin.router,  # до track_actions: перехватывает ta:edit
         track_actions.router,
         stubs.router,
     )

@@ -50,7 +50,9 @@ async def _render_playlists(message: Message, telegram_user, page: int, edit: bo
         await message.answer(text, reply_markup=keyboard)
 
 
-async def show_playlist_view(callback: CallbackQuery, playlist_id: int, page: int) -> bool:
+async def show_playlist_view(
+    callback: CallbackQuery, playlist_id: int, page: int, as_new_message: bool = False
+) -> bool:
     """True — экран показан; False — плейлист не найден. Callback не answer-ит."""
     async with session_factory() as session:
         user = await ensure_user(session, callback.from_user)
@@ -64,15 +66,17 @@ async def show_playlist_view(callback: CallbackQuery, playlist_id: int, page: in
     text = f"Название:\n{playlist.title}\n\nВсего треков:\n{total}"
     if total == 0:
         text += "\n\nПлейлист пуст — добавляйте треки из карточки трека."
-    await callback.message.edit_text(
-        text, reply_markup=playlist_view_keyboard(tracks, playlist_id, page, total_pages)
-    )
+    keyboard = playlist_view_keyboard(tracks, playlist_id, page, total_pages)
+    if as_new_message:
+        await callback.message.answer(text, reply_markup=keyboard)
+    else:
+        await callback.message.edit_text(text, reply_markup=keyboard)
     return True
 
 
 @router.callback_query(F.data == "menu:playlists")
 async def cb_playlists(callback: CallbackQuery, state: FSMContext) -> None:
-    await state.clear()
+    await state.set_state(None)  # данные поиска сохраняем — экраны выше остаются рабочими
     await _render_playlists(callback.message, callback.from_user, page=1, edit=True)
     await callback.answer()
 

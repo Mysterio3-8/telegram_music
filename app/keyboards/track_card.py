@@ -1,10 +1,29 @@
+from urllib.parse import quote
+
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from app.db.models import Playlist, Track
 
 
-def track_card_keyboard(track: Track, ctx: str, in_library: bool) -> InlineKeyboardMarkup:
-    """ctx — откуда открыта карточка: lib.{page} | pl.{playlist_id}.{page} | srch"""
+def share_url(track: Track, bot_username: str) -> str:
+    """Системное окно Telegram «поделиться» с deep-link на трек (SPEC: доработки, п.4)."""
+    link = f"https://t.me/{bot_username}?start=track_{track.id}"
+    text = f"🎧 {track.artist} — {track.title}"
+    return f"https://t.me/share/url?url={quote(link, safe='')}&text={quote(text, safe='')}"
+
+
+def track_card_keyboard(
+    track: Track,
+    ctx: str,
+    in_library: bool,
+    bot_username: str,
+    is_admin: bool = False,
+) -> InlineKeyboardMarkup:
+    """ctx — откуда открыта карточка: lib.{page} | pl.{playlist_id}.{page} | srch.
+
+    Карточка — отдельное сообщение с плеером; «Назад» (back:del) просто удаляет её,
+    предыдущий экран остаётся выше в чате.
+    """
     rows: list[list[InlineKeyboardButton]] = []
 
     if in_library:
@@ -27,8 +46,12 @@ def track_card_keyboard(track: Track, ctx: str, in_library: bool) -> InlineKeybo
         rows.append(
             [InlineKeyboardButton(text="⬇️ Скачать", callback_data=f"ta:file:{track.id}:{ctx}")]
         )
-    rows.append([InlineKeyboardButton(text="📤 Поделиться", callback_data=f"ta:share:{track.id}:{ctx}")])
-    rows.append([InlineKeyboardButton(text="◀️ Назад", callback_data=f"back:{ctx}")])
+    rows.append([InlineKeyboardButton(text="📤 Поделиться", url=share_url(track, bot_username))])
+    if is_admin:
+        rows.append(
+            [InlineKeyboardButton(text="✏️ Редактировать (админ)", callback_data=f"ta:edit:{track.id}:{ctx}")]
+        )
+    rows.append([InlineKeyboardButton(text="◀️ Назад", callback_data="back:del")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -44,5 +67,5 @@ def pick_playlist_keyboard(
         ]
         for playlist in playlists
     ]
-    rows.append([InlineKeyboardButton(text="◀️ Назад", callback_data=f"trk:{track_id}:{ctx}")])
+    rows.append([InlineKeyboardButton(text="◀️ Назад", callback_data=f"ta:card:{track_id}:{ctx}")])
     return InlineKeyboardMarkup(inline_keyboard=rows)

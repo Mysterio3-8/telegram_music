@@ -63,12 +63,20 @@ async def process_track_query(message: Message, state: FSMContext) -> None:
     await _render_track_results(message, state, message.text, page=1, edit=False)
 
 
+async def _restart_search(callback: CallbackQuery, state: FSMContext, new_state, prompt: str) -> None:
+    """Запрос не восстановился (например, рестарт FSM) — мягко просим ввести заново,
+    без алерта «запрос устарел» (SPEC: доработки, п.2)."""
+    await state.set_state(new_state)
+    await callback.message.answer(prompt)
+    await callback.answer()
+
+
 @router.callback_query(F.data.startswith("st:page:"))
 async def cb_track_results_page(callback: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
     query = data.get("track_query")
     if not query:
-        await callback.answer("Повторите поиск — запрос устарел", show_alert=True)
+        await _restart_search(callback, state, TrackSearch.waiting_query, "Введите название трека")
         return
     page = int(callback.data.split(":")[2])
     await _render_track_results(callback.message, state, query, page, edit=True)
@@ -123,7 +131,7 @@ async def cb_instrumental_results_page(callback: CallbackQuery, state: FSMContex
     data = await state.get_data()
     query = data.get("ins_query")
     if not query:
-        await callback.answer("Повторите поиск — запрос устарел", show_alert=True)
+        await _restart_search(callback, state, InstrumentalSearch.waiting_query, "Введите название")
         return
     page = int(callback.data.split(":")[2])
     await _render_instrumental_results(callback.message, state, query, page, edit=True)
@@ -135,7 +143,7 @@ async def cb_instrumental_back(callback: CallbackQuery, state: FSMContext) -> No
     data = await state.get_data()
     query = data.get("ins_query")
     if not query:
-        await callback.answer("Повторите поиск — запрос устарел", show_alert=True)
+        await _restart_search(callback, state, InstrumentalSearch.waiting_query, "Введите название")
         return
     await _render_instrumental_results(
         callback.message, state, query, data.get("ins_page", 1), edit=True
