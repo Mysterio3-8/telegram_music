@@ -1,0 +1,16 @@
+[Unit]
+Description=Telegram Music Bot — YouTube import worker (Celery, queue=youtube)
+After=network-online.target redis-server.service
+Wants=network-online.target
+Requires=redis-server.service
+
+[Service]
+WorkingDirectory=/opt/tg-music-bot
+# Ограниченная параллельность загрузок (доп. ТЗ §14); N = YOUTUBE_CONCURRENCY
+ExecStartPre=/opt/tg-music-bot/.venv/bin/python -m app.cli.youtube recover
+ExecStart=/opt/tg-music-bot/.venv/bin/celery -A app.tasks.celery_app worker -Q youtube --concurrency=2 --loglevel=info
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

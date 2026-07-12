@@ -1,0 +1,9 @@
+[Unit]
+Description=Daily check for YouTube sources due for re-scan (доп. ТЗ §11)
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+
+[Install]
+WantedBy=timers.target

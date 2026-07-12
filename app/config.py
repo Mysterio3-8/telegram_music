@@ -47,6 +47,14 @@ class Settings(BaseSettings):
     # chromaprint: имя/путь бинарника fpcalc (пусто → отпечаток не считается)
     fpcalc_path: str = "fpcalc"
 
+    # YouTube-импортёр (доп. ТЗ). Cookies — путь к файлу в формате Netscape (yt-dlp),
+    # НЕ в БД и НЕ в логах; для публичных каналов не требуются.
+    youtube_cookies_path: str = ""
+    youtube_audio_format: str = "bestaudio[ext=m4a]/bestaudio/best"
+    youtube_concurrency: int = 2  # одновременных загрузок (§14): 1-5
+    youtube_max_retries: int = 3  # попыток при временной ошибке (§13)
+    youtube_check_interval_days: int = 30  # период автопроверки новых видео (§11)
+
     # Публичный API (§27)
     jwt_secret: str = ""  # пусто → подписываем bot_token
     jwt_ttl_minutes: int = 1440

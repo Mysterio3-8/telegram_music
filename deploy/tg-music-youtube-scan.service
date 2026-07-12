@@ -1,0 +1,8 @@
+[Unit]
+Description=Telegram Music Bot — periodic YouTube re-scan (доп. ТЗ §11)
+After=network-online.target redis-server.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/tg-music-bot
+ExecStart=/opt/tg-music-bot/.venv/bin/python -m app.cli.youtube scan-due

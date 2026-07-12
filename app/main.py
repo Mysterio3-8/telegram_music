@@ -7,6 +7,7 @@ from app.config import settings
 from app.fsm import build_storage
 from app.handlers import (
     admin,
+    admin_youtube,
     library,
     player,
     playlists,
@@ -44,6 +45,7 @@ async def main() -> None:
         premium.router,
         player.router,
         admin.router,  # до track_actions: перехватывает ta:edit
+        admin_youtube.router,
         track_actions.router,
         stubs.router,
     )

@@ -6,8 +6,8 @@
 ## Прод
 
 - VPS: `ssh news-rewriter-vps` (root@38.244.213.132), код в `/opt/tg-music-bot`
-- Сервисы: `tg-music-bot` (polling) и `tg-music-worker` (Celery, обогащение загрузок). `systemctl {status,restart} tg-music-bot tg-music-worker`, логи: `journalctl -u <сервис> -f`
-- Redis (`redis-server`) — FSM + брокер Celery. ffmpeg + libchromaprint-tools (fpcalc) — для отпечатков
+- Сервисы: `tg-music-bot` (polling), `tg-music-worker` (Celery, обогащение загрузок), `tg-music-youtube` (Celery, очередь `youtube` — импорт с YouTube), таймер `tg-music-youtube-scan` (автопроверка §11). Юниты — в [deploy/](deploy/). `systemctl {status,restart} <сервис>`, логи: `journalctl -u <сервис> -f`
+- Redis (`redis-server`) — FSM + брокер Celery. ffmpeg + libchromaprint-tools (fpcalc) — отпечатки. yt-dlp (pip) — загрузка с YouTube
 - Repo: git@github.com:Mysterio3-8/telegram_music.git (пуш только по SSH — https-креды на машине от другого аккаунта)
 - Деплой: `/deploy` (push → pull → pip install → `alembic upgrade head` → restart bot+worker)
 - ⚠️ Не запускать бота локально, пока работает сервис на VPS — двойной polling конфликтует
@@ -23,7 +23,10 @@ app/
 │   ├── base.py    # engine, session_factory (схема — через Alembic)
 │   └── models.py  # все 8 таблиц по SPEC §19
 ├── storage/       # хранилище аудио: LocalStorage / S3Storage, get_storage()
-├── tasks/         # Celery: celery_app, enrich_track, enqueue_enrich
+├── tasks/         # Celery: celery_app, enrich_track, youtube (scan/process/recover/scan_due)
+├── importers/     # ImportSource: LocalDirectorySource (mutagen)
+├── api/           # FastAPI публичный REST (§27): login(initData→JWT), tracks, library, upload…
+├── cli/           # import_catalog (папка), youtube (управление источниками)
 migrations/        # Alembic (env.py async, versions/)
 ├── services/      # бизнес-логика, НЕ знает о Telegram
 │   ├── users.py     # get_or_create_user, счётчики, TelegramProfile
@@ -35,6 +38,8 @@ migrations/        # Alembic (env.py async, versions/)
 │   ├── track_meta.py # ID3-перетегирование (mutagen) + имя файла «Исполнитель — Название.ext»
 │   ├── queue.py     # выборка пачек треков для очереди (микс/библиотека/плейлист/поиск)
 │   ├── stats.py     # события listen/download + сводная статистика для админ-панели
+│   ├── catalog_import.py # импорт в общую базу (треки/минусы/через API), дедуп
+│   ├── youtube/     # metadata (парсер названия), downloader (yt-dlp), sources (очередь), importer
 │   └── premium.py   # активация/продление, is_premium_active, лимиты (playlist/upload)
 ├── keyboards/     # inline-разметка, без логики (library, playlists, search, track_card, premium, player, admin)
 ├── middlewares/
@@ -51,6 +56,7 @@ migrations/        # Alembic (env.py async, versions/)
     ├── delivery.py      # выдача аудио с актуальными тегами/именем + кэш file_id (без роутера)
     ├── player.py        # q:* — очередь воспроизведения и режим «Микс»
     ├── admin.py         # /admin (статистика), ta:edit — правка метаданных трека
+    ├── admin_youtube.py # adm:yt* — управление YouTube-источниками (§17)
     ├── track_actions.py # trk:/ta:/back: — открытие карточки и действия с треком
     └── stubs.py         # Mini App (кнопка скрыта из меню)
 tests/             # pytest + pytest-asyncio, in-memory sqlite

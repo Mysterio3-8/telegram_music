@@ -8,16 +8,20 @@ from app.services.uploads import DUPLICATE_DURATION_TOLERANCE, find_by_fingerpri
 from app.storage.base import StorageBackend
 
 
-async def import_track(
+async def import_track_detailed(
     session: AsyncSession, storage: StorageBackend, item: ImportItem
-) -> bool:
-    """Импортирует трек в общую базу. Возвращает True, если создан новый (False — дубликат)."""
+) -> tuple[Track, bool]:
+    """Импортирует трек в общую базу. Возвращает (трек, создан_ли_новый).
+    При дубликате (по отпечатку или метаданным) возвращает найденный трек и False."""
     fingerprint = compute_fingerprint_from_bytes(item.data, suffix=f".{item.file_format or 'audio'}")
 
-    if fingerprint and await find_by_fingerprint(session, fingerprint) is not None:
-        return False
-    if await find_duplicate(session, item.title, item.artist, item.duration) is not None:
-        return False
+    if fingerprint:
+        existing = await find_by_fingerprint(session, fingerprint)
+        if existing is not None:
+            return existing, False
+    metadata_dup = await find_duplicate(session, item.title, item.artist, item.duration)
+    if metadata_dup is not None:
+        return metadata_dup, False
 
     bitrate = None
     if item.duration > 0:
@@ -35,7 +39,15 @@ async def import_track(
     await session.flush()
     track.storage_path = storage.save(f"tracks/{track.id}", item.data)
     await session.commit()
-    return True
+    return track, True
+
+
+async def import_track(
+    session: AsyncSession, storage: StorageBackend, item: ImportItem
+) -> bool:
+    """Импортирует трек в общую базу. True — создан новый (False — дубликат)."""
+    _, created = await import_track_detailed(session, storage, item)
+    return created
 
 
 async def _instrumental_duplicate(
