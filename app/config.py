@@ -26,6 +26,22 @@ class Settings(BaseSettings):
     # Администраторы (Telegram ID через запятую): /admin, правка метаданных треков
     admin_ids: str = ""
 
+    # Обязательная подписка (TZ §14-17): пусто в любом из полей → канал не проверяется.
+    required_channel_1: str = "@tgramuzuka"
+    required_channel_1_label: str = "📢 ТГ Музыка"
+    required_channel_2: str = "@zvyagaminus"
+    required_channel_2_label: str = "🎤 Минусы"
+    subscription_cache_ttl_minutes: int = 60
+    admin_bypass_subscription: bool = False
+
+    @property
+    def required_channels(self) -> list[tuple[str, str]]:
+        pairs = [
+            (self.required_channel_1, self.required_channel_1_label),
+            (self.required_channel_2, self.required_channel_2_label),
+        ]
+        return [(channel, label) for channel, label in pairs if channel]
+
     # Очередь воспроизведения: сколько аудио отправляется одной пачкой
     # (Telegram-клиент сам проигрывает следующее аудио в чате — пачка = непрерывная очередь)
     queue_batch_size: int = 5

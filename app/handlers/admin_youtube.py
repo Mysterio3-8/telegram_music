@@ -6,7 +6,6 @@ from aiogram.types import CallbackQuery, Message
 
 from app.db.base import session_factory
 from app.db.models import YoutubeSource
-from app.handlers.cards import is_admin
 from app.keyboards.admin_youtube import (
     confirm_delete_keyboard,
     source_view_keyboard,
@@ -17,6 +16,7 @@ from app.services.app_settings import (
     is_youtube_enabled,
     set_flag,
 )
+from app.services.users import is_admin
 from app.services.youtube.sources import (
     add_source,
     delete_source,

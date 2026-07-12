@@ -9,11 +9,18 @@ from app.db.models import User, UserLibrary
 from app.handlers.cards import show_track_card
 from app.handlers.common import ensure_user
 from app.keyboards.main_menu import main_menu_keyboard
+from app.keyboards.subscription import subscription_gate_keyboard
 from app.services.library import get_track
 from app.services.premium import is_premium_active
+from app.services.subscription import is_fully_subscribed
 from app.services.users import count_library_tracks, count_playlists
 
 router = Router()
+
+SUBSCRIPTION_GATE_TEXT = (
+    "🎵 Для использования ТГ Музыки подпишитесь на наши каналы.\n\n"
+    "После подписки нажмите «Проверить подписку»."
+)
 
 
 async def build_cabinet_text(session: AsyncSession, user: User) -> str:
@@ -53,6 +60,12 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
     await state.clear()
     async with session_factory() as session:
         user = await ensure_user(session, message.from_user)
+        subscribed = await is_fully_subscribed(
+            session, message.bot, user.id, user.telegram_id, force=True
+        )
+        if not subscribed:
+            await message.answer(SUBSCRIPTION_GATE_TEXT, reply_markup=subscription_gate_keyboard())
+            return
         text = await build_cabinet_text(session, user)
     if command.args and command.args.startswith("track_"):
         if await _show_shared_track(message, user, command.args):

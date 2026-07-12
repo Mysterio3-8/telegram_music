@@ -28,12 +28,15 @@ app/
 ├── api/           # FastAPI публичный REST (§27): login(initData→JWT), tracks, library, upload…
 ├── cli/           # import_catalog (папка), youtube (управление источниками)
 migrations/        # Alembic (env.py async, versions/)
+├── bot_commands.py # setup_bot_commands: /start (все) + /admin (персональный scope админов)
 ├── services/      # бизнес-логика, НЕ знает о Telegram
-│   ├── users.py     # get_or_create_user, счётчики, TelegramProfile
+│   ├── users.py     # get_or_create_user, счётчики, TelegramProfile, is_admin
 │   ├── library.py   # страницы, поиск, random, add/remove
 │   ├── playlists.py # CRUD плейлистов, треки с позициями
-│   ├── search.py    # поиск по общей базе (tracks + instrumentals)
+│   ├── search.py    # поиск по общей базе (tracks + instrumentals, читает)
+│   ├── instrumentals.py # запись минусов из админки: дедуп + создание (пишет)
 │   ├── uploads.py   # валидация аудио, дубликаты по метаданным/отпечатку, создание трека
+│   ├── subscription.py # обязательная подписка (§14-17): getChatMember + TTL-кэш
 │   ├── fingerprint.py # chromaprint через fpcalc (graceful-фолбэк)
 │   ├── track_meta.py # ID3-перетегирование (mutagen) + имя файла «Исполнитель — Название.ext»
 │   ├── queue.py     # выборка пачек треков для очереди (микс/библиотека/плейлист/поиск)
@@ -41,19 +44,22 @@ migrations/        # Alembic (env.py async, versions/)
 │   ├── catalog_import.py # импорт в общую базу (треки/минусы/через API), дедуп
 │   ├── youtube/     # metadata (парсер названия), downloader (yt-dlp), sources (очередь), importer
 │   └── premium.py   # активация/продление, is_premium_active, лимиты (playlist/upload)
-├── keyboards/     # inline-разметка, без логики (library, playlists, search, track_card, premium, player, admin)
+├── keyboards/     # inline-разметка, без логики (library, playlists, search, track_card, premium, player, admin, subscription)
 ├── middlewares/
-│   └── ads.py     # AdMiddleware: реклама каждое N-е действие бесплатных (SPEC §24)
+│   ├── ads.py          # AdMiddleware: реклама каждое N-е действие бесплатных (SPEC §24)
+│   └── subscription.py # SubscriptionMiddleware: гейт всех действий кроме /start и sub:check
 └── handlers/      # роутинг апдейтов → вызов services
     ├── common.py        # ensure_user (+авто-снятие истёкшего Premium), format_duration
-    ├── start.py         # /start (+deep-link track_{id}), кабинет, menu:main, noop
+    ├── start.py         # /start (+deep-link track_{id}, гейт подписки), кабинет, menu:main, noop
+    ├── subscription.py  # sub:check — принудительная перепроверка подписки
     ├── library.py       # экран библиотеки, FSM-поиск (микс — в player.py)
     ├── playlists.py     # список/просмотр/создание/удаление плейлистов
-    ├── search.py        # поиск треков и минусов, пагинация из FSM data
-    ├── upload.py        # мастер загрузки (файл→название→исполнитель→подтверждение)
+    ├── search.py        # поиск треков и минусов (ins:open:/ins:play:), пагинация из FSM data
+    ├── upload.py        # мастер загрузки трека (файл→название→исполнитель→подтверждение)
+    ├── admin_upload_minus.py # мастер загрузки минуса из админки — отдельный от upload.py, пишет в Instrumental
     ├── premium.py       # экран Premium, invoice/pre_checkout/successful_payment
     ├── cards.py         # карточка трека — аудиосообщение с плеером (без роутера, общая для разделов)
-    ├── delivery.py      # выдача аудио с актуальными тегами/именем + кэш file_id (без роутера)
+    ├── delivery.py      # выдача трека/минуса с кэшем file_id (send_track_audio/send_instrumental_audio, без роутера)
     ├── player.py        # q:* — очередь воспроизведения и режим «Микс»
     ├── admin.py         # /admin (статистика), ta:edit — правка метаданных трека
     ├── admin_youtube.py # adm:yt* — управление YouTube-источниками (§17)
@@ -90,12 +96,13 @@ $env:DATABASE_URL="sqlite+aiosqlite:///_tmp.db"; .\.venv\Scripts\python.exe -m a
 - keyboards/ — только разметка
 - Трек никогда не удаляется из `tracks` — только связи (user_library, playlist_tracks)
 - Ровно 5 элементов на страницу (`settings.page_size`), навигация только Inline Keyboard
-- callback_data соглашение: `menu:*` (меню), `lib:*` (библиотека), `pls:*`/`pl:*` (плейлисты), `st:`/`si:`/`ins:` (поиск), `up:*` (загрузка), `trk:`/`ta:`/`back:` (карточка трека; ctx = `lib.{page}` | `pl.{id}.{page}` | `srch`), `q:*` (очередь/микс), `adm:*` (админ-панель)
+- callback_data соглашение: `menu:*` (меню), `lib:*` (библиотека), `pls:*`/`pl:*` (плейлисты), `st:`/`si:`/`ins:open:`/`ins:play:` (поиск), `up:*` (загрузка трека), `admin_min:*` (загрузка минуса из админки), `trk:`/`ta:`/`back:` (карточка трека; ctx = `lib.{page}` | `pl.{id}.{page}` | `srch`), `q:*` (очередь/микс), `adm:*` (админ-панель), `sub:check` (подтвердить подписку)
 - Карточка трека — отдельное аудиосообщение (не заменяет экран списка); `back:del` удаляет её, `back:{ctx}` — легаси-навигация для старых сообщений
-- Файлы треков: `tracks.tg_file_id` — для мгновенной пересылки; `tracks.storage_path` (`local://`/`s3://`) — архивная копия, ставит воркер обогащения. Ключ в хранилище — `tracks/{id}`
-- Выдача аудио — только через `handlers/delivery.send_track_audio`: она гарантирует актуальные ID3-теги и имя файла «Исполнитель — Название.ext» (`meta_synced=False` → перетегировать и переотправить, кэшировать новый file_id) и пишет события статистики
+- Файлы треков: `tracks.tg_file_id` — для мгновенной пересылки; `tracks.storage_path` (`local://`/`s3://`) — архивная копия, ставит воркер обогащения. Ключ в хранилище — `tracks/{id}`. Минусы — та же схема в `instrumentals` (`instrumentals.tg_file_id`/`storage_path`, ключ `instrumentals/{id}`), но отдельная таблица от `tracks` — совпадение title/artist с треком не дубликат (TZ §9)
+- Выдача аудио — только через `handlers/delivery.send_track_audio` (треки) / `send_instrumental_audio` (минусы): гарантируют мгновенную пересылку по кэшированному file_id; `send_track_audio` дополнительно держит актуальные ID3-теги и имя файла «Исполнитель — Название.ext» (`meta_synced=False` → перетегировать и переотправить) и пишет события статистики
 - Схема БД — только через Alembic-миграции, не create_all. Загрузка не должна ломаться, если Redis/Celery/fpcalc недоступны (graceful-фолбэк на границах)
 - Один callback — один `callback.answer()`: shared-функции экранов (show_playlist_view и т.п.) не answer-ят, возвращают bool
+- Обязательная подписка (§14-17): `SubscriptionMiddleware` гейтит все message/callback хендлеры кроме `/start` и `sub:check` (у них своя принудительная проверка). Кэш в `subscription_status` с TTL `SUBSCRIPTION_CACHE_TTL_MINUTES`; при ошибке Telegram API — fail-closed (считаем неподписанным). `ADMIN_BYPASS_SUBSCRIPTION=true` освобождает админов
 
 ## Что осталось (по этапам SPEC §30)
 
@@ -104,6 +111,7 @@ $env:DATABASE_URL="sqlite+aiosqlite:///_tmp.db"; .\.venv\Scripts\python.exe -m a
 3. ~~Premium (Stars + карта/СБП), реклама~~ ✅ (карта/СБП ждёт `payment_provider_token`; логи оплаты — в journalctl)
 4. ~~Инфраструктура + модуль импорта~~ ✅ (Alembic, S3/local хранилище, Celery+Redis, chromaprint; импортёр: `python -m app.cli.import_catalog <dir> [--instrumental] [--artist X]`, дедуп по отпечатку+метаданным). Коннекторы к внешним источникам — по мере появления прав
 5. FastAPI публичный API ✅ (app/api, JWT + Telegram WebApp initData; как сервис НЕ развёрнут — ждёт Mini App и домена/HTTPS). Mini App — ждёт чертежи пользователя (кнопка скрыта в main_menu.py)
+6. Апдейт по доп. ТЗ (обязательная подписка, минусы, быстрые команды) — независимые срезы ✅: подписка на 2 канала (§14-17), воспроизведение+загрузка минусов через админку (§9-11), /start-/admin scope команд (§12-13). Player Engine и настоящий автоплей через Mini App (§3-8) — отложены осознанно (нужен домен/HTTPS), архитектура (Instrumental, delivery-слой) готова принять Mini App позже без переделки
 
 ## Известные грабли
 
@@ -112,11 +120,14 @@ $env:DATABASE_URL="sqlite+aiosqlite:///_tmp.db"; .\.venv\Scripts\python.exe -m a
 - Обогащение (отпечаток+архив) — асинхронно в воркере: сразу после загрузки трека `storage_path` ещё пуст, появляется через секунды. Если воркер лежит — трек работает по `tg_file_id`, отпечаток не считается
 - Windows-консоль: путь проекта с кириллицей, в PowerShell возможны артефакты кодировки в выводе — на работу не влияет
 
-## Checkpoint (2026-07-11, ночь)
+## Checkpoint (2026-07-12)
 
-- Сделано: (а) пакет доработок из PR #1 задеплоен на VPS (миграция b3e91a7c42d0 применена: track_events + meta_synced); (б) домержены модуль импорта каталога + FastAPI API (§27), конфликт .env.example разрешён, 72 теста; (в) первый массовый импорт на прод: 42 минуса (биты DJ Kale из ПРОДАЖА/ТРЕКИ\биты) + 13 треков (альбом First/Pearly Pride, синглы) — у всех chromaprint-отпечатки и файлы в local-хранилище (182 МБ), дедуп поймал 1 дубликат
+- Сделано: реализованы 3 независимых среза доп. ТЗ (129 тестов, было 120):
+  1. Обязательная подписка (§14-17): модель `SubscriptionStatus`, `services/subscription.py` (getChatMember + TTL-кэш, fail-closed), `SubscriptionMiddleware` на все хендлеры кроме `/start`/`sub:check`, гейт-экран с кнопками на 2 канала + «Проверить подписку», `ADMIN_BYPASS_SUBSCRIPTION`. Миграция `a1c2e3f4b5d6`
+  2. Минусы доиграны до рабочего состояния (`Instrumental` уже существовал, но не имел воспроизведения и загрузки из бота): добавлены `tg_file_id`/`source`/`created_at`, `send_instrumental_audio`, кнопка «▶️ Слушать» в карточке минуса, мастер загрузки минусов из админки (`admin_upload_minus.py`, дедуп только внутри `instrumentals`, не пересекается с `tracks`). Миграция `b2d3e4f5a6c7`
+  3. Быстрые команды (§12-13): `app/bot_commands.py` — `/start` в дефолтном scope, `/admin` только в персональном scope админов (`BotCommandScopeChat`); backend-проверка `is_admin` уже была на месте
+  - Заодно: `is_admin` перенесён из `handlers/cards.py` в `services/users.py` (нужен был `services/subscription.py`, а services не должны зависеть от handlers)
 - Активно: нет
-- Следующий шаг: ADMIN_IDS в .env на VPS (ждёт подтверждения ID пользователем — авто-запись заблокировал классификатор); проверить вживую выдачу импортированного трека (у них нет tg_file_id — delivery отправит из хранилища и закэширует); Mini App — ждёт чертежи
-- НЕ импортировано (нет прав на раздачу): треки Big Baby Tape/kizaru/BONES/Three 6 Mafia и др. коммерческие из ремикс-папок Desktop. В импорт попал «Кино — Группа крови» (тег в файле из ПРОДАЖА) — проверить/удалить через админку
-- Ограничение Bot API (осознанное): событий «трек дослушан» нет — микс/очередь пачками по `QUEUE_BATCH_SIZE` с кнопкой «Продолжить»; getFile ≤ 20 МБ
-- Блокеры: карта/СБП ждёт `PAYMENT_PROVIDER_TOKEN`; Mini App ждёт чертежи; API-сервис не поднят (нужен домен/HTTPS под Mini App)
+- Следующий шаг: задеплоить (`/deploy`), вписать реальный `ADMIN_IDS` в `.env` на VPS (пользователь подтвердил, что ID известен, но фактическое значение не передано — нужно получить у пользователя, напр. через @userinfobot, SSH-чтение .env заблокировано классификатором); бот уже подтверждён администратором в @tgramuzuka и @zvyagaminus — подписку можно тестировать сразу после деплоя
+- Осознанно отложено: Player Engine + настоящий автоплей через Mini App (§3-8 доп. ТЗ) — требует публичного HTTPS-домена для VPS 38.244.213.132, которого пока нет; пользователь подтвердил делать это отдельным этапом, когда появятся чертежи
+- Блокеры: карта/СБП ждёт `PAYMENT_PROVIDER_TOKEN`; Mini App ждёт домен/HTTPS + чертежи; API-сервис не поднят

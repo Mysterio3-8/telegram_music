@@ -7,7 +7,8 @@ from aiogram.types import CallbackQuery, Message
 
 from app.config import settings
 from app.db.base import session_factory
-from app.handlers.common import format_duration
+from app.handlers.common import ensure_user, format_duration
+from app.handlers.delivery import send_instrumental_audio
 from app.keyboards.search import (
     instrumental_card_keyboard,
     instrumental_results_keyboard,
@@ -151,9 +152,9 @@ async def cb_instrumental_back(callback: CallbackQuery, state: FSMContext) -> No
     await callback.answer()
 
 
-@router.callback_query(F.data.startswith("ins:"))
+@router.callback_query(F.data.startswith("ins:open:"))
 async def cb_instrumental_card(callback: CallbackQuery) -> None:
-    instrumental_id = int(callback.data.split(":")[1])
+    instrumental_id = int(callback.data.split(":")[2])
     async with session_factory() as session:
         instrumental = await get_instrumental(session, instrumental_id)
     if instrumental is None:
@@ -163,6 +164,22 @@ async def cb_instrumental_card(callback: CallbackQuery) -> None:
         f"🎼 {instrumental.title} (Минус)\n\n"
         f"Исполнитель: {instrumental.artist}\n"
         f"Длительность: {format_duration(instrumental.duration)}",
-        reply_markup=instrumental_card_keyboard(),
+        reply_markup=instrumental_card_keyboard(instrumental.id),
     )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("ins:play:"))
+async def cb_instrumental_play(callback: CallbackQuery) -> None:
+    instrumental_id = int(callback.data.split(":")[2])
+    async with session_factory() as session:
+        await ensure_user(session, callback.from_user)
+        instrumental = await get_instrumental(session, instrumental_id)
+        if instrumental is None:
+            await callback.answer("Минус не найден", show_alert=True)
+            return
+        message = await send_instrumental_audio(callback.bot, callback.message.chat.id, session, instrumental)
+    if message is None:
+        await callback.answer("Файл недоступен", show_alert=True)
+        return
     await callback.answer()

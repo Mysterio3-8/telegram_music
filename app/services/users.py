@@ -5,6 +5,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.db.models import Playlist, User, UserLibrary
 
 
@@ -45,6 +46,10 @@ async def get_or_create_user(session: AsyncSession, profile: TelegramProfile) ->
 
 async def get_user_by_telegram_id(session: AsyncSession, telegram_id: int) -> User | None:
     return await session.scalar(select(User).where(User.telegram_id == telegram_id))
+
+
+def is_admin(telegram_id: int) -> bool:
+    return telegram_id in settings.admin_id_set
 
 
 async def count_library_tracks(session: AsyncSession, user_id: int) -> int:

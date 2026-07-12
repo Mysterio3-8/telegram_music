@@ -42,7 +42,7 @@ def instrumental_results_keyboard(
         [
             InlineKeyboardButton(
                 text=f"{number}. {item.artist} — {item.title}",
-                callback_data=f"ins:{item.id}",
+                callback_data=f"ins:open:{item.id}",
             )
         ]
         for number, item in enumerate(instrumentals, start=first_number)
@@ -52,7 +52,10 @@ def instrumental_results_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def instrumental_card_keyboard() -> InlineKeyboardMarkup:
+def instrumental_card_keyboard(instrumental_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text="◀️ Назад", callback_data="si:back")]]
+        inline_keyboard=[
+            [InlineKeyboardButton(text="▶️ Слушать", callback_data=f"ins:play:{instrumental_id}")],
+            [InlineKeyboardButton(text="◀️ Назад", callback_data="si:back")],
+        ]
     )

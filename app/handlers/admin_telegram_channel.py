@@ -6,7 +6,6 @@ from aiogram.types import CallbackQuery, Message
 
 from app.db.base import session_factory
 from app.db.models import TelegramChannelSource
-from app.handlers.cards import is_admin
 from app.keyboards.admin_telegram_channel import (
     confirm_delete_keyboard,
     source_view_keyboard,
@@ -25,6 +24,7 @@ from app.services.telegram_channel.sources import (
     list_sources,
     set_source_status,
 )
+from app.services.users import is_admin
 from app.tasks.telegram_channel import telegram_channel_scan_source
 
 router = Router()

@@ -41,6 +41,9 @@ class Track(Base):
 
 
 class Instrumental(Base):
+    """Минусы — отдельная от tracks таблица (TZ §9): совпадение title/artist с полноценным
+    треком не считается дубликатом, файлы физически разные."""
+
     __tablename__ = "instrumentals"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -48,7 +51,10 @@ class Instrumental(Base):
     artist: Mapped[str] = mapped_column(String(256), index=True)
     duration: Mapped[int]  # секунды
     storage_path: Mapped[str | None] = mapped_column(String(512))
+    tg_file_id: Mapped[str | None] = mapped_column(String(256))  # для мгновенной пересылки
     fingerprint: Mapped[str | None] = mapped_column(String(128), index=True)
+    source: Mapped[str] = mapped_column(String(32), default="import", server_default="import")
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
 
 class Playlist(Base):
@@ -166,6 +172,17 @@ class TelegramChannelSource(Base):
     found_count: Mapped[int] = mapped_column(default=0, server_default="0")
     imported_count: Mapped[int] = mapped_column(default=0, server_default="0")
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
+class SubscriptionStatus(Base):
+    """Кэш проверки обязательной подписки на каналы (TZ §14-17). TTL — в SubscriptionService."""
+
+    __tablename__ = "subscription_status"
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    channel: Mapped[str] = mapped_column(String(256), primary_key=True)
+    is_subscribed: Mapped[bool] = mapped_column(default=False)
+    checked_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
 
 class TelegramChannelImport(Base):

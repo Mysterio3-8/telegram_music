@@ -7,15 +7,11 @@
 from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.db.models import Track, User
 from app.handlers.common import format_duration
 from app.handlers.delivery import send_track_audio
 from app.keyboards.track_card import track_card_keyboard
-
-
-def is_admin(telegram_id: int) -> bool:
-    return telegram_id in settings.admin_id_set
+from app.services.users import is_admin
 
 
 def build_track_card_text(track: Track) -> str:

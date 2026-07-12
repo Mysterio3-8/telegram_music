@@ -13,7 +13,7 @@ from aiogram import Bot
 from aiogram.types import BufferedInputFile, InlineKeyboardMarkup, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Track, User
+from app.db.models import Instrumental, Track, User
 from app.services.stats import record_event
 from app.services.track_meta import build_filename, retag_audio
 
@@ -84,4 +84,58 @@ async def send_track_audio(
 
     if message is not None:
         await record_event(session, user.id, track.id, event)
+    return message
+
+
+async def _load_instrumental_bytes(bot: Bot, instrumental: Instrumental) -> bytes | None:
+    if instrumental.storage_path:
+        try:
+            from app.storage import get_storage
+
+            return get_storage().load(f"instrumentals/{instrumental.id}")
+        except Exception:  # noqa: BLE001
+            logger.warning("Архив недоступен instrumental=%s", instrumental.id, exc_info=True)
+    if instrumental.tg_file_id:
+        try:
+            buffer = io.BytesIO()
+            await bot.download(instrumental.tg_file_id, destination=buffer)
+            return buffer.getvalue()
+        except Exception:  # noqa: BLE001
+            logger.warning(
+                "Не удалось скачать instrumental=%s из Telegram", instrumental.id, exc_info=True
+            )
+    return None
+
+
+async def send_instrumental_audio(
+    bot: Bot,
+    chat_id: int,
+    session: AsyncSession,
+    instrumental: Instrumental,
+    reply_markup: InlineKeyboardMarkup | None = None,
+) -> Message | None:
+    """Отправляет минус в чат; кэширует tg_file_id при первой отправке из архива."""
+    if instrumental.tg_file_id:
+        return await bot.send_audio(
+            chat_id, instrumental.tg_file_id, reply_markup=reply_markup,
+            title=instrumental.title, performer=instrumental.artist,
+        )
+
+    data = await _load_instrumental_bytes(bot, instrumental)
+    if data is None:
+        return None
+    audio_file = BufferedInputFile(
+        data, filename=build_filename(instrumental.artist, instrumental.title, None)
+    )
+    message = await bot.send_audio(
+        chat_id,
+        audio_file,
+        title=instrumental.title,
+        performer=instrumental.artist,
+        duration=instrumental.duration or None,
+        reply_markup=reply_markup,
+    )
+    if message.audio is not None:
+        instrumental.tg_file_id = message.audio.file_id
+        await session.commit()
     return message

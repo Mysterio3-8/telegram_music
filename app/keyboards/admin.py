@@ -13,6 +13,7 @@ def admin_panel_keyboard(reclaimable_count: int = 0) -> InlineKeyboardMarkup:
             ]
         )
     rows += [
+        [InlineKeyboardButton(text="➕ Загрузить минусы", callback_data="adm:upload_minus")],
         [InlineKeyboardButton(text="🎬 YouTube-источники", callback_data="adm:yt")],
         [InlineKeyboardButton(text="📡 Мой Telegram-канал", callback_data="adm:tgc")],
         [InlineKeyboardButton(text="◀️ В меню", callback_data="menu:main")],

@@ -3,11 +3,13 @@ import logging
 
 from aiogram import Bot, Dispatcher
 
+from app.bot_commands import setup_bot_commands
 from app.config import settings
 from app.fsm import build_storage
 from app.handlers import (
     admin,
     admin_telegram_channel,
+    admin_upload_minus,
     admin_youtube,
     library,
     player,
@@ -16,10 +18,12 @@ from app.handlers import (
     search,
     start,
     stubs,
+    subscription,
     track_actions,
     upload,
 )
 from app.middlewares.ads import AdMiddleware
+from app.middlewares.subscription import SubscriptionMiddleware
 
 
 async def main() -> None:
@@ -31,7 +35,12 @@ async def main() -> None:
         raise SystemExit("BOT_TOKEN не задан — скопируйте .env.example в .env и впишите токен")
 
     bot = Bot(token=settings.bot_token)
+    await setup_bot_commands(bot)
     dp = Dispatcher(storage=build_storage())
+
+    subscription_middleware = SubscriptionMiddleware()
+    dp.message.middleware(subscription_middleware)
+    dp.callback_query.middleware(subscription_middleware)
 
     ad_middleware = AdMiddleware(frequency=settings.ad_frequency)
     dp.message.middleware(ad_middleware)
@@ -39,6 +48,7 @@ async def main() -> None:
 
     dp.include_routers(
         start.router,
+        subscription.router,
         library.router,
         playlists.router,
         search.router,
@@ -46,6 +56,7 @@ async def main() -> None:
         premium.router,
         player.router,
         admin.router,  # до track_actions: перехватывает ta:edit
+        admin_upload_minus.router,
         admin_youtube.router,
         admin_telegram_channel.router,
         track_actions.router,

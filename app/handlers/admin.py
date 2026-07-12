@@ -10,7 +10,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, Message
 
 from app.db.base import session_factory
-from app.handlers.cards import is_admin
+from app.services.users import is_admin
 from app.keyboards.admin import admin_panel_keyboard, reclaim_confirm_keyboard
 from app.services.library import get_track, update_track_meta
 from app.services.stats import ProjectStats, collect_stats
