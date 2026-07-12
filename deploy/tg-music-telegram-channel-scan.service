@@ -1,0 +1,8 @@
+[Unit]
+Description=Telegram Music Bot — periodic Telegram-channel re-scan
+After=network-online.target redis-server.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/tg-music-bot
+ExecStart=/opt/tg-music-bot/.venv/bin/python -m app.cli.telegram_channel scan-due

@@ -10,6 +10,8 @@
 | `tg-music-worker` | Celery, обогащение загрузок (очередь по умолчанию) |
 | `tg-music-youtube` | Celery, YouTube-импорт (очередь `youtube`, лимит параллельности) |
 | `tg-music-youtube-scan.timer` | ежедневная проверка источников на новые видео (§11) |
+| `tg-music-telegram-channel` | Celery, импорт из личного Telegram-канала (очередь `telegram_channel`, БЕЗ файлов на диске) |
+| `tg-music-telegram-channel-scan.timer` | ежедневная проверка канала на новые посты |
 
 Файлы юнитов — в этой папке. Установка нового юнита:
 ```bash
@@ -20,7 +22,7 @@ cp deploy/<unit> /etc/systemd/system/ && systemctl daemon-reload && systemctl en
 
 `/deploy` или вручную:
 ```bash
-ssh news-rewriter-vps "cd /opt/tg-music-bot && git pull && .venv/bin/pip install -q -r requirements.txt && .venv/bin/alembic upgrade head && systemctl restart tg-music-bot tg-music-worker tg-music-youtube"
+ssh news-rewriter-vps "cd /opt/tg-music-bot && git pull && .venv/bin/pip install -q -r requirements.txt && .venv/bin/alembic upgrade head && systemctl restart tg-music-bot tg-music-worker tg-music-youtube tg-music-telegram-channel"
 ```
 
 ## Управление YouTube-источниками
@@ -38,5 +40,34 @@ CLI (эквивалент, если нужно с сервера):
 .venv/bin/python -m app.cli.youtube recover       # вернуть оборванные задачи
 ```
 
+## Импорт из личного Telegram-канала (без файлов на диске)
+
+Файл никогда не лежит на сервере: скачивается временно только для отпечатка,
+сразу перезаливается через бота (получает свой `tg_file_id`) и байты отбрасываются.
+
+**Один раз перед первым использованием** — вход в личный аккаунт (интерактивно,
+номер телефона + код из Telegram/SMS):
+```bash
+ssh news-rewriter-vps
+cd /opt/tg-music-bot
+# TELEGRAM_API_ID / TELEGRAM_API_HASH — получить на https://my.telegram.org
+.venv/bin/python -m app.cli.telegram_login
+```
+Сессия сохранится в `TELEGRAM_SESSION_PATH` — держать вне git, права 600 (даёт
+доступ к аккаунту, как и сам номер телефона). Дальше вход не требуется.
+
+Управление — всё из бота: `/admin` → 📡 Мой Telegram-канал →
+- 🔴/🟢 глобальный выключатель импортёра;
+- ➕ Добавить канал (пришлёте @username/ссылку — импорт стартует сам);
+- по каждому источнику: проверить сейчас / отключить / удалить.
+
+CLI-эквивалент:
+```bash
+.venv/bin/python -m app.cli.telegram_channel add <@channel>
+.venv/bin/python -m app.cli.telegram_channel list
+.venv/bin/python -m app.cli.telegram_channel scan <id|all>
+.venv/bin/python -m app.cli.telegram_channel recover
+```
+
 ## Системные зависимости
-`ffmpeg`, `libchromaprint-tools` (fpcalc), `redis-server`, `yt-dlp` (pip).
+`ffmpeg`, `libchromaprint-tools` (fpcalc), `redis-server`, `yt-dlp` и `telethon` (pip).

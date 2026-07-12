@@ -1,0 +1,15 @@
+[Unit]
+Description=Telegram Music Bot — Telegram-channel import worker (Celery, queue=telegram_channel)
+After=network-online.target redis-server.service
+Wants=network-online.target
+Requires=redis-server.service
+
+[Service]
+WorkingDirectory=/opt/tg-music-bot
+ExecStartPre=/opt/tg-music-bot/.venv/bin/python -m app.cli.telegram_channel recover
+ExecStart=/opt/tg-music-bot/.venv/bin/celery -A app.tasks.celery_app worker -Q telegram_channel --concurrency=1 --loglevel=info
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

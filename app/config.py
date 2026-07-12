@@ -55,6 +55,27 @@ class Settings(BaseSettings):
     youtube_max_retries: int = 3  # попыток при временной ошибке (§13)
     youtube_check_interval_days: int = 30  # период автопроверки новых видео (§11)
 
+    # Личный Telegram-канал: импорт своих аудиопостов через MTProto (Telethon).
+    # api_id/api_hash — на my.telegram.org. session_path — файл входа, вне git,
+    # права 600 (даёт доступ к аккаунту как номер телефона). Создаётся один раз
+    # через `python -m app.cli.telegram_login`, дальше используется без диалога.
+    telegram_api_id: int = 0
+    telegram_api_hash: str = ""
+    telegram_session_path: str = "telegram_userbot.session"
+    # Приватный чат, куда бот перезаливает трек, чтобы получить свой tg_file_id
+    # (без него бот не может отправлять то, что скачал не сам userbot).
+    # Пусто → используется личка первого администратора (ADMIN_IDS).
+    telegram_archive_chat_id: int = 0
+    telegram_channel_check_interval_days: int = 1
+    telegram_channel_max_retries: int = 3
+
+    @property
+    def effective_archive_chat_id(self) -> int:
+        if self.telegram_archive_chat_id:
+            return self.telegram_archive_chat_id
+        admins = sorted(self.admin_id_set)
+        return admins[0] if admins else 0
+
     # Публичный API (§27)
     jwt_secret: str = ""  # пусто → подписываем bot_token
     jwt_ttl_minutes: int = 1440

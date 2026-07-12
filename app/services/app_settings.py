@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.models import AppSetting
 
 YOUTUBE_IMPORT_ENABLED = "youtube_import_enabled"
+TELEGRAM_CHANNEL_IMPORT_ENABLED = "telegram_channel_import_enabled"
 
 
 async def get_flag(session: AsyncSession, key: str, default: bool = True) -> bool:
@@ -24,3 +25,7 @@ async def set_flag(session: AsyncSession, key: str, value: bool) -> None:
 
 async def is_youtube_enabled(session: AsyncSession) -> bool:
     return await get_flag(session, YOUTUBE_IMPORT_ENABLED, default=True)
+
+
+async def is_telegram_channel_enabled(session: AsyncSession) -> bool:
+    return await get_flag(session, TELEGRAM_CHANNEL_IMPORT_ENABLED, default=True)

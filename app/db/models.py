@@ -150,3 +150,41 @@ class YoutubeImport(Base):
     last_error: Mapped[str | None] = mapped_column(String(512))
     discovered_at: Mapped[datetime] = mapped_column(server_default=func.now())
     imported_at: Mapped[datetime | None]
+
+
+class TelegramChannelSource(Base):
+    """Личный Telegram-канал как источник автоимпорта (без хранения файлов на диске)."""
+
+    __tablename__ = "telegram_channel_sources"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    channel: Mapped[str] = mapped_column(String(256))  # @username, invite-ссылка или id
+    title: Mapped[str | None] = mapped_column(String(256))
+    status: Mapped[str] = mapped_column(String(16), default="active")  # active | disabled
+    last_checked_at: Mapped[datetime | None]
+    last_message_id: Mapped[int] = mapped_column(default=0, server_default="0")
+    found_count: Mapped[int] = mapped_column(default=0, server_default="0")
+    imported_count: Mapped[int] = mapped_column(default=0, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
+class TelegramChannelImport(Base):
+    """Задача импорта одного аудиопоста из канала. Файл никогда не лежит на диске —
+    скачивается временно только для отпечатка, сразу отправляется через бота
+    (получает свой tg_file_id) и байты отбрасываются."""
+
+    __tablename__ = "telegram_channel_imports"
+    __table_args__ = (UniqueConstraint("source_id", "message_id", name="uq_tgchan_source_message"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    source_id: Mapped[int] = mapped_column(ForeignKey("telegram_channel_sources.id"), index=True)
+    message_id: Mapped[int] = mapped_column(index=True)
+    original_title: Mapped[str | None] = mapped_column(String(512))  # как было в посте
+    detected_title: Mapped[str | None] = mapped_column(String(256))
+    detected_artist: Mapped[str | None] = mapped_column(String(256))
+    status: Mapped[str] = mapped_column(String(16), default="pending", index=True)
+    track_id: Mapped[int | None] = mapped_column(ForeignKey("tracks.id"))
+    attempts: Mapped[int] = mapped_column(default=0, server_default="0")
+    last_error: Mapped[str | None] = mapped_column(String(512))
+    discovered_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    imported_at: Mapped[datetime | None]

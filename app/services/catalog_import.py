@@ -126,3 +126,45 @@ async def import_user_track(
     session.add(Upload(user_id=user_id, track_id=track.id))
     await session.commit()
     return track
+
+
+async def find_existing_track(
+    session: AsyncSession, fingerprint: str | None, title: str, artist: str, duration: int
+) -> Track | None:
+    """Дедуп-проверка без побочных эффектов: сначала по отпечатку, потом по метаданным."""
+    if fingerprint:
+        existing = await find_by_fingerprint(session, fingerprint)
+        if existing is not None:
+            return existing
+    return await find_duplicate(session, title, artist, duration)
+
+
+async def create_track_from_telegram(
+    session: AsyncSession,
+    *,
+    title: str,
+    artist: str,
+    duration: int,
+    file_format: str | None,
+    file_size: int,
+    fingerprint: str | None,
+    tg_file_id: str,
+) -> Track:
+    """Создаёт трек БЕЗ архивной копии на диске — файл уже заминчен через бота
+    (tg_file_id валиден сразу), сохраняется только ссылка. Дедуп — забота вызывающей
+    стороны (find_existing_track), чтобы не грузить в Telegram то, что уже есть."""
+    bitrate = round(file_size * 8 / duration / 1000) if duration > 0 else None
+    track = Track(
+        title=title,
+        artist=artist,
+        duration=duration,
+        bitrate=bitrate,
+        file_size=file_size,
+        format=file_format,
+        fingerprint=fingerprint,
+        tg_file_id=tg_file_id,
+        meta_synced=True,
+    )
+    session.add(track)
+    await session.commit()
+    return track

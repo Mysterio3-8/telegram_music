@@ -1,0 +1,9 @@
+[Unit]
+Description=Daily check for the Telegram channel due for re-scan
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+
+[Install]
+WantedBy=timers.target

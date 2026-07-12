@@ -8,9 +8,12 @@ celery_app.conf.update(
     accept_content=["json"],
     task_ignore_result=True,
     broker_connection_retry_on_startup=True,
-    # YouTube-задачи — в отдельную очередь (свой воркер с лимитом параллельности, §14)
-    task_routes={"youtube.*": {"queue": "youtube"}},
+    # Фоновые задачи — каждая группа в свою очередь (свой воркер с лимитом параллельности)
+    task_routes={
+        "youtube.*": {"queue": "youtube"},
+        "telegram_channel.*": {"queue": "telegram_channel"},
+    },
 )
 
 # Регистрируем задачи в воркере (celery -A app.tasks.celery_app worker)
-from app.tasks import enrich, youtube  # noqa: E402,F401
+from app.tasks import enrich, telegram_channel, youtube  # noqa: E402,F401
