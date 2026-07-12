@@ -8,16 +8,14 @@ import logging
 from datetime import datetime, timezone
 
 from aiogram import Bot
-from aiogram.types import BufferedInputFile
 from sqlalchemy.ext.asyncio import AsyncSession
 from telethon import TelegramClient
 
 from app.config import settings
 from app.db.models import TelegramChannelImport, TelegramChannelSource
-from app.services.catalog_import import create_track_from_telegram, find_existing_track
+from app.services.catalog_import import import_via_telegram_mint
 from app.services.fingerprint import compute_fingerprint_from_bytes
 from app.services.title_parser import parse_title
-from app.services.track_meta import build_filename, retag_audio
 
 logger = logging.getLogger(__name__)
 
@@ -75,30 +73,18 @@ async def process_import(
 
     fingerprint = compute_fingerprint_from_bytes(data, suffix=f".{file_format}")
 
-    track = await find_existing_track(session, fingerprint, title, artist, duration)
-    if track is None:
-        tagged = retag_audio(data, file_format, title, artist)
-        data = None  # исходные байты больше не нужны
-        sent = await bot.send_audio(
-            settings.effective_archive_chat_id,
-            BufferedInputFile(tagged, filename=build_filename(artist, title, file_format)),
-            title=title,
-            performer=artist,
-            duration=duration or None,
-        )
-        track = await create_track_from_telegram(
-            session,
-            title=title,
-            artist=artist,
-            duration=duration,
-            file_format=file_format,
-            file_size=len(tagged),
-            fingerprint=fingerprint,
-            tg_file_id=sent.audio.file_id,
-        )
-        tagged = None  # заминчено в Telegram — локальная копия больше не нужна
-    else:
-        data = None  # трек уже был — скачанные байты не понадобились
+    track, _created = await import_via_telegram_mint(
+        session,
+        bot,
+        title=title,
+        artist=artist,
+        duration=duration,
+        file_format=file_format,
+        data=data,
+        fingerprint=fingerprint,
+        archive_chat_id=settings.effective_archive_chat_id,
+    )
+    data = None  # заминчено (или дубликат) — локальная копия больше не нужна
 
     imp.detected_title = title[:256]
     imp.detected_artist = artist[:256]

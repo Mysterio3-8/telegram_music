@@ -7,6 +7,7 @@
 import asyncio
 import logging
 
+from aiogram import Bot
 from celery import Task
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -60,7 +61,11 @@ def youtube_process_import(import_id: int) -> None:
         if not await is_youtube_enabled(session):
             logger.info("YouTube-импортёр выключен — задача %s пропущена", import_id)
             return
-        return await process_import(session, import_id)
+        bot = Bot(token=settings.bot_token)
+        try:
+            return await process_import(session, bot, import_id)
+        finally:
+            await bot.session.close()
 
     asyncio.run(_with_session(_run))
 

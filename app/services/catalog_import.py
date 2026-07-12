@@ -1,9 +1,12 @@
+from aiogram import Bot
+from aiogram.types import BufferedInputFile
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Instrumental, Track, Upload, UserLibrary
 from app.importers.base import ImportItem
 from app.services.fingerprint import compute_fingerprint_from_bytes
+from app.services.track_meta import build_filename, retag_audio
 from app.services.uploads import DUPLICATE_DURATION_TOLERANCE, find_by_fingerprint, find_duplicate
 from app.storage.base import StorageBackend
 
@@ -168,3 +171,45 @@ async def create_track_from_telegram(
     session.add(track)
     await session.commit()
     return track
+
+
+async def import_via_telegram_mint(
+    session: AsyncSession,
+    bot: Bot,
+    *,
+    title: str,
+    artist: str,
+    duration: int,
+    file_format: str | None,
+    data: bytes,
+    fingerprint: str | None,
+    archive_chat_id: int,
+) -> tuple[Track, bool]:
+    """Дедуп; если трек новый — перетегирует и отправляет через бота, чтобы
+    получить tg_file_id БЕЗ сохранения байтов на диск (единственный способ
+    заминтить file_id — реально отправить файл через Bot API; это инфраструктурная
+    операция уровня storage.save(), а не бизнес-логика в чужом слое). Общая точка
+    для YouTube- и Telegram-канал-импортёров. Возвращает (трек, создан_ли_новый)."""
+    track = await find_existing_track(session, fingerprint, title, artist, duration)
+    if track is not None:
+        return track, False
+
+    tagged = retag_audio(data, file_format, title, artist)
+    sent = await bot.send_audio(
+        archive_chat_id,
+        BufferedInputFile(tagged, filename=build_filename(artist, title, file_format)),
+        title=title,
+        performer=artist,
+        duration=duration or None,
+    )
+    track = await create_track_from_telegram(
+        session,
+        title=title,
+        artist=artist,
+        duration=duration,
+        file_format=file_format,
+        file_size=len(tagged),
+        fingerprint=fingerprint,
+        tg_file_id=sent.audio.file_id,
+    )
+    return track, True

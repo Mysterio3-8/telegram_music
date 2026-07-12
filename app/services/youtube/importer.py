@@ -1,21 +1,23 @@
 """Импорт одной YouTube-публикации в общую базу треков (доп. ТЗ, §7-§10).
 
-Скачивание → разбор названия → запись ID3-тегов → отпечаток/дедуп → трек в базе.
-Файл сохраняется уже с корректными тегами (§8). Дубликаты по video_id отсекаются
-уникальным ограничением, по содержимому — отпечатком/метаданными в catalog_import.
+Скачивание yt-dlp → разбор названия → отпечаток/дедуп → перезалив через бота
+(получает свой tg_file_id) → трек в базе. Аудио живёт только во временной
+директории yt-dlp (чистится автоматически) и в памяти на время обработки —
+на сервере ничего не остаётся. Дубликаты по video_id отсекаются уникальным
+ограничением, по содержимому — отпечатком/метаданными в catalog_import.
 """
 import logging
 from datetime import datetime, timezone
 
+from aiogram import Bot
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.db.models import YoutubeImport, YoutubeSource
-from app.importers.base import ImportItem
-from app.services.catalog_import import import_track_detailed
-from app.services.track_meta import retag_audio
+from app.services.catalog_import import import_via_telegram_mint
+from app.services.fingerprint import compute_fingerprint_from_bytes
+from app.services.title_parser import parse_title
 from app.services.youtube.downloader import download_audio
-from app.services.youtube.metadata import parse_title
-from app.storage import get_storage
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +26,7 @@ class ImportError_(Exception):
     """Временная ошибка импорта — задача должна быть повторена."""
 
 
-async def process_import(session: AsyncSession, import_id: int) -> str:
+async def process_import(session: AsyncSession, bot: Bot, import_id: int) -> str:
     """Обрабатывает одну задачу. Возвращает финальный статус (imported/skipped).
     Кидает исключение при временной ошибке — воркер повторит попытку."""
     imp = await session.get(YoutubeImport, import_id)
@@ -47,15 +49,19 @@ async def process_import(session: AsyncSession, import_id: int) -> str:
     await session.commit()
 
     artist, title = parse_title(audio.video_title, fallback_artist)
-    tagged = retag_audio(audio.data, audio.file_format, title, artist)
-    item = ImportItem(
+    fingerprint = compute_fingerprint_from_bytes(audio.data, suffix=f".{audio.file_format}")
+
+    track, _created = await import_via_telegram_mint(
+        session,
+        bot,
         title=title,
         artist=artist,
         duration=audio.duration,
-        data=tagged,
         file_format=audio.file_format,
+        data=audio.data,
+        fingerprint=fingerprint,
+        archive_chat_id=settings.effective_archive_chat_id,
     )
-    track, _created = await import_track_detailed(session, get_storage(), item)
 
     imp.detected_title = title[:256]
     imp.detected_artist = artist[:256]
