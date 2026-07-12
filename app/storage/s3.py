@@ -37,3 +37,6 @@ class S3Storage:
             return True
         except ClientError:
             return False
+
+    def delete(self, key: str) -> None:
+        self._client.delete_object(Bucket=self._bucket, Key=key)

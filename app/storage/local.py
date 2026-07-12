@@ -21,3 +21,6 @@ class LocalStorage:
 
     def exists(self, key: str) -> bool:
         return self._path(key).exists()
+
+    def delete(self, key: str) -> None:
+        self._path(key).unlink(missing_ok=True)

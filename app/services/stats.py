@@ -6,6 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Playlist, Track, TrackEvent, Upload, User
+from app.services.storage_cleanup import count_reclaimable
 
 TOP_TRACKS_LIMIT = 5
 
@@ -29,7 +30,10 @@ class ProjectStats:
     users_active_day: int
     users_active_week: int
     premium_active: int
-    tracks_total: int
+    tracks_total: int  # все треки, доступные для прослушивания — независимо от хранилища
+    archived_on_disk: int  # сколько из них ещё держат архивную копию (storage_path)
+    reclaimable_count: int  # архив-дубли: tg_file_id уже есть и подтверждён — можно удалить
+    reclaimable_bytes: int
     uploads_total: int
     playlists_total: int
     listens_total: int
@@ -62,6 +66,7 @@ async def collect_stats(session: AsyncSession) -> ProjectStats:
         .limit(TOP_TRACKS_LIMIT)
     )
     top_tracks = [(track, plays) for track, plays in (await session.execute(top_stmt)).all()]
+    reclaimable_count, reclaimable_bytes = await count_reclaimable(session)
 
     return ProjectStats(
         users_total=await _count(session, users_where()),
@@ -71,6 +76,11 @@ async def collect_stats(session: AsyncSession) -> ProjectStats:
         users_active_week=await _count(session, users_where(User.last_login >= week_ago)),
         premium_active=await _count(session, users_where(User.premium.is_(True))),
         tracks_total=await _count(session, select(func.count()).select_from(Track)),
+        archived_on_disk=await _count(
+            session, select(func.count()).select_from(Track).where(Track.storage_path.is_not(None))
+        ),
+        reclaimable_count=reclaimable_count,
+        reclaimable_bytes=reclaimable_bytes,
         uploads_total=await _count(session, select(func.count()).select_from(Upload)),
         playlists_total=await _count(session, select(func.count()).select_from(Playlist)),
         listens_total=await _count(session, events_where(TrackEvent.event == "listen")),

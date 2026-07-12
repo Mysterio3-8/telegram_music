@@ -11,3 +11,7 @@ class StorageBackend(Protocol):
 
     def exists(self, key: str) -> bool:
         ...
+
+    def delete(self, key: str) -> None:
+        """Удаляет объект. Не должен падать, если ключа уже нет."""
+        ...
