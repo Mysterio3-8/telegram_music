@@ -2,32 +2,46 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db
-from app.api.schemas import InstrumentalOut, Page, TrackOut
+from app.api.schemas import InstrumentalOut, Page, TrackOut, track_out
 from app.config import settings
 from app.services.library import get_track
 from app.services.search import get_instrumental, search_instrumentals, search_tracks
 
 router = APIRouter(tags=["catalog"], dependencies=[Depends(get_current_user)])
 
+MINIAPP_MAX_PAGE_SIZE = 100
+
 
 @router.get("/tracks", response_model=Page[TrackOut])
 async def list_tracks(
     q: str = "",
     page: int = Query(1, ge=1),
+    page_size: int = Query(None, ge=1, le=MINIAPP_MAX_PAGE_SIZE),
     session: AsyncSession = Depends(get_db),
 ) -> Page[TrackOut]:
-    tracks, total = await search_tracks(session, q, page)
-    return Page(items=tracks, total=total, page=page, page_size=settings.page_size)
+    tracks, total = await search_tracks(session, q, page, page_size)
+    return Page(
+        items=[track_out(t) for t in tracks],
+        total=total,
+        page=page,
+        page_size=page_size or settings.page_size,
+    )
 
 
 @router.get("/search", response_model=Page[TrackOut])
 async def search(
     q: str,
     page: int = Query(1, ge=1),
+    page_size: int = Query(None, ge=1, le=MINIAPP_MAX_PAGE_SIZE),
     session: AsyncSession = Depends(get_db),
 ) -> Page[TrackOut]:
-    tracks, total = await search_tracks(session, q, page)
-    return Page(items=tracks, total=total, page=page, page_size=settings.page_size)
+    tracks, total = await search_tracks(session, q, page, page_size)
+    return Page(
+        items=[track_out(t) for t in tracks],
+        total=total,
+        page=page,
+        page_size=page_size or settings.page_size,
+    )
 
 
 @router.get("/track/{track_id}", response_model=TrackOut)
@@ -37,7 +51,7 @@ async def get_track_by_id(
     track = await get_track(session, track_id)
     if track is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Трек не найден")
-    return track
+    return track_out(track)
 
 
 @router.get("/instrumentals", response_model=Page[InstrumentalOut])

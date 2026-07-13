@@ -1,0 +1,118 @@
+// Реальный API-клиент: JWT по Telegram WebApp initData, никаких моков.
+// В проде mini app и API живут на одном домене (nginx: /api → uvicorn).
+// В dev (порт 5500, python http.server) API поднимается отдельно на 8010.
+
+const IS_DEV = location.port === "5500";
+export const API_BASE = IS_DEV ? "http://127.0.0.1:8010" : "/api";
+
+let accessToken = null;
+
+export class ApiError extends Error {
+  constructor(message, status) {
+    super(message);
+    this.status = status;
+  }
+}
+
+function tg() {
+  return window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+}
+
+export function telegramUser() {
+  const webApp = tg();
+  return webApp && webApp.initDataUnsafe ? webApp.initDataUnsafe.user || null : null;
+}
+
+export async function login() {
+  // Dev-режим: токен кладётся в localStorage вручную (сгенерирован локальным секретом)
+  const devToken = IS_DEV ? localStorage.getItem("tgmusic-dev-token") : null;
+  if (devToken) {
+    accessToken = devToken;
+    return;
+  }
+  const webApp = tg();
+  const initData = webApp ? webApp.initData : "";
+  if (!initData) {
+    throw new ApiError("Откройте приложение из Telegram", 401);
+  }
+  const response = await fetch(`${API_BASE}/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ init_data: initData }),
+  });
+  if (!response.ok) {
+    throw new ApiError("Не удалось войти", response.status);
+  }
+  const data = await response.json();
+  accessToken = data.access_token;
+}
+
+async function request(path, options = {}) {
+  const response = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      ...(options.body ? { "Content-Type": "application/json" } : {}),
+      ...(options.headers || {}),
+    },
+  });
+  if (response.status === 401) {
+    // токен истёк — перелогин и один повтор
+    await login();
+    return request(path, { ...options, _retried: true });
+  }
+  if (!response.ok) {
+    throw new ApiError(`Ошибка запроса (${response.status})`, response.status);
+  }
+  if (response.status === 204) return null;
+  return response.json();
+}
+
+export function resolveAudioUrl(track) {
+  return track.audio_url ? `${API_BASE}${track.audio_url}` : null;
+}
+
+export function getTracks(query = "", page = 1, pageSize = 100) {
+  const params = new URLSearchParams({ q: query, page: String(page), page_size: String(pageSize) });
+  return request(`/tracks?${params}`);
+}
+
+export function getLibrary(page = 1) {
+  return request(`/library?page=${page}`);
+}
+
+export function getLibraryIds() {
+  return request("/library/ids");
+}
+
+export function addToLibrary(trackId) {
+  return request(`/library/${trackId}`, { method: "POST" });
+}
+
+export function removeFromLibrary(trackId) {
+  return request(`/library/${trackId}`, { method: "DELETE" });
+}
+
+export function getPremiumStatus() {
+  return request("/premium/status");
+}
+
+export function createPaymentLink() {
+  return request("/premium/pay", { method: "POST" });
+}
+
+export function formatDuration(totalSeconds) {
+  const seconds = Math.max(0, Math.round(totalSeconds || 0));
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+export function shuffle(list) {
+  const result = [...list];
+  for (let i = result.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+}

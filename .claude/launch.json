@@ -1,0 +1,20 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "miniapp",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "5500", "--directory", "miniapp"],
+      "port": 5500
+    },
+    {
+      "name": "api",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": [
+        "/c",
+        "set DATABASE_URL=sqlite+aiosqlite:///dev_miniapp.db&& set API_CORS_ORIGINS=http://localhost:5500,http://127.0.0.1:5500&& .venv\\Scripts\\python.exe -m uvicorn app.api.app:app --host 127.0.0.1 --port 8010"
+      ],
+      "port": 8010
+    }
+  ]
+}

@@ -11,17 +11,21 @@ def _track_filter(query: str):
 
 
 async def search_tracks(
-    session: AsyncSession, query: str, page: int
+    session: AsyncSession, query: str, page: int, page_size: int | None = None
 ) -> tuple[list[Track], int]:
-    """Поиск по общей базе. Возвращает (страница результатов, всего найдено)."""
+    """Поиск по общей базе. Возвращает (страница результатов, всего найдено).
+
+    page_size переопределяется только Mini App (пачки до 100); бот всегда на дефолте.
+    """
+    size = page_size or settings.page_size
     where = _track_filter(query)
     total = await session.scalar(select(func.count()).select_from(Track).where(where)) or 0
     stmt = (
         select(Track)
         .where(where)
         .order_by(Track.artist, Track.title)
-        .offset((page - 1) * settings.page_size)
-        .limit(settings.page_size)
+        .offset((page - 1) * size)
+        .limit(size)
     )
     return list((await session.scalars(stmt)).all()), total
 

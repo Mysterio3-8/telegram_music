@@ -1,0 +1,66 @@
+@import url("tokens.css");
+
+/* ============ Profile screen ============ */
+
+.profile-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 0 8px;
+}
+
+.profile-head span {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.profile-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 26px 0 8px;
+}
+
+.profile-hero__name {
+  margin-top: 16px;
+  font-size: 19px;
+  font-weight: 800;
+}
+
+.profile-hero__status {
+  margin-top: 5px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+.profile-hero__status.is-premium {
+  color: var(--text-accent);
+  font-weight: 700;
+}
+
+.profile-card {
+  margin-top: 22px;
+  padding: 4px 4px;
+}
+
+/* ============ Library screen ============ */
+
+.lib-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 4px 12px;
+}
+
+.lib-row .section-title {
+  font-size: 14px;
+}
+
+/* ============ Home screen ============ */
+
+.home-track-card {
+  margin-top: 20px;
+  padding: 8px;
+}

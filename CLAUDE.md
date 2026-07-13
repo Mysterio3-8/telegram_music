@@ -6,7 +6,8 @@
 ## Прод
 
 - VPS: `ssh news-rewriter-vps` (root@38.244.213.132), код в `/opt/tg-music-bot`
-- Сервисы: `tg-music-bot` (polling), `tg-music-worker` (Celery, обогащение загрузок), `tg-music-youtube` (Celery, очередь `youtube` — импорт с YouTube), таймер `tg-music-youtube-scan` (автопроверка §11). Юниты — в [deploy/](deploy/). `systemctl {status,restart} <сервис>`, логи: `journalctl -u <сервис> -f`
+- Домен: keybest.cc → VPS (Mini App статика + API через nginx, HTTPS certbot). DNS настраивает пользователь у регистратора
+- Сервисы: `tg-music-bot` (polling), `tg-music-worker` (Celery, обогащение загрузок), `tg-music-youtube` (Celery, очередь `youtube` — импорт с YouTube), таймер `tg-music-youtube-scan` (автопроверка §11), `tg-music-api` (uvicorn :8010 — API Mini App + webhook ЮKassa). Юниты — в [deploy/](deploy/), nginx-сайт — [deploy/nginx-keybest.conf](deploy/nginx-keybest.conf). `systemctl {status,restart} <сервис>`, логи: `journalctl -u <сервис> -f`
 - Redis (`redis-server`) — FSM + брокер Celery. ffmpeg + libchromaprint-tools (fpcalc) — отпечатки. yt-dlp (pip) — загрузка с YouTube
 - Repo: git@github.com:Mysterio3-8/telegram_music.git (пуш только по SSH — https-креды на машине от другого аккаунта)
 - Деплой: `/deploy` (push → pull → pip install → `alembic upgrade head` → restart bot+worker)
@@ -120,14 +121,15 @@ $env:DATABASE_URL="sqlite+aiosqlite:///_tmp.db"; .\.venv\Scripts\python.exe -m a
 - Обогащение (отпечаток+архив) — асинхронно в воркере: сразу после загрузки трека `storage_path` ещё пуст, появляется через секунды. Если воркер лежит — трек работает по `tg_file_id`, отпечаток не считается
 - Windows-консоль: путь проекта с кириллицей, в PowerShell возможны артефакты кодировки в выводе — на работу не влияет
 
-## Checkpoint (2026-07-12)
+## Checkpoint (2026-07-13)
 
-- Сделано: реализованы 3 независимых среза доп. ТЗ (129 тестов, было 120):
-  1. Обязательная подписка (§14-17): модель `SubscriptionStatus`, `services/subscription.py` (getChatMember + TTL-кэш, fail-closed), `SubscriptionMiddleware` на все хендлеры кроме `/start`/`sub:check`, гейт-экран с кнопками на 2 канала + «Проверить подписку», `ADMIN_BYPASS_SUBSCRIPTION`. Миграция `a1c2e3f4b5d6`
-  2. Минусы доиграны до рабочего состояния (`Instrumental` уже существовал, но не имел воспроизведения и загрузки из бота): добавлены `tg_file_id`/`source`/`created_at`, `send_instrumental_audio`, кнопка «▶️ Слушать» в карточке минуса, мастер загрузки минусов из админки (`admin_upload_minus.py`, дедуп только внутри `instrumentals`, не пересекается с `tracks`). Миграция `b2d3e4f5a6c7`
-  3. Быстрые команды (§12-13): `app/bot_commands.py` — `/start` в дефолтном scope, `/admin` только в персональном scope админов (`BotCommandScopeChat`); backend-проверка `is_admin` уже была на месте
-  - Заодно: `is_admin` перенесён из `handlers/cards.py` в `services/users.py` (нужен был `services/subscription.py`, а services не должны зависеть от handlers)
-- Активно: нет
-- Следующий шаг: задеплоить (`/deploy`), вписать реальный `ADMIN_IDS` в `.env` на VPS (пользователь подтвердил, что ID известен, но фактическое значение не передано — нужно получить у пользователя, напр. через @userinfobot, SSH-чтение .env заблокировано классификатором); бот уже подтверждён администратором в @tgramuzuka и @zvyagaminus — подписку можно тестировать сразу после деплоя
-- Осознанно отложено: Player Engine + настоящий автоплей через Mini App (§3-8 доп. ТЗ) — требует публичного HTTPS-домена для VPS 38.244.213.132, которого пока нет; пользователь подтвердил делать это отдельным этапом, когда появятся чертежи
-- Блокеры: карта/СБП ждёт `PAYMENT_PROVIDER_TOKEN`; Mini App ждёт домен/HTTPS + чертежи; API-сервис не поднят
+- Сделано ранее (задеплоено): обязательная подписка §14-17, минусы §9-11, команды §12-13 (коммит 4d77957); ADMIN_IDS=5852263277 на VPS
+- Сделано сейчас (НЕ задеплоено): Mini App-плеер + инфраструктура keybest.cc:
+  1. API расширен: `audio.py` (байты трека по HMAC-подписи + Range для перемотки), `payments.py` (webhook ЮKassa `/webhook/yookassa` + `POST /premium/pay`), library add/remove/ids, `audio_url` в TrackOut, `page_size` до 100 для Mini App
+  2. ЮKassa (API-протокол, redirect): `services/yookassa_payments.py` — создание платежа 21 ₽, webhook перепроверяет статус у API ЮKassa (телу не доверяем), идемпотентен по payment_id. Кнопка «Карта/СБП» в боте (`prem:yookassa`). Ключи только в `.env` VPS: `YOOKASSA_SHOP_ID=1314296`, `YOOKASSA_SECRET_KEY` (⚠️ ключ засветился в чате — рекомендован перевыпуск)
+  3. Mini App (`miniapp/`, vanilla JS без сборки): реальные данные через API (initData→JWT), настоящий `<audio>` с автопереключением по `ended` (ТЗ §3-4), прогресс через отдельный канал подписки (фикс лагов — без полного re-render на тик), очередь-шаффл без повторов (§5), обложки-градиенты по id, тёмная+светлая тема Premium Black Amethyst, вкладки Текст/Отзыв удалены по требованию
+  4. Деплой-файлы: `deploy/tg-music-api.service` (uvicorn :8010), `deploy/nginx-keybest.conf` (статика miniapp + /api + /webhook). nginx+certbot установлены на VPS, nginx active
+  5. Кнопка «🎧 Открыть плеер» (WebAppInfo) в главном меню бота — показывается когда задан `PUBLIC_BASE_URL`
+- Блокер деплоя Mini App: **DNS keybest.cc пустой** — пользователь должен создать A-запись keybest.cc → 38.244.213.132, потом: certbot --nginx -d keybest.cc, прописать на VPS `PUBLIC_BASE_URL`/`YOOKASSA_*`/`API_CORS_ORIGINS`, включить tg-music-api
+- Dev-стенд Mini App: см. miniapp/README.md (dev_miniapp.db + WAV-сиды + dev-JWT в localStorage)
+- Следующий шаг: дождаться DNS → задеплоить → certbot → e2e-проверка оплаты 21 ₽ и автоплея в Telegram

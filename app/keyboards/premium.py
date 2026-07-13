@@ -3,7 +3,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from app.config import settings
 
 
-def premium_keyboard(card_available: bool) -> InlineKeyboardMarkup:
+def premium_keyboard(card_available: bool, yookassa_available: bool = False) -> InlineKeyboardMarkup:
     rows = [
         [
             InlineKeyboardButton(
@@ -12,7 +12,16 @@ def premium_keyboard(card_available: bool) -> InlineKeyboardMarkup:
             )
         ]
     ]
-    if card_available:
+    if yookassa_available:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=f"💳 Карта / СБП — {settings.premium_price_rub} ₽",
+                    callback_data="prem:yookassa",
+                )
+            ]
+        )
+    elif card_available:
         rows.append(
             [
                 InlineKeyboardButton(

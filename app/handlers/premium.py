@@ -18,6 +18,7 @@ from app.db.base import session_factory
 from app.handlers.common import ensure_user
 from app.keyboards.premium import premium_keyboard
 from app.services.premium import activate_premium, is_premium_active
+from app.services.yookassa_payments import create_premium_payment, is_yookassa_configured
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -58,7 +59,10 @@ async def cb_premium(callback: CallbackQuery, state: FSMContext) -> None:
         premium_until = user.premium_until
     await callback.message.edit_text(
         _premium_text(active, premium_until),
-        reply_markup=premium_keyboard(card_available=bool(settings.payment_provider_token)),
+        reply_markup=premium_keyboard(
+            card_available=bool(settings.payment_provider_token),
+            yookassa_available=is_yookassa_configured(),
+        ),
     )
     await callback.answer()
 
@@ -77,6 +81,28 @@ async def cb_pay_stars(callback: CallbackQuery) -> None:
         logger.exception("Не удалось выставить счёт Stars user=%s", callback.from_user.id)
         await callback.answer("Не удалось выставить счёт — попробуйте позже", show_alert=True)
         return
+    await callback.answer()
+
+
+@router.callback_query(F.data == "prem:yookassa")
+async def cb_pay_yookassa(callback: CallbackQuery) -> None:
+    """Оплата через API ЮKassa: платёж создаётся напрямую, пользователь получает
+    ссылку на страницу оплаты. Подтверждение придёт webhook-ом на API-сервис."""
+    url = await create_premium_payment(callback.from_user.id, settings.bot_username)
+    if url is None:
+        await callback.answer("Не удалось создать платёж — попробуйте позже", show_alert=True)
+        return
+    await callback.message.answer(
+        f"💳 Оплата {settings.premium_price_rub} ₽ — Premium на {settings.premium_duration_days} дней.\n\n"
+        "Нажмите кнопку, оплатите любым удобным способом и вернитесь в бот — "
+        "Premium включится автоматически в течение минуты.",
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text=f"Оплатить {settings.premium_price_rub} ₽", url=url)],
+                [InlineKeyboardButton(text="◀️ В меню", callback_data="menu:main")],
+            ]
+        ),
+    )
     await callback.answer()
 
 

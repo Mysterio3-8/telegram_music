@@ -8,13 +8,20 @@ from app.api.schemas import (
     PlaylistOut,
     PremiumStatusOut,
     TrackOut,
+    track_out,
 )
 from app.config import settings
 from app.db.models import User
 from app.importers.base import ImportItem
 from app.services.audio import duration_from_bytes
 from app.services.catalog_import import import_user_track
-from app.services.library import get_library_page, get_random_track
+from app.services.library import (
+    add_to_library,
+    get_library_page,
+    get_random_track,
+    get_track,
+    remove_from_library,
+)
 from app.services.playlists import create_playlist
 from app.services.premium import can_create_playlist, can_upload, is_premium_active
 from app.services.uploads import detect_format
@@ -32,7 +39,45 @@ async def my_library(
 ) -> Page[TrackOut]:
     total = await count_library_tracks(session, user.id)
     tracks = await get_library_page(session, user.id, page)
-    return Page(items=tracks, total=total, page=page, page_size=settings.page_size)
+    return Page(
+        items=[track_out(t) for t in tracks], total=total, page=page, page_size=settings.page_size
+    )
+
+
+@router.get("/library/ids", response_model=list[int])
+async def my_library_ids(
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+) -> list[int]:
+    """Все id треков библиотеки — Mini App отмечает «в библиотеке» в любых списках."""
+    from sqlalchemy import select
+
+    from app.db.models import UserLibrary
+
+    rows = await session.scalars(
+        select(UserLibrary.track_id).where(UserLibrary.user_id == user.id)
+    )
+    return list(rows.all())
+
+
+@router.post("/library/{track_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def add_track_to_library(
+    track_id: int,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+) -> None:
+    if await get_track(session, track_id) is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Трек не найден")
+    await add_to_library(session, user.id, track_id)
+
+
+@router.delete("/library/{track_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_track_from_library(
+    track_id: int,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+) -> None:
+    await remove_from_library(session, user.id, track_id)
 
 
 @router.get("/random", response_model=TrackOut)
@@ -43,7 +88,7 @@ async def random_track(
     track = await get_random_track(session, user.id)
     if track is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Библиотека пуста")
-    return track
+    return track_out(track)
 
 
 @router.post("/playlist", response_model=PlaylistOut, status_code=status.HTTP_201_CREATED)

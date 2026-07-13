@@ -49,3 +49,28 @@ def decode_access_token(token: str) -> int | None:
         return int(payload["sub"])
     except (jwt.PyJWTError, KeyError, ValueError):
         return None
+
+
+# --- Подписанные аудио-ссылки Mini App ---
+# <audio src> не умеет слать Authorization-заголовок, поэтому доступ к байтам трека
+# защищается HMAC-подписью с истечением: без личных данных в URL, срок жизни ограничен.
+
+AUDIO_URL_TTL_SECONDS = 6 * 3600
+
+
+def _audio_signature(track_id: int, expires: int) -> str:
+    payload = f"audio:{track_id}:{expires}"
+    digest = hmac.new(settings.effective_jwt_secret.encode(), payload.encode(), hashlib.sha256)
+    return digest.hexdigest()[:32]
+
+
+def build_audio_url(track_id: int) -> str:
+    expires = int(datetime.now(timezone.utc).timestamp()) + AUDIO_URL_TTL_SECONDS
+    signature = _audio_signature(track_id, expires)
+    return f"/tracks/{track_id}/audio?exp={expires}&sig={signature}"
+
+
+def verify_audio_signature(track_id: int, expires: int, signature: str) -> bool:
+    if expires < int(datetime.now(timezone.utc).timestamp()):
+        return False
+    return hmac.compare_digest(_audio_signature(track_id, expires), signature)

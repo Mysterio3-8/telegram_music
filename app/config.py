@@ -5,6 +5,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     bot_token: str = ""
+    bot_username: str = "tgram_music_bot"  # для return_url ЮKassa и ссылок «поделиться»
     database_url: str = "sqlite+aiosqlite:///music_bot.db"
     page_size: int = 5
     library_search_limit: int = 10
@@ -12,9 +13,18 @@ class Settings(BaseSettings):
 
     # Premium (SPEC §14)
     premium_price_stars: int = 15
-    premium_price_rub: int = 17
+    premium_price_rub: int = 21
     premium_duration_days: int = 30
     payment_provider_token: str = ""  # токен провайдера для карты/СБП; пусто → доступны только Stars
+
+    # ЮKassa (API ЮKassa, redirect-сценарий) — оплата 21 ₽ картой/СБП вне Telegram Payments.
+    # Пустые значения → кнопка оплаты через ЮKassa не показывается.
+    yookassa_shop_id: str = ""
+    yookassa_secret_key: str = ""
+
+    # Публичный базовый URL (https://keybest.cc) — подписанные аудио-ссылки Mini App
+    # и return_url ЮKassa. Пусто → аудио-ссылки относительные (same-origin).
+    public_base_url: str = ""
 
     # Лимиты бесплатного тарифа (Premium снимает)
     free_playlist_limit: int = 5

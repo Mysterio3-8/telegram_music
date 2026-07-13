@@ -16,6 +16,16 @@ class TrackOut(BaseModel):
     duration: int
     bitrate: int | None = None
     format: str | None = None
+    audio_url: str | None = None  # подписанная ссылка на байты (track_out)
+
+
+def track_out(track) -> "TrackOut":
+    """TrackOut с подписанной аудио-ссылкой — единая точка для всех роутеров."""
+    from app.api.security import build_audio_url
+
+    out = TrackOut.model_validate(track)
+    out.audio_url = build_audio_url(track.id)
+    return out
 
 
 class InstrumentalOut(BaseModel):
