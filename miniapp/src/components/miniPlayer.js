@@ -17,6 +17,7 @@ export function renderMiniPlayer(state) {
         <button class="mini-player__play" data-action="toggle-play" data-stop="1" aria-label="Play/Pause">
           ${icon(isPlaying ? "pause" : "play")}
         </button>
+        <div class="mini-player__progress"><div class="mini-player__progress-fill" id="mini-progress-fill"></div></div>
       </div>
     </div>
   `;

@@ -292,12 +292,6 @@
   overflow: hidden;
 }
 
-.track-cover svg {
-  width: 17px;
-  height: 17px;
-  opacity: 0.85;
-}
-
 .track-info {
   flex: 1;
   min-width: 0;
@@ -550,33 +544,43 @@
 
 .mini-player__inner {
   pointer-events: auto;
+  position: relative;
   width: 100%;
   max-width: 448px;
   display: flex;
   align-items: center;
   gap: 11px;
-  padding: 9px 10px 9px 9px;
+  padding: 9px 10px 11px 9px;
   border-radius: 18px;
   background: var(--player-bg);
   border: 1px solid var(--glass-border-amethyst);
   box-shadow: var(--glass-shadow);
+  overflow: hidden;
+}
+
+.mini-player__progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2.5px;
+  background: var(--progress-track);
+}
+
+.mini-player__progress-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--progress-active);
 }
 
 .mini-player__cover {
   width: 40px;
   height: 40px;
   border-radius: 11px;
-  background: var(--gradient-brand);
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
-}
-
-.mini-player__cover svg {
-  width: 16px;
-  height: 16px;
 }
 
 .mini-player__info {
@@ -601,13 +605,14 @@
 }
 
 .mini-player__play {
-  width: 34px;
-  height: 34px;
+  width: 38px;
+  height: 38px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1.5px solid var(--play-border);
+  border: 2px solid var(--play-border);
+  box-shadow: var(--play-glow);
   color: var(--text-primary);
   flex-shrink: 0;
 }
@@ -683,13 +688,6 @@
   position: absolute;
   inset: 0;
   background: radial-gradient(circle at 30% 20%, rgba(213, 166, 255, 0.22), transparent 55%);
-}
-
-.player-art svg {
-  width: 30%;
-  height: 30%;
-  opacity: 0.9;
-  position: relative;
 }
 
 .player-meta {
@@ -776,14 +774,14 @@
 }
 
 .player-controls__play {
-  width: 68px;
-  height: 68px;
+  width: 72px;
+  height: 72px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1.5px solid var(--play-border);
-  box-shadow: var(--play-glow);
+  border: 2.5px solid var(--play-border);
+  box-shadow: var(--play-glow), inset 0 0 0 4px rgba(155, 77, 255, 0.08);
   color: var(--text-primary);
 }
 
@@ -978,19 +976,50 @@
   }
 }
 
-.cover-letter {
-  font-size: 17px;
-  font-weight: 800;
-  color: rgba(248, 247, 250, 0.92);
-  letter-spacing: 0.02em;
+/* Абстрактная «кристалл аметиста» обложка: слой блика + приглушённая нота */
+.cover-art {
+  position: relative;
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
 }
 
-.player-art .cover-letter {
-  font-size: 84px;
+.cover-facet {
+  position: absolute;
+  inset: -40% -10%;
+  background: linear-gradient(
+    115deg,
+    transparent 40%,
+    rgba(255, 255, 255, 0.14) 48%,
+    transparent 56%
+  );
+  pointer-events: none;
 }
 
-.mini-player__cover .cover-letter {
-  font-size: 15px;
+.cover-note-icon {
+  position: relative;
+  display: flex;
+  color: rgba(255, 255, 255, 0.32);
+}
+
+.cover-note-icon svg {
+  width: 34%;
+  height: 34%;
+  margin: auto;
+}
+
+.track-cover .cover-note-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.mini-player__cover .cover-note-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.player-art .cover-note-icon svg {
+  width: 30%;
+  height: 30%;
 }
 
 .home-greeting {

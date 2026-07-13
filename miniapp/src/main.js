@@ -118,9 +118,11 @@ subscribeProgress((current, duration) => {
   const fill = document.getElementById("player-progress-fill");
   const thumb = document.getElementById("player-progress-thumb");
   const time = document.getElementById("player-time-current");
+  const miniFill = document.getElementById("mini-progress-fill");
   if (fill) fill.style.width = `${fraction * 100}%`;
   if (thumb) thumb.style.left = `${fraction * 100}%`;
   if (time) time.textContent = formatDuration(current);
+  if (miniFill) miniFill.style.width = `${fraction * 100}%`;
 });
 
 // ---------- Загрузка данных ----------
