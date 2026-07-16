@@ -11,6 +11,11 @@ class Settings(BaseSettings):
     library_search_limit: int = 10
     max_file_size_mb: int = 50
 
+    # Границы «похоже на музыку»: короче — джингл/обрезок, длиннее — подкаст/видео.
+    # Используются в пользовательском импорте по ссылке и в очистке базы.
+    track_min_seconds: int = 40
+    track_max_seconds: int = 540  # 9 минут
+
     # Premium (SPEC §14)
     premium_price_stars: int = 15
     premium_price_rub: int = 21

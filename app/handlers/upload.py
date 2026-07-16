@@ -1,3 +1,5 @@
+import asyncio
+
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -9,7 +11,8 @@ from app.config import settings
 from app.services.library import add_to_library
 from app.services.premium import can_upload
 from app.services.uploads import AudioMeta, create_uploaded_track, find_duplicate, validate_audio
-from app.tasks import enqueue_enrich
+from app.services.youtube.user_import import duration_error, extract_video_id
+from app.tasks import enqueue_enrich, enqueue_user_import
 
 router = Router()
 
@@ -56,7 +59,12 @@ def _menu_keyboard() -> InlineKeyboardMarkup:
 @router.callback_query(F.data == "menu:upload")
 async def cb_upload(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(UploadTrack.waiting_file)
-    await callback.message.answer("Отправьте аудиофайл.", reply_markup=_cancel_keyboard())
+    await callback.message.answer(
+        "Отправьте аудиофайл или ссылку на YouTube.\n\n"
+        f"По ссылке принимаем только музыку: от {settings.track_min_seconds} секунд "
+        f"до {settings.track_max_seconds // 60} минут, без стримов.",
+        reply_markup=_cancel_keyboard(),
+    )
     await callback.answer()
 
 
@@ -93,9 +101,66 @@ async def process_document(message: Message) -> None:
     )
 
 
+@router.message(UploadTrack.waiting_file, F.text)
+async def process_link(message: Message, state: FSMContext) -> None:
+    """Импорт по YouTube-ссылке (парсер в общем доступе, с фильтрами против мусора)."""
+    video_id = extract_video_id(message.text)
+    if video_id is None:
+        await message.answer(
+            "Жду аудиофайл или ссылку на YouTube-видео 🎵", reply_markup=_cancel_keyboard()
+        )
+        return
+
+    async with session_factory() as session:
+        user = await ensure_user(session, message.from_user)
+        if not await can_upload(session, user):
+            await state.clear()
+            await message.answer(
+                f"На бесплатном тарифе можно загрузить {settings.free_upload_limit} треков.\n"
+                "💎 Premium увеличивает лимит — раздел «Купить Premium» в меню.",
+                reply_markup=_menu_keyboard(),
+            )
+            return
+
+    checking = await message.answer("🔍 Проверяю ссылку…")
+    from app.services.youtube.downloader import fetch_video_info
+
+    try:
+        info = await asyncio.to_thread(fetch_video_info, video_id)
+    except Exception:  # noqa: BLE001 — yt-dlp не смог открыть видео
+        info = None
+    if info is None:
+        await checking.edit_text(
+            "Не удалось открыть видео по ссылке. Проверьте её и попробуйте ещё раз.",
+            reply_markup=_cancel_keyboard(),
+        )
+        return
+    if info.is_live:
+        await checking.edit_text(
+            "Это прямой эфир — такие не принимаем.", reply_markup=_cancel_keyboard()
+        )
+        return
+    error = duration_error(info.duration)
+    if error:
+        await checking.edit_text(f"❌ {error}", reply_markup=_cancel_keyboard())
+        return
+
+    if not enqueue_user_import(video_id, message.from_user.id, message.chat.id):
+        await checking.edit_text(
+            "Импорт сейчас недоступен — попробуйте позже.", reply_markup=_menu_keyboard()
+        )
+        return
+    await state.clear()
+    await checking.edit_text(
+        f"⏳ Принято: «{info.title}» ({format_duration(info.duration)}).\n"
+        "Скачаем и пришлём трек сюда — обычно это занимает меньше минуты.",
+        reply_markup=_menu_keyboard(),
+    )
+
+
 @router.message(UploadTrack.waiting_file)
 async def process_not_audio(message: Message) -> None:
-    await message.answer("Жду аудиофайл 🎵", reply_markup=_cancel_keyboard())
+    await message.answer("Жду аудиофайл или ссылку на YouTube 🎵", reply_markup=_cancel_keyboard())
 
 
 @router.message(UploadTrack.waiting_title, F.text)

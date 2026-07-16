@@ -9,10 +9,12 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, Message
 
+from app.config import settings
 from app.db.base import session_factory
 from app.db.models import Track
 from app.services.users import is_admin
-from app.keyboards.admin import admin_panel_keyboard, reclaim_confirm_keyboard
+from app.keyboards.admin import admin_panel_keyboard, junk_confirm_keyboard, reclaim_confirm_keyboard
+from app.services.catalog_cleanup import count_junk_tracks, delete_junk_tracks, list_junk_tracks
 from app.services.library import get_track, update_track_meta
 from app.services.recommendations import VALID_MOODS
 from app.services.stats import ProjectStats, collect_stats
@@ -52,6 +54,11 @@ def _stats_text(stats: ProjectStats) -> str:
             f"   └ 🧹 можно освободить: {stats.reclaimable_count} "
             f"(~{_format_mb(stats.reclaimable_bytes)}) — уже есть в Telegram"
         )
+    if stats.junk_count > 0:
+        lines.append(
+            f"🗑 Не похоже на музыку: {stats.junk_count} "
+            f"(<{settings.track_min_seconds} сек или >{settings.track_max_seconds // 60} мин)"
+        )
     return "\n".join(lines)
 
 
@@ -62,7 +69,7 @@ async def cmd_admin(message: Message) -> None:
     async with session_factory() as session:
         stats = await collect_stats(session)
     await message.answer(
-        _stats_text(stats), reply_markup=admin_panel_keyboard(stats.reclaimable_count)
+        _stats_text(stats), reply_markup=admin_panel_keyboard(stats.reclaimable_count, stats.junk_count)
     )
 
 
@@ -75,7 +82,7 @@ async def cb_admin_stats(callback: CallbackQuery) -> None:
         stats = await collect_stats(session)
     try:
         await callback.message.edit_text(
-            _stats_text(stats), reply_markup=admin_panel_keyboard(stats.reclaimable_count)
+            _stats_text(stats), reply_markup=admin_panel_keyboard(stats.reclaimable_count, stats.junk_count)
         )
     except TelegramBadRequest:
         pass  # цифры не изменились
@@ -115,9 +122,53 @@ async def cb_reclaim_go(callback: CallbackQuery) -> None:
         stats = await collect_stats(session)
     await callback.message.edit_text(
         f"✅ Удалено файлов: {deleted}\n\n{_stats_text(stats)}",
-        reply_markup=admin_panel_keyboard(stats.reclaimable_count),
+        reply_markup=admin_panel_keyboard(stats.reclaimable_count, stats.junk_count),
     )
     await callback.answer("Диск очищен")
+
+
+# --- Очистка не-музыки (короче/длиннее музыкальных границ) — удаляет НАВСЕГДА ---
+
+
+@router.callback_query(F.data == "adm:junk:ask")
+async def cb_junk_ask(callback: CallbackQuery) -> None:
+    if not is_admin(callback.from_user.id):
+        await callback.answer("Недоступно", show_alert=True)
+        return
+    async with session_factory() as session:
+        junk = await count_junk_tracks(session)
+        preview = await list_junk_tracks(session)
+    if junk.count == 0:
+        await callback.answer("Мусора нет — все треки в музыкальных границах", show_alert=True)
+        return
+    sample = "\n".join(
+        f"• {t.artist} — {t.title} ({t.duration // 60}:{t.duration % 60:02d})" for t in preview
+    )
+    more = f"\n…и ещё {junk.count - len(preview)}" if junk.count > len(preview) else ""
+    await callback.message.edit_text(
+        f"Найдено {junk.count} треков, не похожих на музыку "
+        f"(<{settings.track_min_seconds} сек или >{settings.track_max_seconds // 60} мин), "
+        f"~{_format_mb(junk.total_bytes)} в файлах:\n\n{sample}{more}\n\n"
+        "⚠️ Удаляются НАВСЕГДА: файлы, записи, связи с библиотеками и плейлистами. "
+        "Отменить нельзя.",
+        reply_markup=junk_confirm_keyboard(junk.count),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "adm:junk:go")
+async def cb_junk_go(callback: CallbackQuery) -> None:
+    if not is_admin(callback.from_user.id):
+        await callback.answer("Недоступно", show_alert=True)
+        return
+    async with session_factory() as session:
+        deleted = await delete_junk_tracks(session, get_storage())
+        stats = await collect_stats(session)
+    await callback.message.edit_text(
+        f"✅ Удалено треков: {deleted}\n\n{_stats_text(stats)}",
+        reply_markup=admin_panel_keyboard(stats.reclaimable_count, stats.junk_count),
+    )
+    await callback.answer("База очищена")
 
 
 # --- Правка метаданных трека из карточки ---

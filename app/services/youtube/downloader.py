@@ -33,6 +33,14 @@ class DownloadedAudio:
     video_title: str
 
 
+@dataclass(frozen=True)
+class VideoInfo:
+    video_id: str
+    title: str
+    duration: int
+    is_live: bool
+
+
 def _base_opts() -> dict:
     opts: dict = {"quiet": True, "no_warnings": True, "ignoreerrors": True}
     if settings.youtube_cookies_path and Path(settings.youtube_cookies_path).exists():
@@ -67,6 +75,21 @@ def _collect_entries(info: dict | None) -> list[VideoEntry]:
 
     walk(info)
     return entries
+
+
+def fetch_video_info(video_id: str) -> VideoInfo | None:
+    """Метаданные одного видео без скачивания — для проверки лимитов ДО загрузки."""
+    opts = {**_base_opts(), "skip_download": True, "noplaylist": True}
+    with yt_dlp.YoutubeDL(opts) as ydl:
+        info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
+    if info is None:
+        return None
+    return VideoInfo(
+        video_id=video_id,
+        title=info.get("title") or video_id,
+        duration=int(info.get("duration") or 0),
+        is_live=bool(info.get("is_live")),
+    )
 
 
 def list_videos(source_url: str) -> list[VideoEntry]:

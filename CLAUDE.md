@@ -93,9 +93,9 @@ $env:DATABASE_URL="sqlite+aiosqlite:///_tmp.db"; .\.venv\Scripts\python.exe -m a
 ## Инварианты (нельзя нарушать)
 
 - handlers/ не содержат бизнес-логику — только роутинг и форматирование текста
-- services/ не импортируют aiogram — только SQLAlchemy и модели
+- services/ не импортируют aiogram — только SQLAlchemy и модели (исключение: импортёры, минтящие file_id через бота)
 - keyboards/ — только разметка
-- Трек никогда не удаляется из `tracks` — только связи (user_library, playlist_tracks)
+- Трек никогда не удаляется из `tracks` — только связи (user_library, playlist_tracks). **Единственное исключение** (решение владельца): админ-очистка не-музыки `adm:junk:*` — треки вне границ `track_min_seconds..track_max_seconds` (40 сек – 9 мин) удаляются полностью (файл + связи + запись), с подтверждением
 - Ровно 5 элементов на страницу (`settings.page_size`), навигация только Inline Keyboard
 - callback_data соглашение: `menu:*` (меню), `lib:*` (библиотека), `pls:*`/`pl:*` (плейлисты), `st:`/`si:`/`ins:open:`/`ins:play:` (поиск), `up:*` (загрузка трека), `admin_min:*` (загрузка минуса из админки), `trk:`/`ta:`/`back:` (карточка трека; ctx = `lib.{page}` | `pl.{id}.{page}` | `srch`), `q:*` (очередь/микс), `adm:*` (админ-панель), `sub:check` (подтвердить подписку)
 - Карточка трека — отдельное аудиосообщение (не заменяет экран списка); `back:del` удаляет её, `back:{ctx}` — легаси-навигация для старых сообщений
@@ -121,6 +121,12 @@ $env:DATABASE_URL="sqlite+aiosqlite:///_tmp.db"; .\.venv\Scripts\python.exe -m a
 - Схема БД — через Alembic. При адаптации существующей БД без `alembic_version`: `alembic stamp <ревизия-соответствующая-текущей-схеме>`, затем `upgrade head` (так приняли прод: stamp d01cfc648f91 → upgrade добавил tg_file_id)
 - Обогащение (отпечаток+архив) — асинхронно в воркере: сразу после загрузки трека `storage_path` ещё пуст, появляется через секунды. Если воркер лежит — трек работает по `tg_file_id`, отпечаток не считается
 - Windows-консоль: путь проекта с кириллицей, в PowerShell возможны артефакты кодировки в выводе — на работу не влияет
+
+## Checkpoint (2026-07-16, поздно) — парсер в общий доступ + очистка не-музыки
+
+- **Импорт по YouTube-ссылке для всех пользователей**: мастер «Загрузить трек» принимает и ссылку (youtu.be / watch?v= / shorts / music.youtube / embed). Фильтры против мусора: только одиночное видео (не стрим), длительность `track_min_seconds..track_max_seconds` (40 сек – 9 мин, проверка ДО скачивания по метаданным и ПОСЛЕ по факту), лимит бесплатного тарифа = лимит загрузок (`can_upload`, импорт создаёт `Upload`), размер ≤ `max_file_size_mb`, дедуп по отпечатку. Поток: handler (`process_link` в upload.py) → `fetch_video_info` (yt-dlp skip_download, в `asyncio.to_thread`) → Celery `youtube.user_import` (очередь `youtube`, 2 ретрая по 60 сек) → mint через бота → трек приходит пользователю в чат + в его библиотеку. Без брокера — честное «импорт недоступен». Сервис: `app/services/youtube/user_import.py`
+- **Очистка не-музыки**: `app/services/catalog_cleanup.py` (count/list/delete; удаляет файл из хранилища + user_library/playlist_tracks/track_events/lyrics/uploads, обнуляет track_id в youtube_imports/telegram_channel_imports, затем трек). В админке: строка «🗑 Не похоже на музыку: N» + кнопка → превью списка (топ-15 по длительности) → подтверждение → удаление. Инвариант «трек не удаляется» получил явное исключение (см. Инварианты)
+- Тесты: `test_user_import.py` (разбор ссылок, границы), `test_catalog_cleanup.py` (счёт/удаление со связями/no-op). **160 passed**
 
 ## Checkpoint (2026-07-16) — ВСЁ ЗАДЕПЛОЕНО на прод
 

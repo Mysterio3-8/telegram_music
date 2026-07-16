@@ -70,6 +70,49 @@ def youtube_process_import(import_id: int) -> None:
     asyncio.run(_with_session(_run))
 
 
+@celery_app.task(name="youtube.user_import", bind=True, max_retries=2)
+def youtube_user_import(self, video_id: str, telegram_id: int, chat_id: int) -> None:
+    """Импорт по ссылке от пользователя: скачивает, заводит трек, присылает его в чат."""
+    from app.services.youtube.user_import import UserImportRejected, process_user_import
+
+    async def _run(session):
+        bot = Bot(token=settings.bot_token)
+        try:
+            try:
+                track, created = await process_user_import(session, bot, video_id, telegram_id)
+            except UserImportRejected as exc:
+                await bot.send_message(chat_id, f"❌ Не добавили: {exc}")
+                return
+            note = "добавлен в общую базу и вашу библиотеку" if created else "уже был в базе — добавили в вашу библиотеку"
+            if track.tg_file_id:
+                await bot.send_audio(
+                    chat_id,
+                    track.tg_file_id,
+                    caption=f"✅ {track.artist} — {track.title}\nТрек {note}.",
+                )
+            else:
+                await bot.send_message(chat_id, f"✅ {track.artist} — {track.title} — {note}.")
+        finally:
+            await bot.session.close()
+
+    try:
+        asyncio.run(_with_session(_run))
+    except Exception as exc:  # noqa: BLE001 — повторяем с паузой; после 2 попыток сообщаем
+        if self.request.retries >= self.max_retries:
+            asyncio.run(_notify(chat_id, "❌ Не удалось скачать трек по ссылке. Попробуйте позже."))
+            logger.warning("User-импорт %s не удался: %s", video_id, exc)
+            return
+        raise self.retry(exc=exc, countdown=60)
+
+
+async def _notify(chat_id: int, text: str) -> None:
+    bot = Bot(token=settings.bot_token)
+    try:
+        await bot.send_message(chat_id, text)
+    finally:
+        await bot.session.close()
+
+
 @celery_app.task(name="youtube.scan_source")
 def youtube_scan_source(source_id: int) -> None:
     async def _scan(session) -> list[int]:
