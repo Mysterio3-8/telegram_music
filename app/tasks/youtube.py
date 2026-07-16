@@ -71,8 +71,11 @@ def youtube_process_import(import_id: int) -> None:
 
 
 @celery_app.task(name="youtube.user_import", bind=True, max_retries=2)
-def youtube_user_import(self, video_id: str, telegram_id: int, chat_id: int) -> None:
-    """Импорт по ссылке от пользователя: скачивает, заводит трек, присылает его в чат."""
+def youtube_user_import(
+    self, video_id: str, telegram_id: int, chat_id: int, quiet: bool = False
+) -> None:
+    """Импорт по ссылке от пользователя: скачивает, заводит трек, присылает его в чат.
+    quiet — пачечный режим (плейлист): треки тихо падают в библиотеку, без сообщений."""
     from app.services.youtube.user_import import UserImportRejected, process_user_import
 
     async def _run(session):
@@ -81,7 +84,10 @@ def youtube_user_import(self, video_id: str, telegram_id: int, chat_id: int) -> 
             try:
                 track, created = await process_user_import(session, bot, video_id, telegram_id)
             except UserImportRejected as exc:
-                await bot.send_message(chat_id, f"❌ Не добавили: {exc}")
+                if not quiet:
+                    await bot.send_message(chat_id, f"❌ Не добавили: {exc}")
+                return
+            if quiet:
                 return
             note = "добавлен в общую базу и вашу библиотеку" if created else "уже был в базе — добавили в вашу библиотеку"
             if track.tg_file_id:
@@ -99,7 +105,10 @@ def youtube_user_import(self, video_id: str, telegram_id: int, chat_id: int) -> 
         asyncio.run(_with_session(_run))
     except Exception as exc:  # noqa: BLE001 — повторяем с паузой; после 2 попыток сообщаем
         if self.request.retries >= self.max_retries:
-            asyncio.run(_notify(chat_id, "❌ Не удалось скачать трек по ссылке. Попробуйте позже."))
+            if not quiet:
+                asyncio.run(
+                    _notify(chat_id, "❌ Не удалось скачать трек по ссылке. Попробуйте позже.")
+                )
             logger.warning("User-импорт %s не удался: %s", video_id, exc)
             return
         raise self.retry(exc=exc, countdown=60)

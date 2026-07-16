@@ -14,7 +14,8 @@ const VARIANTS = [
 ];
 
 function pick(track) {
-  return VARIANTS[track.id % VARIANTS.length];
+  // Math.abs: у минусов id отрицательный, а -1 % 6 === -1 в JS → undefined
+  return VARIANTS[Math.abs(track.id) % VARIANTS.length];
 }
 
 export function coverStyle(track) {

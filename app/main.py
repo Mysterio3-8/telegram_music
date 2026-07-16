@@ -11,7 +11,9 @@ from app.handlers import (
     admin_telegram_channel,
     admin_upload_minus,
     admin_youtube,
+    inline,
     library,
+    news,
     player,
     playlists,
     premium,
@@ -60,6 +62,8 @@ async def main() -> None:
         admin_youtube.router,
         admin_telegram_channel.router,
         track_actions.router,
+        inline.router,  # inline_query — вне гейта подписки (middleware только message/callback)
+        news.router,  # channel_post новостного канала → кросс-пост в ВК
         stubs.router,
     )
     await dp.start_polling(bot)

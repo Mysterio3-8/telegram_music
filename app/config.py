@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     # Используются в пользовательском импорте по ссылке и в очистке базы.
     track_min_seconds: int = 40
     track_max_seconds: int = 540  # 9 минут
+    # Импорт целого плейлиста/канала (только Premium): максимум видео за один раз
+    playlist_import_limit: int = 50
 
     # Premium (SPEC §14)
     premium_price_stars: int = 15
@@ -30,6 +32,12 @@ class Settings(BaseSettings):
     # Публичный базовый URL (https://keybest.cc) — подписанные аудио-ссылки Mini App
     # и return_url ЮKassa. Пусто → аудио-ссылки относительные (same-origin).
     public_base_url: str = ""
+
+    # Кросс-пост новостей: пост в этом ТГ-канале (бот — админ) уходит в ВК.
+    # Пустые значения → кросс-пост выключен, бот молчит.
+    news_channel_id: int = 0
+    vk_token: str = ""  # токен сообщества ВК с правом wall
+    vk_group_id: int = 0  # положительный id группы (без минуса)
 
     # Лимиты бесплатного тарифа (Premium снимает)
     free_playlist_limit: int = 5

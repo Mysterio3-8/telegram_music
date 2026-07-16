@@ -30,6 +30,13 @@ _URL_PATTERNS = [
 ]
 
 
+_PLAYLIST_PATTERNS = [
+    re.compile(r"youtube\.com/playlist\?"),
+    re.compile(r"[?&]list="),
+    re.compile(r"youtube\.com/(?:@[\w.-]+|channel/|c/|user/)"),
+]
+
+
 def extract_video_id(text: str) -> str | None:
     """Достаёт video_id из YouTube-ссылки. None — это не ссылка на видео."""
     for pattern in _URL_PATTERNS:
@@ -37,6 +44,13 @@ def extract_video_id(text: str) -> str | None:
         if match:
             return match.group(1)
     return None
+
+
+def is_playlist_link(text: str) -> bool:
+    """Ссылка на плейлист или канал целиком (импорт пачкой, только Premium)."""
+    if "youtu" not in text:
+        return False
+    return any(p.search(text) for p in _PLAYLIST_PATTERNS)
 
 
 def duration_error(seconds: int) -> str | None:

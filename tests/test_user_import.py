@@ -1,5 +1,5 @@
 from app.config import settings
-from app.services.youtube.user_import import duration_error, extract_video_id
+from app.services.youtube.user_import import duration_error, extract_video_id, is_playlist_link
 
 
 def test_extract_video_id_formats():
@@ -21,6 +21,19 @@ def test_extract_video_id_rejects_non_video():
     assert extract_video_id("https://example.com/watch?v=dQw4w9WgXcQ") is None
     assert extract_video_id("https://www.youtube.com/@somechannel") is None
     assert extract_video_id("https://www.youtube.com/playlist?list=PL123") is None
+
+
+def test_is_playlist_link():
+    assert is_playlist_link("https://www.youtube.com/playlist?list=PL123") is True
+    assert is_playlist_link("https://youtube.com/@somechannel") is True
+    assert is_playlist_link("https://www.youtube.com/channel/UC123") is True
+    assert is_playlist_link("https://www.youtube.com/c/OldStyle") is True
+    assert is_playlist_link("https://youtu.be/dQw4w9WgXcQ") is False
+    assert is_playlist_link("просто текст") is False
+    # watch-ссылка с list= — тоже плейлистная (но extract_video_id проверяется раньше:
+    # одиночное видео из плейлиста импортируется как одно видео)
+    assert is_playlist_link("https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=RD1") is True
+    assert extract_video_id("https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=RD1") == "dQw4w9WgXcQ"
 
 
 def test_duration_limits():

@@ -122,6 +122,14 @@ $env:DATABASE_URL="sqlite+aiosqlite:///_tmp.db"; .\.venv\Scripts\python.exe -m a
 - Обогащение (отпечаток+архив) — асинхронно в воркере: сразу после загрузки трека `storage_path` ещё пуст, появляется через секунды. Если воркер лежит — трек работает по `tg_file_id`, отпечаток не считается
 - Windows-консоль: путь проекта с кириллицей, в PowerShell возможны артефакты кодировки в выводе — на работу не влияет
 
+## Checkpoint (2026-07-17) — плейлисты, минусы в Mini App, инлайн, кросс-пост ВК
+
+- **Импорт плейлистов/каналов целиком** (только Premium, до `playlist_import_limit`=50 видео): ссылка на плейлист/канал в мастере загрузки → `is_playlist_link` → `list_videos` → пачка `youtube.user_import(quiet=True)` — треки тихо падают в библиотеку, одно сообщение «принято N». Watch-ссылка с `list=` считается одиночным видео (extract_video_id проверяется раньше)
+- **Минусы в Mini App**: вкладки «Треки / 🎼 Минусы» в поиске (`state.searchMode`), `GET /instrumentals?q=&page_size=` теперь отдаёт Page[TrackOut] с отрицательными id + подписанным audio_url. У минусов нет кнопок «+»/шита (trackRow: id<0). ⚠️ Грабля: `cover.js` падал на отрицательных id (`-1 % 6 === -1` в JS) — исправлено Math.abs
+- **Инлайн-режим** (`handlers/inline.py`): @бот <запрос> в любом чате → до 10 треков + 5 минусов по tg_file_id (мгновенно), пустой запрос → свежие треки; кнопка «Открыть TG Music» под выдачей. Вне гейта подписки (middleware только message/callback). **Требуется включить у BotFather: /setinline**
+- **Кросс-пост ТГ→ВК** (`services/crosspost.py` + `handlers/news.py`): пост в новостном канале (бот — админ) → wall.post в группу ВК + ссылка на оригинал. Конфиг: `NEWS_CHANNEL_ID`, `VK_TOKEN` (токен сообщества с правом wall), `VK_GROUP_ID` (без минуса). Не настроено → молчит. **Ждём от владельца: id канала + бот-админ + ВК-токен**
+- Тесты: 161 passed (`test_user_import.py` дополнен is_playlist_link)
+
 ## Checkpoint (2026-07-16, поздно) — парсер в общий доступ + очистка не-музыки
 
 - **Импорт по YouTube-ссылке для всех пользователей**: мастер «Загрузить трек» принимает и ссылку (youtu.be / watch?v= / shorts / music.youtube / embed). Фильтры против мусора: только одиночное видео (не стрим), длительность `track_min_seconds..track_max_seconds` (40 сек – 9 мин, проверка ДО скачивания по метаданным и ПОСЛЕ по факту), лимит бесплатного тарифа = лимит загрузок (`can_upload`, импорт создаёт `Upload`), размер ≤ `max_file_size_mb`, дедуп по отпечатку. Поток: handler (`process_link` в upload.py) → `fetch_video_info` (yt-dlp skip_download, в `asyncio.to_thread`) → Celery `youtube.user_import` (очередь `youtube`, 2 ретрая по 60 сек) → mint через бота → трек приходит пользователю в чат + в его библиотеку. Без брокера — честное «импорт недоступен». Сервис: `app/services/youtube/user_import.py`

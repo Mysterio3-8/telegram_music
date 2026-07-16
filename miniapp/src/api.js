@@ -77,6 +77,12 @@ export function getTracks(query = "", page = 1, pageSize = 100) {
   return request(`/tracks?${params}`);
 }
 
+// Минусы: приходят в формате треков с отрицательными id (вкладка «Минусы» в поиске)
+export function getInstrumentals(query = "", page = 1, pageSize = 50) {
+  const params = new URLSearchParams({ q: query, page: String(page), page_size: String(pageSize) });
+  return request(`/instrumentals?${params}`);
+}
+
 export function getLibrary(page = 1) {
   return request(`/library?page=${page}`);
 }

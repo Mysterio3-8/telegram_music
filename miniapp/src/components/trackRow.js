@@ -3,7 +3,19 @@ import { renderCover } from "./cover.js";
 import { formatDuration } from "../api.js";
 
 // Один ряд трека — переиспользуется на Главной/Поиске/Библиотеке.
+// Минусы приходят с отрицательными id: у них нет библиотеки/шита — только воспроизведение.
 export function renderTrackRow(track, { context, inLibrary = false, playing = false } = {}) {
+  const isInstrumental = track.id < 0;
+  const actions = isInstrumental
+    ? ""
+    : `
+      <div class="track-actions">
+        <button class="icon-btn${inLibrary ? " is-added" : ""}" data-action="toggle-library" data-id="${track.id}" aria-label="В библиотеку">
+          ${icon(inLibrary ? "check" : "plus")}
+        </button>
+        <button class="icon-btn" data-action="open-sheet" data-id="${track.id}" aria-label="Ещё">${icon("more")}</button>
+      </div>
+    `;
   return `
     <div class="track-row${playing ? " is-playing" : ""}" data-action="play-track" data-id="${track.id}" data-context="${context}">
       ${renderCover(track)}
@@ -11,12 +23,7 @@ export function renderTrackRow(track, { context, inLibrary = false, playing = fa
         <div class="track-title">${escapeHtml(track.title)}</div>
         <div class="track-artist">${escapeHtml(track.artist)} · ${formatDuration(track.duration)}</div>
       </div>
-      <div class="track-actions">
-        <button class="icon-btn${inLibrary ? " is-added" : ""}" data-action="toggle-library" data-id="${track.id}" aria-label="В библиотеку">
-          ${icon(inLibrary ? "check" : "plus")}
-        </button>
-        <button class="icon-btn" data-action="open-sheet" data-id="${track.id}" aria-label="Ещё">${icon("more")}</button>
-      </div>
+      ${actions}
     </div>
   `;
 }

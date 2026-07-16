@@ -75,10 +75,15 @@ export function renderSearchResults(state) {
 }
 
 export function renderSearch(state) {
+  const isInstrumentals = state.searchMode === "instrumentals";
   return `
+    <div class="pill-row search-mode">
+      <button class="pill${isInstrumentals ? "" : " is-active"}" data-action="search-mode" data-mode="tracks">Треки</button>
+      <button class="pill${isInstrumentals ? " is-active" : ""}" data-action="search-mode" data-mode="instrumentals">🎼 Минусы</button>
+    </div>
     <div class="search-input">
       ${icon("search")}
-      <input type="text" data-role="search-input" placeholder="Трек или исполнитель" value="${escapeHtml(state.searchQuery)}" />
+      <input type="text" data-role="search-input" placeholder="${isInstrumentals ? "Минус или исполнитель" : "Трек или исполнитель"}" value="${escapeHtml(state.searchQuery)}" />
     </div>
     <div id="search-results">${renderSearchResults(state)}</div>
   `;

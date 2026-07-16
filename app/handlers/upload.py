@@ -9,9 +9,9 @@ from app.db.base import session_factory
 from app.handlers.common import ensure_user, format_duration
 from app.config import settings
 from app.services.library import add_to_library
-from app.services.premium import can_upload
+from app.services.premium import can_upload, is_premium_active
 from app.services.uploads import AudioMeta, create_uploaded_track, find_duplicate, validate_audio
-from app.services.youtube.user_import import duration_error, extract_video_id
+from app.services.youtube.user_import import duration_error, extract_video_id, is_playlist_link
 from app.tasks import enqueue_enrich, enqueue_user_import
 
 router = Router()
@@ -101,11 +101,66 @@ async def process_document(message: Message) -> None:
     )
 
 
+async def _process_playlist_link(message: Message, state: FSMContext) -> None:
+    """Импорт плейлиста/канала целиком — только Premium, до playlist_import_limit видео.
+    Треки тихо падают в библиотеку (без пачки сообщений в чат)."""
+    async with session_factory() as session:
+        user = await ensure_user(session, message.from_user)
+        if not is_premium_active(user):
+            await message.answer(
+                "Импорт плейлистов и каналов целиком — только для 💎 Premium.\n"
+                "Бесплатно можно импортировать по одному видео — пришлите ссылку на него.",
+                reply_markup=_cancel_keyboard(),
+            )
+            return
+
+    scanning = await message.answer("🔍 Читаю плейлист…")
+    from app.services.youtube.downloader import list_videos
+
+    try:
+        videos = await asyncio.to_thread(list_videos, message.text.strip())
+    except Exception:  # noqa: BLE001 — yt-dlp не смог открыть источник
+        videos = []
+    if not videos:
+        await scanning.edit_text(
+            "Не удалось прочитать плейлист по ссылке. Проверьте её и попробуйте ещё раз.",
+            reply_markup=_cancel_keyboard(),
+        )
+        return
+
+    batch = videos[: settings.playlist_import_limit]
+    queued = 0
+    for video in batch:
+        if enqueue_user_import(video.video_id, message.from_user.id, message.chat.id, quiet=True):
+            queued += 1
+    if queued == 0:
+        await scanning.edit_text(
+            "Импорт сейчас недоступен — попробуйте позже.", reply_markup=_menu_keyboard()
+        )
+        return
+    await state.clear()
+    skipped_note = (
+        f"\nВ плейлисте {len(videos)} видео — взяли первые {len(batch)}."
+        if len(videos) > len(batch)
+        else ""
+    )
+    await scanning.edit_text(
+        f"⏳ Принято {queued} видео.{skipped_note}\n\n"
+        f"Музыка (от {settings.track_min_seconds} сек до {settings.track_max_seconds // 60} мин) "
+        "появится в вашей библиотеке по мере обработки — без сообщений на каждый трек. "
+        "Видео и подкасты отсеются автоматически.",
+        reply_markup=_menu_keyboard(),
+    )
+
+
 @router.message(UploadTrack.waiting_file, F.text)
 async def process_link(message: Message, state: FSMContext) -> None:
     """Импорт по YouTube-ссылке (парсер в общем доступе, с фильтрами против мусора)."""
     video_id = extract_video_id(message.text)
     if video_id is None:
+        if is_playlist_link(message.text):
+            await _process_playlist_link(message, state)
+            return
         await message.answer(
             "Жду аудиофайл или ссылку на YouTube-видео 🎵", reply_markup=_cancel_keyboard()
         )

@@ -8,6 +8,7 @@ import {
   getAlbumTracks,
   getCurators,
   getCuratorTracks,
+  getInstrumentals,
   getLyrics,
   getPlaylists,
   getPlaylistTracks,
@@ -316,7 +317,8 @@ function scheduleSearch(query) {
   mutateSearch({ searchStatus: "loading" });
   searchTimer = setTimeout(async () => {
     try {
-      const page = await getTracks(query.trim(), 1, 50);
+      const fetcher = getState().searchMode === "instrumentals" ? getInstrumentals : getTracks;
+      const page = await fetcher(query.trim(), 1, 50);
       if (seq !== searchSeq) return; // пришёл более свежий запрос
       mutateSearch({ searchResults: page.items, searchTotal: page.total, searchStatus: "done" });
     } catch {
@@ -576,6 +578,14 @@ root.addEventListener("click", (event) => {
     case "search-chip":
       runSearch(el.dataset.q);
       break;
+    case "search-mode": {
+      const mode = el.dataset.mode;
+      if (getState().searchMode === mode) break;
+      mutate({ searchMode: mode, searchResults: [], searchTotal: 0, searchStatus: "idle" });
+      const currentQuery = getState().searchQuery;
+      if (currentQuery.trim()) scheduleSearch(currentQuery); // перезапустить в новом режиме
+      break;
+    }
     case "clear-recent-searches":
       clearRecentSearches();
       mutateSearch({});

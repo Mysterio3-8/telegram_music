@@ -1884,3 +1884,8 @@
 .lyrics-input:focus {
   border-color: var(--glass-border-amethyst);
 }
+
+/* Переключатель «Треки / Минусы» в поиске */
+.search-mode {
+  margin-bottom: 12px;
+}

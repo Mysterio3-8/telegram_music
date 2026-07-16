@@ -36,16 +36,17 @@ def _instrumental_filter(query: str):
 
 
 async def search_instrumentals(
-    session: AsyncSession, query: str, page: int
+    session: AsyncSession, query: str, page: int, page_size: int | None = None
 ) -> tuple[list[Instrumental], int]:
+    size = page_size or settings.page_size
     where = _instrumental_filter(query)
     total = await session.scalar(select(func.count()).select_from(Instrumental).where(where)) or 0
     stmt = (
         select(Instrumental)
         .where(where)
         .order_by(Instrumental.artist, Instrumental.title)
-        .offset((page - 1) * settings.page_size)
-        .limit(settings.page_size)
+        .offset((page - 1) * size)
+        .limit(size)
     )
     return list((await session.scalars(stmt)).all()), total
 

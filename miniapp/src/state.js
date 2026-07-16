@@ -47,6 +47,7 @@ const state = {
   albumsStatus: "idle",
   curators: [],
   curatorsStatus: "idle",
+  searchMode: "tracks", // tracks | instrumentals — вкладки в поиске
   collectionTitle: "",
   collectionTracks: [],
   collectionStatus: "idle",
