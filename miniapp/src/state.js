@@ -45,6 +45,8 @@ const state = {
   playlistsStatus: "idle",
   albums: [],
   albumsStatus: "idle",
+  curators: [],
+  curatorsStatus: "idle",
   collectionTitle: "",
   collectionTracks: [],
   collectionStatus: "idle",
@@ -212,7 +214,7 @@ function startTrack(index) {
   state.currentTrack = track;
   state.isPlaying = true;
   pushRecentTrack(track);
-  if (typeof track.id === "number") recordListen(track.id);
+  if (typeof track.id === "number" && track.id > 0) recordListen(track.id); // минусы (id<0) не пишем
   setAudioSource(track);
   updateMediaSession(track);
   notify();

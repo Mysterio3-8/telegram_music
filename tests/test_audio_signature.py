@@ -1,6 +1,6 @@
 from urllib.parse import parse_qs, urlparse
 
-from app.api.security import build_audio_url, verify_audio_signature
+from app.api.security import build_audio_url, build_instrumental_audio_url, verify_audio_signature
 
 
 def _parse(url: str) -> tuple[int, int, str]:
@@ -35,3 +35,14 @@ def test_signature_rejects_expired():
 
     expired = exp - security.AUDIO_URL_TTL_SECONDS - 10
     assert verify_audio_signature(42, expired, sig) is False
+
+
+def test_instrumental_signature_own_namespace():
+    ins_id, exp, sig = _parse(build_instrumental_audio_url(7))
+
+    assert ins_id == 7
+    assert verify_audio_signature(7, exp, sig, kind="ins") is True
+    # подпись минуса не подходит для трека и наоборот
+    assert verify_audio_signature(7, exp, sig) is False
+    _, t_exp, t_sig = _parse(build_audio_url(7))
+    assert verify_audio_signature(7, t_exp, t_sig, kind="ins") is False

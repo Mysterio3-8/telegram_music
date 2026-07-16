@@ -58,8 +58,9 @@ def decode_access_token(token: str) -> int | None:
 AUDIO_URL_TTL_SECONDS = 6 * 3600
 
 
-def _audio_signature(track_id: int, expires: int) -> str:
-    payload = f"audio:{track_id}:{expires}"
+def _audio_signature(track_id: int, expires: int, kind: str = "audio") -> str:
+    # kind разделяет пространства подписей: подпись трека не годится для минуса
+    payload = f"{kind}:{track_id}:{expires}"
     digest = hmac.new(settings.effective_jwt_secret.encode(), payload.encode(), hashlib.sha256)
     return digest.hexdigest()[:32]
 
@@ -70,7 +71,13 @@ def build_audio_url(track_id: int) -> str:
     return f"/tracks/{track_id}/audio?exp={expires}&sig={signature}"
 
 
-def verify_audio_signature(track_id: int, expires: int, signature: str) -> bool:
+def build_instrumental_audio_url(instrumental_id: int) -> str:
+    expires = int(datetime.now(timezone.utc).timestamp()) + AUDIO_URL_TTL_SECONDS
+    signature = _audio_signature(instrumental_id, expires, kind="ins")
+    return f"/instrumentals/{instrumental_id}/audio?exp={expires}&sig={signature}"
+
+
+def verify_audio_signature(track_id: int, expires: int, signature: str, kind: str = "audio") -> bool:
     if expires < int(datetime.now(timezone.utc).timestamp()):
         return False
-    return hmac.compare_digest(_audio_signature(track_id, expires), signature)
+    return hmac.compare_digest(_audio_signature(track_id, expires, kind), signature)

@@ -11,10 +11,17 @@ from datetime import datetime
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Track, TrackEvent
+from app.db.models import Instrumental, Track, TrackEvent
 
 MIX_LIMIT = 60
 VALID_MOODS = {"happy", "sad", "energetic", "calm", "love"}
+
+
+async def instrumental_mix(session: AsyncSession, limit: int = MIX_LIMIT) -> list[Instrumental]:
+    """Микс «Инструментальная» — минусы из отдельной таблицы, в случайном порядке."""
+    items = list((await session.scalars(select(Instrumental))).all())
+    random.shuffle(items)
+    return items[:limit]
 
 
 def detect_language(text: str) -> str:

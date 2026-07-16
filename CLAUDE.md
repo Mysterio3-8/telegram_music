@@ -132,7 +132,11 @@ $env:DATABASE_URL="sqlite+aiosqlite:///_tmp.db"; .\.venv\Scripts\python.exe -m a
 - **Деплой выполнен**: 3 миграции применены (prod был `b2d3e4f5a6c7` → `e5a6b7c8d9f0`), перезапущены `tg-music-{bot,worker,api,youtube}` (все active), бот на polling, API отдаёт 200 реальному трафику
 - **nginx**: в `location /` добавлен `add_header Cache-Control "no-cache"` ([deploy/nginx-keybest.conf](deploy/nginx-keybest.conf) + живой конфиг) — вернувшиеся пользователи ревалидируют и получают свежий Mini App (проверено: заголовок отдаётся на index.html и *.js). Бэкапы конфига — в `/root/nginx-backups`
 - **`aiohttp`** добавлен в requirements.txt (использует ЮKassa + LRCLIB)
-- **Осталось честно недоделанным:** «инструментальный» язык в миксе (в таблице tracks нет инструменталок — no-op); кураторы (нет модели данных); настроение работает только для треков, помеченных админом
+- **Доделано (2026-07-16, вторая волна):**
+  - **«Инструментальная» в миксе**: `GET /mix?language=instrumental` отдаёт минусы из `instrumentals` с **отрицательными id** (не пересекаются с треками) и `audio_url` на новый эндпоинт `GET /instrumentals/{id}/audio` (HMAC-подпись в отдельном namespace `ins:` — подпись трека не подходит, проверено 403; Range поддержан). Фронт не пишет listen для id<0
+  - **Кураторы**: без новой модели — кураторские подборки = плейлисты пользователей из `ADMIN_IDS` (`GET /curators`, `/curators/{id}/tracks`, пустые скрыты). Экран `curators.js` → collection. Чтобы наполнить: админ создаёт плейлист в Mini App
+  - **Массовое тегирование настроения**: `python -m app.cli.set_mood <mood> <запрос>` / `--untagged` / `--dry`
+- **Осталось честно недоделанным:** формат минусов в стриминге захардкожен mp3 (в `instrumentals` нет поля format); кураторские подборки показываются все (нет флага «черновик»)
 
 ## Checkpoint (2026-07-14, вечер) — редизайн Mini App: блоки B/C/D ЗАВЕРШЕНЫ
 

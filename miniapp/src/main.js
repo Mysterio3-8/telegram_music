@@ -6,6 +6,8 @@ import {
   getLibraryIds,
   getAlbums,
   getAlbumTracks,
+  getCurators,
+  getCuratorTracks,
   getLyrics,
   getPlaylists,
   getPlaylistTracks,
@@ -59,6 +61,7 @@ import { renderLyrics } from "./screens/lyrics.js";
 import { renderDownloads } from "./screens/downloads.js";
 import { renderPlaylists } from "./screens/playlists.js";
 import { renderAlbums } from "./screens/albums.js";
+import { renderCurators } from "./screens/curators.js";
 import { renderCollection } from "./screens/collection.js";
 import { isOffline, saveOffline, removeOffline, offlineTracks } from "./offline.js";
 import {
@@ -94,6 +97,7 @@ const SCREENS = {
   downloads: renderDownloads,
   playlists: renderPlaylists,
   albums: renderAlbums,
+  curators: renderCurators,
   collection: renderCollection,
 };
 
@@ -270,6 +274,15 @@ async function loadAlbums() {
     mutate({ albums: await getAlbums(), albumsStatus: "ready" });
   } catch {
     mutate({ albumsStatus: "error" });
+  }
+}
+
+async function loadCurators() {
+  mutate({ curatorsStatus: "loading", screen: "curators" });
+  try {
+    mutate({ curators: await getCurators(), curatorsStatus: "ready" });
+  } catch {
+    mutate({ curators: [], curatorsStatus: "ready" });
   }
 }
 
@@ -514,7 +527,10 @@ root.addEventListener("click", (event) => {
       loadAlbums();
       break;
     case "open-curators":
-      openCollection("Кураторы", async () => [], "library");
+      loadCurators();
+      break;
+    case "open-curator":
+      openCollection(el.dataset.title || "Подборка", () => getCuratorTracks(id), "curators");
       break;
     case "open-playlist":
       openCollection(el.dataset.title || "Плейлист", () => getPlaylistTracks(id), "playlists");

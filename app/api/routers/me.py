@@ -20,8 +20,9 @@ from app.api.schemas import (
     UserStatsOut,
     track_out,
 )
+from app.api.security import build_instrumental_audio_url
 from app.config import settings
-from app.db.models import Track, User
+from app.db.models import Playlist, Track, User
 from app.importers.base import ImportItem
 from app.services.audio import duration_from_bytes
 from app.services.catalog_import import import_user_track
@@ -46,7 +47,7 @@ from app.services.playlists import (
     get_playlist,
     get_playlist_tracks_page,
 )
-from app.services.recommendations import build_mix
+from app.services.recommendations import build_mix, instrumental_mix
 from app.services.premium import can_create_playlist, can_upload, is_premium_active
 from app.services.stats import record_event
 from app.services.uploads import detect_format
@@ -125,6 +126,20 @@ async def personalized_mix(
     session: AsyncSession = Depends(get_db),
 ) -> list[TrackOut]:
     """Микс под настроение/тип/язык (доп. ТЗ, настройки рекомендаций)."""
+    if language == "instrumental":
+        # Минусы — отдельная таблица; отрицательный id не пересекается с треками,
+        # аудио идёт через /instrumentals/{id}/audio с собственной подписью
+        items = await instrumental_mix(session)
+        return [
+            TrackOut(
+                id=-item.id,
+                title=item.title,
+                artist=item.artist,
+                duration=item.duration,
+                audio_url=build_instrumental_audio_url(item.id),
+            )
+            for item in items
+        ]
     tracks = await build_mix(session, mood=mood, recognizability=recognizability, language=language)
     return [track_out(t) for t in tracks]
 
@@ -152,6 +167,57 @@ async def playlist_tracks(
     playlist = await get_playlist(session, playlist_id)
     if playlist is None or playlist.user_id != user.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Плейлист не найден")
+    tracks: list = []
+    page = 1
+    while True:
+        batch = await get_playlist_tracks_page(session, playlist_id, page)
+        tracks += batch
+        if len(batch) < settings.page_size:
+            break
+        page += 1
+    return [track_out(t) for t in tracks]
+
+
+@router.get("/curators", response_model=list[PlaylistSummaryOut])
+async def curated_playlists(
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+) -> list[PlaylistSummaryOut]:
+    """Кураторские подборки — публичные плейлисты админов (ADMIN_IDS)."""
+    if not settings.admin_id_set:
+        return []
+    admin_user_ids = list(
+        (await session.scalars(select(User.id).where(User.telegram_id.in_(settings.admin_id_set)))).all()
+    )
+    if not admin_user_ids:
+        return []
+    playlists = (
+        await session.scalars(
+            select(Playlist)
+            .where(Playlist.user_id.in_(admin_user_ids))
+            .order_by(Playlist.created_at.desc())
+        )
+    ).all()
+    out = []
+    for p in playlists:
+        count = await count_playlist_tracks(session, p.id)
+        if count:  # пустые подборки не показываем
+            out.append(PlaylistSummaryOut(id=p.id, title=p.title, track_count=count))
+    return out
+
+
+@router.get("/curators/{playlist_id}/tracks", response_model=list[TrackOut])
+async def curated_playlist_tracks(
+    playlist_id: int,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+) -> list[TrackOut]:
+    playlist = await get_playlist(session, playlist_id)
+    if playlist is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Подборка не найдена")
+    owner = await session.get(User, playlist.user_id)
+    if owner is None or owner.telegram_id not in settings.admin_id_set:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Подборка не найдена")
     tracks: list = []
     page = 1
     while True:

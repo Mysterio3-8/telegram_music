@@ -1,8 +1,8 @@
 from datetime import timedelta
 
-from app.db.models import Track, TrackEvent, User
+from app.db.models import Instrumental, Track, TrackEvent, User
 from app.services.premium import _utcnow
-from app.services.recommendations import build_mix, detect_language
+from app.services.recommendations import build_mix, detect_language, instrumental_mix
 
 
 def test_detect_language():
@@ -58,3 +58,12 @@ async def test_mix_recognizability_known_orders_by_plays(session):
 
     known = await build_mix(session, recognizability="known")
     assert known[0].title == "Hit"
+
+
+async def test_instrumental_mix_returns_instrumentals(session):
+    session.add(Instrumental(title="Минус 1", artist="A", duration=120))
+    session.add(Instrumental(title="Минус 2", artist="B", duration=130))
+    await session.commit()
+
+    mix = await instrumental_mix(session)
+    assert sorted(i.title for i in mix) == ["Минус 1", "Минус 2"]

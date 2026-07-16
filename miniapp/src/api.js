@@ -122,6 +122,14 @@ export function getAlbums() {
   return request("/albums");
 }
 
+export function getCurators() {
+  return request("/curators");
+}
+
+export function getCuratorTracks(playlistId) {
+  return request(`/curators/${playlistId}/tracks`);
+}
+
 export function getAlbumTracks(name) {
   return request(`/albums/tracks?name=${encodeURIComponent(name)}`);
 }
