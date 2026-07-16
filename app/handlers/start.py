@@ -71,7 +71,12 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
             session, message.bot, user.id, user.telegram_id, force=True
         )
         if not subscribed:
-            await message.answer(SUBSCRIPTION_GATE_TEXT, reply_markup=subscription_gate_keyboard())
+            from app.services.required_channels import get_required_channels
+
+            channels = await get_required_channels(session)
+            await message.answer(
+                SUBSCRIPTION_GATE_TEXT, reply_markup=subscription_gate_keyboard(channels)
+            )
             return
         text = await build_cabinet_text(session, user)
     if command.args and command.args.startswith("track_"):

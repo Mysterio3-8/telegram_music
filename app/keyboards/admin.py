@@ -22,10 +22,28 @@ def admin_panel_keyboard(reclaimable_count: int = 0, junk_count: int = 0) -> Inl
             ]
         )
     rows += [
+        [InlineKeyboardButton(text="📢 Каналы подписки", callback_data="adm:subch")],
         [InlineKeyboardButton(text="➕ Загрузить минусы", callback_data="adm:upload_minus")],
         [InlineKeyboardButton(text="🎬 YouTube-источники", callback_data="adm:yt")],
         [InlineKeyboardButton(text="📡 Мой Telegram-канал", callback_data="adm:tgc")],
         [InlineKeyboardButton(text="◀️ В меню", callback_data="menu:main")],
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def sub_channels_keyboard(channels) -> InlineKeyboardMarkup:
+    """channels: list[RequiredChannel] — по кнопке удаления на канал."""
+    rows = [
+        [
+            InlineKeyboardButton(
+                text=f"🗑 {row.label} ({row.channel})", callback_data=f"adm:subch:del:{row.id}"
+            )
+        ]
+        for row in channels
+    ]
+    rows += [
+        [InlineKeyboardButton(text="➕ Добавить канал", callback_data="adm:subch:add")],
+        [InlineKeyboardButton(text="◀️ Назад", callback_data="adm:stats")],
     ]
     return InlineKeyboardMarkup(inline_keyboard=rows)
 

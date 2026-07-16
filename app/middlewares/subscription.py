@@ -45,14 +45,16 @@ class SubscriptionMiddleware(BaseMiddleware):
                 # ещё не проходил /start — пропускаем, там пройдёт полноценная проверка
                 return await handler(event, data)
             subscribed = await is_fully_subscribed(session, event.bot, db_user.id, tg_user.id)
+            if subscribed:
+                return await handler(event, data)
+            from app.services.required_channels import get_required_channels
 
-        if subscribed:
-            return await handler(event, data)
+            keyboard = subscription_gate_keyboard(await get_required_channels(session))
 
         if isinstance(event, CallbackQuery):
             await event.answer("Сначала подпишитесь на каналы", show_alert=True)
             if event.message is not None:
-                await event.message.answer(GATE_TEXT, reply_markup=subscription_gate_keyboard())
+                await event.message.answer(GATE_TEXT, reply_markup=keyboard)
         elif isinstance(event, Message):
-            await event.answer(GATE_TEXT, reply_markup=subscription_gate_keyboard())
+            await event.answer(GATE_TEXT, reply_markup=keyboard)
         return None

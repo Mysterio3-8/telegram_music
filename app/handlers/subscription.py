@@ -10,7 +10,7 @@ from app.services.subscription import is_fully_subscribed
 
 router = Router()
 
-NOT_SUBSCRIBED_ALERT = "Не вижу подписку на оба канала. Подпишитесь и попробуйте снова."
+NOT_SUBSCRIBED_ALERT = "Не вижу подписку на все каналы. Подпишитесь и попробуйте снова."
 
 
 @router.callback_query(F.data == "sub:check")

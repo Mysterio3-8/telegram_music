@@ -84,10 +84,13 @@ async def is_fully_subscribed(
     telegram_id: int,
     force: bool = False,
 ) -> bool:
-    """True — подписан на все обязательные каналы (или админ с включённым байпасом)."""
+    """True — подписан на все обязательные каналы (или админ с включённым байпасом).
+    Каналы — из БД (управляются админкой); пустой список → гейт выключен."""
     if settings.admin_bypass_subscription and is_admin(telegram_id):
         return True
-    for channel, _label in settings.required_channels:
-        if not await is_channel_subscribed(session, bot, user_id, telegram_id, channel, force):
+    from app.services.required_channels import get_required_channels
+
+    for row in await get_required_channels(session):
+        if not await is_channel_subscribed(session, bot, user_id, telegram_id, row.channel, force):
             return False
     return True

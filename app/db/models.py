@@ -192,6 +192,18 @@ class TelegramChannelSource(Base):
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
 
+class RequiredChannel(Base):
+    """Обязательный канал подписки (TZ §14-17). Управляется из админки; таблица пустая →
+    гейт подписки выключен. Бот должен быть админом канала (иначе getChatMember не работает)."""
+
+    __tablename__ = "required_channels"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    channel: Mapped[str] = mapped_column(String(128), unique=True)  # @handle или -100…
+    label: Mapped[str] = mapped_column(String(128))  # текст кнопки в гейте
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
 class SubscriptionStatus(Base):
     """Кэш проверки обязательной подписки на каналы (TZ §14-17). TTL — в SubscriptionService."""
 

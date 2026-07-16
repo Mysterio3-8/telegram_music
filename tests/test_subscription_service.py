@@ -93,29 +93,37 @@ async def test_is_channel_subscribed_refreshes_after_ttl(session):
     assert bot.calls == 1
 
 
-async def test_is_fully_subscribed_requires_all_channels(session, monkeypatch):
-    monkeypatch.setattr(
-        settings, "required_channel_1", "@chan1", raising=False
-    )
-    monkeypatch.setattr(
-        type(settings), "required_channels",
-        property(lambda self: [("@chan1", "L1"), ("@chan2", "L2")]),
-    )
+async def _seed_channels(session, *channels: str) -> None:
+    from app.services.required_channels import add_required_channel
+
+    for channel in channels:
+        await add_required_channel(session, channel, f"L{channel}")
+
+
+async def test_is_fully_subscribed_requires_all_channels(session):
+    await _seed_channels(session, "@chan1", "@chan2")
     user = await make_user(session)
     bot = FakeBot(status=ChatMemberStatus.MEMBER)
 
     assert await is_fully_subscribed(session, bot, user.id, user.telegram_id) is True
+    assert bot.calls == 2  # оба канала проверены
 
 
-async def test_is_fully_subscribed_false_when_one_channel_missing(session, monkeypatch):
-    monkeypatch.setattr(
-        type(settings), "required_channels",
-        property(lambda self: [("@chan1", "L1"), ("@chan2", "L2")]),
-    )
+async def test_is_fully_subscribed_false_when_one_channel_missing(session):
+    await _seed_channels(session, "@chan1", "@chan2")
     user = await make_user(session)
     bot = FakeBot(status=ChatMemberStatus.LEFT)
 
     assert await is_fully_subscribed(session, bot, user.id, user.telegram_id) is False
+
+
+async def test_is_fully_subscribed_true_when_no_channels(session):
+    # пустой список каналов (админ всё удалил) → гейт выключен
+    user = await make_user(session)
+    bot = FakeBot(status=ChatMemberStatus.LEFT)
+
+    assert await is_fully_subscribed(session, bot, user.id, user.telegram_id) is True
+    assert bot.calls == 0
 
 
 async def test_is_fully_subscribed_admin_bypass(session, monkeypatch):

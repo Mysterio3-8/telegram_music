@@ -49,7 +49,8 @@ class Settings(BaseSettings):
     # Администраторы (Telegram ID через запятую): /admin, правка метаданных треков
     admin_ids: str = ""
 
-    # Обязательная подписка (TZ §14-17): пусто в любом из полей → канал не проверяется.
+    # Обязательная подписка (TZ §14-17). Каналы живут в БД (таблица required_channels,
+    # управление — из админки). Поля ниже — только сид для миграции f6a7b8c9d0e2.
     required_channel_1: str = "@tgramuzuka"
     required_channel_1_label: str = "📢 ТГ Музыка"
     required_channel_2: str = "@zvyagaminus"
@@ -59,6 +60,7 @@ class Settings(BaseSettings):
 
     @property
     def required_channels(self) -> list[tuple[str, str]]:
+        """Сид-значения для миграции; рантайм читает таблицу required_channels."""
         pairs = [
             (self.required_channel_1, self.required_channel_1_label),
             (self.required_channel_2, self.required_channel_2_label),

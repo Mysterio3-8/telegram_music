@@ -13,8 +13,20 @@ from app.config import settings
 from app.db.base import session_factory
 from app.db.models import Track
 from app.services.users import is_admin
-from app.keyboards.admin import admin_panel_keyboard, junk_confirm_keyboard, reclaim_confirm_keyboard
+from app.keyboards.admin import (
+    admin_panel_keyboard,
+    junk_confirm_keyboard,
+    reclaim_confirm_keyboard,
+    sub_channels_keyboard,
+)
 from app.services.catalog_cleanup import count_junk_tracks, delete_junk_tracks, list_junk_tracks
+from app.services.required_channels import (
+    add_required_channel,
+    get_required_channels,
+    normalize_channel,
+    remove_required_channel,
+)
+from app.services.subscription import check_channel_membership
 from app.services.library import get_track, update_track_meta
 from app.services.recommendations import VALID_MOODS
 from app.services.stats import ProjectStats, collect_stats
@@ -31,6 +43,11 @@ class TrackEdit(StatesGroup):
     waiting_title = State()
     waiting_artist = State()
     waiting_mood = State()
+
+
+class SubChannelAdd(StatesGroup):
+    waiting_channel = State()
+    waiting_label = State()
 
 
 def _format_mb(size_bytes: int) -> str:
@@ -125,6 +142,101 @@ async def cb_reclaim_go(callback: CallbackQuery) -> None:
         reply_markup=admin_panel_keyboard(stats.reclaimable_count, stats.junk_count),
     )
     await callback.answer("Диск очищен")
+
+
+# --- Каналы обязательной подписки: управление из админки (TZ §14-17) ---
+
+
+def _sub_channels_text(channels) -> str:
+    if not channels:
+        return (
+            "📢 Каналы обязательной подписки\n\n"
+            "Список пуст — гейт подписки ВЫКЛЮЧЕН, бот доступен всем без подписки."
+        )
+    lines = ["📢 Каналы обязательной подписки\n"]
+    lines += [f"{i}. {row.label} — {row.channel}" for i, row in enumerate(channels, start=1)]
+    lines.append("\nПользователи должны быть подписаны на все каналы из списка.")
+    return "\n".join(lines)
+
+
+async def _show_sub_channels(message, session) -> None:
+    channels = await get_required_channels(session)
+    await message.edit_text(_sub_channels_text(channels), reply_markup=sub_channels_keyboard(channels))
+
+
+@router.callback_query(F.data == "adm:subch")
+async def cb_sub_channels(callback: CallbackQuery) -> None:
+    if not is_admin(callback.from_user.id):
+        await callback.answer("Недоступно", show_alert=True)
+        return
+    async with session_factory() as session:
+        await _show_sub_channels(callback.message, session)
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("adm:subch:del:"))
+async def cb_sub_channel_delete(callback: CallbackQuery) -> None:
+    if not is_admin(callback.from_user.id):
+        await callback.answer("Недоступно", show_alert=True)
+        return
+    channel_id = int(callback.data.rsplit(":", 1)[1])
+    async with session_factory() as session:
+        removed = await remove_required_channel(session, channel_id)
+        await _show_sub_channels(callback.message, session)
+    await callback.answer("Канал убран" if removed else "Уже удалён")
+
+
+@router.callback_query(F.data == "adm:subch:add")
+async def cb_sub_channel_add(callback: CallbackQuery, state: FSMContext) -> None:
+    if not is_admin(callback.from_user.id):
+        await callback.answer("Недоступно", show_alert=True)
+        return
+    await state.set_state(SubChannelAdd.waiting_channel)
+    await callback.message.answer(
+        "Пришлите канал: @username или id вида -100…\n\n"
+        "⚠️ Бот должен быть админом этого канала — иначе Telegram не даёт проверять подписку."
+    )
+    await callback.answer()
+
+
+@router.message(SubChannelAdd.waiting_channel, F.text)
+async def process_sub_channel(message: Message, state: FSMContext) -> None:
+    channel = normalize_channel(message.text)
+    if channel is None:
+        await message.answer("Не похоже на канал. Формат: @username или -100XXXXXXXXXX.")
+        return
+    # Живая проверка тем же вызовом, которым работает гейт: если getChatMember
+    # не отвечает — бот не админ канала, и подписку проверить не сможет
+    if not await check_channel_membership(message.bot, message.from_user.id, channel):
+        await message.answer(
+            f"Не могу проверить участников {channel}.\n"
+            "Убедитесь, что канал существует, бот добавлен в него админом, "
+            "а вы сами на него подписаны, — и пришлите канал ещё раз."
+        )
+        return
+    await state.update_data(new_channel=channel)
+    await state.set_state(SubChannelAdd.waiting_label)
+    await message.answer("Текст кнопки для гейта (например «📢 ТГ Музыка»):")
+
+
+@router.message(SubChannelAdd.waiting_label, F.text)
+async def process_sub_channel_label(message: Message, state: FSMContext) -> None:
+    label = message.text.strip()
+    if not label or len(label) > 128:
+        await message.answer("Текст кнопки от 1 до 128 символов. Попробуйте ещё раз.")
+        return
+    data = await state.get_data()
+    await state.set_state(None)
+    async with session_factory() as session:
+        row = await add_required_channel(session, data["new_channel"], label)
+        channels = await get_required_channels(session)
+    if row is None:
+        await message.answer("Такой канал уже в списке.")
+        return
+    await message.answer(
+        f"✅ Добавлен: {label} — {row.channel}\n\n{_sub_channels_text(channels)}",
+        reply_markup=sub_channels_keyboard(channels),
+    )
 
 
 # --- Очистка не-музыки (короче/длиннее музыкальных границ) — удаляет НАВСЕГДА ---
