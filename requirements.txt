@@ -13,6 +13,7 @@ fastapi>=0.115
 uvicorn>=0.30
 pyjwt>=2.9
 python-multipart>=0.0.9
+aiohttp>=3.9  # HTTP-клиент: ЮKassa, LRCLIB (тексты песен)
 
 # прод-БД (когда поднимем PostgreSQL):
 # asyncpg>=0.29
