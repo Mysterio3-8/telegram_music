@@ -1,4 +1,6 @@
-import { resolveAudioUrl, shuffle } from "./api.js";
+import { resolveAudioUrl, shuffle, recordListen, getMix } from "./api.js";
+import { pushRecentTrack, getRecSettings } from "./prefs.js";
+import { isOffline, offlineBlobUrl } from "./offline.js";
 
 // Плеер — настоящий <audio>: событие ended переключает следующий трек само,
 // без действий пользователя (ТЗ §3-4). Прогресс (timeupdate, ~4 раза/сек)
@@ -30,6 +32,22 @@ const state = {
   playerOpen: false,
   sheetTrack: null,
   toast: "",
+  recDraft: getRecSettings(), // редактируемый черновик настроек рекомендаций
+  subDismissed: false, // карточка подписки скрыта на эту сессию
+  docKey: "about", // активный статический документ (faq/privacy/license/about)
+  profile: null, // геймификация: ранг, приглашённые, достижения (грузится при открытии профиля)
+  profileStatus: "idle", // idle | loading | ready | error
+  lyricsTrack: null, // трек, для которого открыт экран текста
+  lyrics: null, // {text, source, found}
+  lyricsStatus: "idle", // idle | loading | ready | error
+  lyricsEditing: false,
+  playlists: [],
+  playlistsStatus: "idle",
+  albums: [],
+  albumsStatus: "idle",
+  collectionTitle: "",
+  collectionTracks: [],
+  collectionStatus: "idle",
 };
 
 const structureListeners = new Set();
@@ -138,23 +156,64 @@ function updateMediaSession(track) {
   navigator.mediaSession.setActionHandler("previoustrack", playPrev);
 }
 
+let currentObjectUrl = null;
+
+function playFrom(src, track) {
+  if (state.currentTrack !== track) return; // трек сменился, пока резолвили источник
+  audio.src = src;
+  audio.play().catch(() => {
+    // автоплей заблокирован до первого касания — ставим на паузу без паники
+    state.isPlaying = false;
+    notify();
+  });
+}
+
+function revokeObjectUrl() {
+  if (currentObjectUrl) {
+    URL.revokeObjectURL(currentObjectUrl);
+    currentObjectUrl = null;
+  }
+}
+
+function setAudioSource(track) {
+  const playNetwork = () => {
+    const url = resolveAudioUrl(track);
+    if (!url) {
+      showToast("У трека нет аудио");
+      return;
+    }
+    playFrom(url, track);
+  };
+
+  if (isOffline(track.id)) {
+    offlineBlobUrl(track.id).then((blobUrl) => {
+      if (state.currentTrack !== track) {
+        if (blobUrl) URL.revokeObjectURL(blobUrl);
+        return;
+      }
+      revokeObjectUrl();
+      if (blobUrl) {
+        currentObjectUrl = blobUrl;
+        playFrom(blobUrl, track);
+      } else {
+        playNetwork(); // кэш очищен Telegram — играем по сети
+      }
+    });
+    return;
+  }
+  revokeObjectUrl();
+  playNetwork();
+}
+
 function startTrack(index) {
   const track = state.queue[index];
   if (!track) return;
   state.queueIndex = index;
   state.currentTrack = track;
   state.isPlaying = true;
-  const url = resolveAudioUrl(track);
-  if (!url) {
-    showToast("У трека нет аудио");
-    return;
-  }
-  audio.src = url;
-  audio.play().catch(() => {
-    // автоплей заблокирован до первого касания — ставим на паузу без паники
-    state.isPlaying = false;
-    notify();
-  });
+  pushRecentTrack(track);
+  if (typeof track.id === "number") recordListen(track.id);
+  setAudioSource(track);
   updateMediaSession(track);
   notify();
 }
@@ -172,11 +231,27 @@ export function playTrack(track, contextList) {
 }
 
 export function playAll() {
-  if (!state.catalog.length) {
-    showToast("В базе пока нет треков");
+  playMix(state.catalog, "В базе пока нет треков");
+}
+
+// Персональный микс под сохранённые настройки рекомендаций (настроение/тип/язык).
+export async function playRecommended() {
+  showToast("Собираю рекомендации…");
+  try {
+    const tracks = await getMix(getRecSettings());
+    playMix(tracks, "Пока нечего рекомендовать");
+  } catch {
+    showToast("Не удалось собрать микс");
+  }
+}
+
+// Запуск произвольного микса (варианты swipe-hero: вся база / любимые / рекомендации).
+export function playMix(list, emptyMessage = "Здесь пока нет треков") {
+  if (!list || !list.length) {
+    showToast(emptyMessage);
     return;
   }
-  state.queue = shuffle(state.catalog);
+  state.queue = shuffle(list);
   startTrack(0);
   state.playerOpen = true;
   notify();

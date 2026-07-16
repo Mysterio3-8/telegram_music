@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import BigInteger, ForeignKey, String, UniqueConstraint, func
+from sqlalchemy import BigInteger, ForeignKey, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -18,6 +18,10 @@ class User(Base):
     premium_until: Mapped[datetime | None]
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     last_login: Mapped[datetime | None]
+    # Геймификация (доп. ТЗ): рефералы, награды за приглашения, реферальная скидка
+    referred_by: Mapped[int | None] = mapped_column(BigInteger, index=True)  # telegram_id пригласившего
+    referral_milestones_claimed: Mapped[int] = mapped_column(default=0, server_default="0")
+    premium_discount_pct: Mapped[int] = mapped_column(default=0, server_default="0")
 
 
 class Track(Base):
@@ -37,6 +41,8 @@ class Track(Base):
     # Сбрасывается при правке метаданных; выставляется после перетегированной переотправки.
     meta_synced: Mapped[bool] = mapped_column(default=False, server_default="0")
     fingerprint: Mapped[str | None] = mapped_column(String(128), index=True)
+    # Настроение для рекомендаций (доп. ТЗ): happy|sad|energetic|calm|love. Ставит админ.
+    mood: Mapped[str | None] = mapped_column(String(16), index=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
 
@@ -103,6 +109,18 @@ class TrackEvent(Base):
     track_id: Mapped[int] = mapped_column(ForeignKey("tracks.id"), index=True)
     event: Mapped[str] = mapped_column(String(16), index=True)  # listen | download
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
+class Lyrics(Base):
+    """Текст песни для трека (доп. ТЗ). Источник: lrclib (автопоиск) | user | admin.
+    Один трек — один текст (track_id первичный ключ)."""
+
+    __tablename__ = "lyrics"
+
+    track_id: Mapped[int] = mapped_column(ForeignKey("tracks.id"), primary_key=True)
+    text: Mapped[str] = mapped_column(Text)
+    source: Mapped[str] = mapped_column(String(16), default="user")
+    updated_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
 
 class Upload(Base):

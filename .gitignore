@@ -5,3 +5,7 @@ __pycache__/
 *.db
 .pytest_cache/
 storage/
+
+# Референсные скриншоты/эскизы дизайна (не код)
+MiniAppPhoto/
+kreen/

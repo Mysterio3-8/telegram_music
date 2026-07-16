@@ -70,10 +70,45 @@ a {
   flex-direction: column;
 }
 
+/* Планшеты — колонка чуть шире, но не растянута на весь экран */
+@media (min-width: 700px) {
+  #app {
+    max-width: 560px;
+  }
+}
+
 .screen {
   flex: 1;
   padding: 20px 20px calc(104px + env(safe-area-inset-bottom));
   animation: screen-in 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Играет трек — снизу висит мини-плеер: увеличиваем отступ, чтобы контент
+   не уходил под него и под навигацию (ТЗ: не скрывать контент нижней панелью) */
+#app.is-playing .screen {
+  padding-bottom: calc(168px + env(safe-area-inset-bottom));
+}
+
+/* Горизонтальные ленты (hero-карусель, быстрый доступ, блоки библиотеки):
+   скролл строго внутри контейнера, страница по горизонтали не едет. */
+.h-scroll {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+}
+
+.h-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.h-scroll > * {
+  scroll-snap-align: start;
+  flex: 0 0 auto;
 }
 
 @keyframes screen-in {

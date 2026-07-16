@@ -91,6 +91,25 @@
   --shadow-elevated: 0 18px 60px rgba(0, 0, 0, 0.45);
   --divider: rgba(255, 255, 255, 0.06);
   --overlay-scrim: rgba(5, 5, 7, 0.72);
+
+  /* --- Унифицированные радиусы (ТЗ: единые скругления) --- */
+  --radius-sm: 12px;
+  --radius-md: 16px;
+  --radius-lg: 20px;
+  --radius-xl: 26px;
+  --radius-pill: 999px;
+
+  /* --- Унифицированные отступы --- */
+  --space-1: 6px;
+  --space-2: 10px;
+  --space-3: 14px;
+  --space-4: 18px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  /* --- Единая высота интерактивных элементов --- */
+  --control-h: 46px;
+  --tap-min: 44px; /* минимальная зона нажатия (доступность) */
 }
 
 /*

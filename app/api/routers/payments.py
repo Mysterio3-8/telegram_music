@@ -25,12 +25,20 @@ class PaymentLinkOut(BaseModel):
 
 
 @router.post("/premium/pay", response_model=PaymentLinkOut)
-async def create_payment_link(user: User = Depends(get_current_user)) -> PaymentLinkOut:
+async def create_payment_link(
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+) -> PaymentLinkOut:
     if not is_yookassa_configured():
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Оплата временно недоступна")
-    url = await create_premium_payment(user.telegram_id, settings.bot_username)
+    discount = user.premium_discount_pct or 0
+    price = settings.premium_price_rub * (100 - discount) // 100 if discount else settings.premium_price_rub
+    url = await create_premium_payment(user.telegram_id, settings.bot_username, price)
     if url is None:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Не удалось создать платёж")
+    if discount:
+        user.premium_discount_pct = 0
+        await session.commit()
     return PaymentLinkOut(confirmation_url=url)
 
 

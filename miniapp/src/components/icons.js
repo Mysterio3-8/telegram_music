@@ -36,6 +36,18 @@ const PATHS = {
   help: '<circle cx="12" cy="12" r="8.5"/><path d="M9.6 9.3a2.4 2.4 0 1 1 3.5 2.1c-.9.5-1.4 1-1.4 2"/><circle cx="12" cy="16.3" r="0.4" fill="currentColor" stroke="none"/>',
   theme: '<path d="M12 3.5a8.5 8.5 0 1 0 8.5 8.5A6.5 6.5 0 0 1 12 3.5Z"/>',
   logout: '<path d="M9 4H6a1.5 1.5 0 0 0-1.5 1.5v13A1.5 1.5 0 0 0 6 20h3"/><path d="M15.5 16.5 20 12l-4.5-4.5"/><path d="M20 12H9"/>',
+  tune: '<path d="M5 8h9"/><path d="M18 8h1"/><circle cx="16" cy="8" r="2"/><path d="M5 16h1"/><path d="M10 16h9"/><circle cx="8" cy="16" r="2"/>',
+  sparkles: '<path d="M12 4.5 13.6 9 18 10.5 13.6 12 12 16.5 10.4 12 6 10.5 10.4 9 12 4.5Z"/><path d="M18 15.5 18.8 18 21 18.8 18.8 19.6 18 22 17.2 19.6 15 18.8 17.2 18 18 15.5Z"/>',
+  history: '<path d="M4 12a8 8 0 1 1 2.5 5.8"/><path d="M4 12H2m2 0 .2 2.6"/><path d="M12 8v4l3 2"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 3v2"/><path d="M12 19v2"/><path d="M4.9 4.9 6.3 6.3"/><path d="m17.7 17.7 1.4 1.4"/><path d="M3 12h2"/><path d="M19 12h2"/><path d="M4.9 19.1 6.3 17.7"/><path d="m17.7 6.3 1.4-1.4"/>',
+  moon: '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z"/>',
+  fire: '<path d="M12 3s5 3.5 5 8.5a5 5 0 0 1-10 0c0-2 1-3.5 1-3.5S9 10 10 10c0-2.5 2-4 2-7Z"/>',
+  leaf: '<path d="M4 20c0-8 6-14 16-14 0 10-6 14-14 14a6 6 0 0 1-2 0Z"/><path d="M9 15c3-3 6-5 9-6"/>',
+  album: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="2.2"/>',
+  mic: '<rect x="9" y="3.5" width="6" height="11" rx="3"/><path d="M6 11a6 6 0 0 0 12 0"/><path d="M12 17v3.5"/><path d="M9 20.5h6"/>',
+  star: '<path d="M12 4l2.3 4.9 5.2.6-3.9 3.6 1 5.3-4.6-2.7-4.6 2.7 1-5.3-3.9-3.6 5.2-.6L12 4Z"/>',
+  globe: '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17"/><path d="M12 3.5c2.5 2.4 3.8 5.4 3.8 8.5S14.5 18.1 12 20.5c-2.5-2.4-3.8-5.4-3.8-8.5S9.5 5.9 12 3.5Z"/>',
+  lyrics: '<path d="M5 5h14"/><path d="M5 9h10"/><path d="M5 13h8"/><path d="M5 17h11"/>',
 };
 
 export function icon(name) {

@@ -2,11 +2,22 @@ import { icon } from "./icons.js";
 import { renderCover } from "./cover.js";
 import { escapeHtml } from "./trackRow.js";
 import { formatDuration } from "../api.js";
+import { isOffline, offlineSupported } from "../offline.js";
 
 export function renderTrackSheet(state) {
   const track = state.sheetTrack;
   if (!track) return "";
   const inLibrary = state.libraryIds.has(track.id);
+  const isPremium = state.premium && state.premium.active;
+  const saved = isOffline(track.id);
+  const offlineItem =
+    isPremium && offlineSupported()
+      ? `
+        <button class="sheet-item" data-action="toggle-offline" data-id="${track.id}">
+          ${icon(saved ? "check" : "download")} ${saved ? "Удалить из офлайна" : "Сохранить офлайн"}
+        </button>
+      `
+      : "";
 
   return `
     <div class="sheet-overlay" data-action="close-sheet">
@@ -25,6 +36,10 @@ export function renderTrackSheet(state) {
         </button>
         <button class="sheet-item" data-action="download" data-id="${track.id}">
           ${icon("download")} Скачать
+        </button>
+        ${offlineItem}
+        <button class="sheet-item" data-action="open-lyrics" data-id="${track.id}">
+          ${icon("lyrics")} Текст песни
         </button>
         <button class="sheet-item" data-action="share" data-id="${track.id}">
           ${icon("share")} Поделиться

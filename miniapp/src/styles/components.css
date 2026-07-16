@@ -1032,3 +1032,855 @@
 .track-row.is-playing .track-title {
   color: var(--text-accent);
 }
+
+/* ============ Section head — вариант со стеком (заголовок + подпись + чип) ============ */
+
+.section-head--stack {
+  align-items: flex-start;
+}
+
+.section-sub {
+  display: block;
+  margin-top: 3px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.chip-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 15px;
+  border-radius: var(--radius-pill);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border-amethyst);
+  color: var(--text-primary);
+  font-size: 12.5px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.chip-btn svg {
+  width: 15px;
+  height: 15px;
+  color: var(--icon-active);
+}
+
+.chip-btn:active {
+  transform: scale(0.96);
+}
+
+/* ============ Hero-карусель (свайп между миксами) ============ */
+
+.hero {
+  margin-top: 16px;
+}
+
+.hero__track {
+  border-radius: var(--radius-xl);
+}
+
+.hero-slide {
+  flex: 0 0 100%;
+  width: 100%;
+  min-height: 188px;
+  padding: 26px 22px;
+  border-radius: var(--radius-xl);
+  text-align: center;
+  background: var(--gradient-dark);
+  border: 1px solid var(--glass-border-amethyst);
+  box-shadow: var(--glass-shadow);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.hero-slide::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% -5%, rgba(155, 77, 255, 0.24), transparent 62%);
+  pointer-events: none;
+}
+
+.hero-slide:active {
+  filter: brightness(0.95);
+}
+
+.hero-slide__play {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  margin-bottom: 15px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--gradient-brand);
+  box-shadow: var(--play-glow);
+}
+
+.hero-slide__play svg {
+  width: 27px;
+  height: 27px;
+  color: #fff;
+  margin-left: 3px;
+}
+
+.hero-slide__title {
+  position: relative;
+  font-size: 19px;
+  font-weight: 800;
+}
+
+.hero-slide__subtitle {
+  position: relative;
+  margin-top: 5px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+.hero__dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.hero__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  opacity: 0.4;
+  transition: opacity 0.25s ease, width 0.25s ease;
+}
+
+.hero__dot.is-active {
+  width: 18px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  opacity: 1;
+}
+
+/* ============ Карточка подписки (только не-Premium) ============ */
+
+.sub-card {
+  position: relative;
+  margin-top: 18px;
+  padding: 20px 20px 18px;
+  border-radius: var(--radius-lg);
+  background: var(--gradient-premium-card);
+  border: 1px solid var(--glass-border-amethyst);
+  box-shadow: var(--glass-shadow);
+  overflow: hidden;
+}
+
+.sub-card__close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.sub-card__close svg {
+  width: 15px;
+  height: 15px;
+}
+
+.sub-card__title {
+  font-size: 18px;
+  font-weight: 800;
+  padding-right: 32px;
+}
+
+.sub-card__subtitle {
+  margin-top: 4px;
+  font-size: 12.5px;
+  color: var(--text-soft);
+}
+
+.sub-card__cta {
+  display: inline-flex;
+  align-items: center;
+  height: 40px;
+  margin-top: 15px;
+  padding: 0 22px;
+  border-radius: var(--radius-md);
+  background: var(--raw-white-pure);
+  color: #1a1022;
+  font-size: 13.5px;
+  font-weight: 800;
+}
+
+/* ============ Быстрый доступ ============ */
+
+.quick-access {
+  margin-top: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.quick-tile {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  border: 1px solid var(--glass-border);
+  text-align: left;
+}
+
+.quick-tile:active {
+  background: var(--accent-soft);
+}
+
+.quick-tile__icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-soft);
+  color: var(--icon-active);
+  flex-shrink: 0;
+}
+
+.quick-tile__icon svg {
+  width: 19px;
+  height: 19px;
+}
+
+.quick-tile__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.quick-tile__title {
+  font-size: 13.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.quick-tile__sub {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  margin-top: 1px;
+}
+
+/* ============ Шапка вложенной страницы ============ */
+
+.page-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0 14px;
+}
+
+.page-head span {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+/* ============ Настройки рекомендаций ============ */
+
+.rec-section-label {
+  margin: 22px 2px 12px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.mood-grid {
+  padding: 2px;
+}
+
+.mood-tile {
+  width: 88px;
+  padding: 14px 8px 12px;
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  border: 1px solid var(--glass-border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 9px;
+}
+
+.mood-tile__icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-soft);
+  color: var(--icon-active);
+}
+
+.mood-tile__icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.mood-tile__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.mood-tile.is-active {
+  border-color: var(--accent);
+  box-shadow: var(--accent-glow);
+}
+
+.mood-tile.is-active .mood-tile__label {
+  color: var(--text-primary);
+}
+
+.pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.pill {
+  height: 40px;
+  padding: 0 18px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-card);
+  border: 1px solid var(--glass-border);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.pill.is-active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.rec-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 30px;
+}
+
+.rec-actions .btn {
+  flex: 1;
+}
+
+.empty-state--sm {
+  margin-top: 14px;
+  padding: 8px 12px;
+}
+
+/* ============ Поиск: чипы запросов ============ */
+
+.section-head--between {
+  justify-content: space-between;
+}
+
+.chip-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.search-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 100%;
+  height: 38px;
+  padding: 0 14px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-card);
+  border: 1px solid var(--glass-border);
+  color: var(--text-soft);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.search-chip svg {
+  width: 14px;
+  height: 14px;
+  color: var(--icon-active);
+  flex-shrink: 0;
+}
+
+.search-chip span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.search-chip:active {
+  background: var(--accent-soft);
+  border-color: var(--glass-border-amethyst);
+}
+
+/* ============ Библиотека: блоки «Мои треки» по 3 ============ */
+
+.lib-cols {
+  margin-top: 4px;
+}
+
+.lib-col {
+  flex: 0 0 86%;
+  padding: 6px;
+  border-radius: var(--radius-lg);
+  background: var(--glass-bg-card);
+  border: 1px solid var(--glass-border-card);
+  box-shadow: var(--glass-inset);
+}
+
+/* Одна колонка целиком (треков ≤ 3) — на всю ширину, без «подглядывания» */
+.lib-cols > .lib-col:only-child {
+  flex-basis: 100%;
+}
+
+.lib-mix-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.lib-mix-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 15px 6px;
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  border: 1px solid var(--glass-border);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-soft);
+}
+
+.lib-mix-btn:active {
+  background: var(--accent-soft);
+}
+
+.lib-mix-btn__icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--gradient-brand);
+  color: #fff;
+  box-shadow: var(--accent-glow);
+}
+
+.lib-mix-btn__icon svg {
+  width: 19px;
+  height: 19px;
+}
+
+/* ============ Раздел «Ещё» ============ */
+
+.more-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.more-tile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 14px;
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  border: 1px solid var(--glass-border);
+  text-align: left;
+  min-height: 60px;
+}
+
+.more-tile:active {
+  background: var(--accent-soft);
+}
+
+.more-tile__icon {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-soft);
+  color: var(--icon-active);
+  flex-shrink: 0;
+}
+
+.more-tile__icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.more-tile__label {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+/* ============ Любимые исполнители ============ */
+
+.page-hint {
+  margin: -6px 2px 16px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.artist-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.artist-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  border: 1px solid var(--glass-border);
+  text-align: left;
+}
+
+.artist-row__avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 16px;
+  color: #fff;
+  background: var(--gradient-brand);
+  flex-shrink: 0;
+}
+
+.artist-row__info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.artist-row__name {
+  font-size: 13.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.artist-row__count {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  margin-top: 1px;
+}
+
+.artist-row__heart {
+  display: flex;
+  color: var(--icon-inactive);
+  flex-shrink: 0;
+}
+
+.artist-row__heart svg {
+  width: 20px;
+  height: 20px;
+}
+
+.artist-row.is-fav .artist-row__heart {
+  color: var(--accent);
+}
+
+.artist-row.is-fav .artist-row__heart svg {
+  fill: var(--accent);
+}
+
+/* ============ Документы (FAQ / политика / лицензия / о приложении) ============ */
+
+.doc-body {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.doc-block__heading {
+  font-size: 14.5px;
+  font-weight: 800;
+  margin-bottom: 6px;
+}
+
+.doc-block__text {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+/* ============ Профиль: ранг, прогресс, статистика, достижения ============ */
+
+.rank-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 6px;
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+  border: 1px solid var(--glass-border-amethyst);
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-accent);
+  vertical-align: middle;
+}
+
+.rank-progress {
+  margin-top: 18px;
+  padding: 16px 18px;
+}
+
+.rank-progress__text {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-soft);
+}
+
+.rank-progress__bar {
+  margin-top: 10px;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--progress-track);
+  overflow: hidden;
+}
+
+.rank-progress__bar span {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--gradient-brand);
+}
+
+.pstat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.pstat {
+  padding: 14px 6px;
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  border: 1px solid var(--glass-border);
+  text-align: center;
+}
+
+.pstat__value {
+  font-size: 19px;
+  font-weight: 800;
+  color: var(--text-accent);
+}
+
+.pstat__label {
+  margin-top: 2px;
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+
+.ach-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ach-badge {
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  background: var(--surface-card);
+  border: 1px solid var(--glass-border);
+  filter: grayscale(1);
+  opacity: 0.45;
+}
+
+.ach-badge.is-unlocked {
+  filter: none;
+  opacity: 1;
+  border-color: var(--glass-border-amethyst);
+  background: var(--accent-soft);
+}
+
+/* ============ Экран достижений ============ */
+
+.ach-summary {
+  margin: 2px 2px 4px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-accent);
+}
+
+.ach-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ach-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 13px 14px;
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  border: 1px solid var(--glass-border);
+}
+
+.ach-card__emoji {
+  width: 44px;
+  height: 44px;
+  border-radius: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  background: var(--bg-base);
+  filter: grayscale(1);
+  opacity: 0.5;
+  flex-shrink: 0;
+}
+
+.ach-card.is-unlocked {
+  border-color: var(--glass-border-amethyst);
+}
+
+.ach-card.is-unlocked .ach-card__emoji {
+  filter: none;
+  opacity: 1;
+  background: var(--accent-soft);
+}
+
+.ach-card__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.ach-card__title {
+  font-size: 13.5px;
+  font-weight: 700;
+}
+
+.ach-card__done {
+  margin-top: 3px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-accent);
+}
+
+.ach-card__bar {
+  margin-top: 8px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--progress-track);
+  overflow: hidden;
+}
+
+.ach-card__bar span {
+  display: block;
+  height: 100%;
+  background: var(--gradient-brand);
+}
+
+.ach-card__progress {
+  margin-top: 5px;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ============ Текст песни ============ */
+
+.lyrics-track {
+  margin: -8px 2px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-accent);
+}
+
+.lyrics-text {
+  margin: 0;
+  padding: 18px;
+  border-radius: var(--radius-lg);
+  background: var(--surface-card);
+  border: 1px solid var(--glass-border);
+  font-family: inherit;
+  font-size: 14.5px;
+  line-height: 1.85;
+  color: var(--text-soft);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.lyrics-meta {
+  margin: 10px 2px 0;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.lyrics-input {
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  border: 1px solid var(--glass-border);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.7;
+  resize: vertical;
+  outline: none;
+}
+
+.lyrics-input:focus {
+  border-color: var(--glass-border-amethyst);
+}

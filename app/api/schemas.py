@@ -65,8 +65,72 @@ class PlaylistCreateIn(BaseModel):
     title: str
 
 
+class LyricsOut(BaseModel):
+    text: str | None = None
+    source: str | None = None
+    found: bool
+
+
+class PlaylistSummaryOut(BaseModel):
+    id: int
+    title: str
+    track_count: int
+
+
+class AlbumOut(BaseModel):
+    name: str
+    track_count: int
+
+
+class LyricsIn(BaseModel):
+    text: str
+
+
 class PremiumStatusOut(BaseModel):
     active: bool
     until: datetime | None = None
     price_stars: int
     price_rub: int
+    price_rub_effective: int | None = None  # с учётом реферальной скидки, если есть
+    discount_pct: int = 0
+
+
+class RankOut(BaseModel):
+    key: str
+    title: str
+    emoji: str
+
+
+class ReferralOut(BaseModel):
+    link: str
+    invited: int
+    rank: RankOut | None = None
+    next_rank: RankOut | None = None
+    to_next: int
+
+
+class AchievementOut(BaseModel):
+    code: str
+    emoji: str
+    title: str
+    category: str
+    unlocked: bool
+    progress: int
+    target: int
+
+
+class UserStatsOut(BaseModel):
+    listens: int
+    listen_hours: float
+    streak_days: int
+    favorites: int
+    playlists: int
+
+
+class ProfileOut(BaseModel):
+    premium: PremiumStatusOut
+    referral: ReferralOut
+    stats: UserStatsOut
+    achievements_unlocked: int
+    achievements_total: int
+    achievements: list[AchievementOut]

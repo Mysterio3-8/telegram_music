@@ -10,9 +10,11 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, Message
 
 from app.db.base import session_factory
+from app.db.models import Track
 from app.services.users import is_admin
 from app.keyboards.admin import admin_panel_keyboard, reclaim_confirm_keyboard
 from app.services.library import get_track, update_track_meta
+from app.services.recommendations import VALID_MOODS
 from app.services.stats import ProjectStats, collect_stats
 from app.services.storage_cleanup import reclaim_disk_space
 from app.storage import get_storage
@@ -26,6 +28,7 @@ KEEP_MARK = "-"  # ответ «-» — оставить поле без изм�
 class TrackEdit(StatesGroup):
     waiting_title = State()
     waiting_artist = State()
+    waiting_mood = State()
 
 
 def _format_mb(size_bytes: int) -> str:
@@ -38,9 +41,7 @@ def _stats_text(stats: ProjectStats) -> str:
         "",
         f"👥 Пользователи: {stats.users_total}",
         f"├ Новых за день: {stats.users_new_day}",
-        f"├ Новых за неделю: {stats.users_new_week}",
-        f"├ Активных за день: {stats.users_active_day}",
-        f"├ Активных за неделю: {stats.users_active_week}",
+        f"├ Активных за всё время: {stats.users_active_all_time}",
         f"└ 💎 Premium: {stats.premium_active}",
         "",
         f"🎵 Треков в базе: {stats.tracks_total} — все доступны для прослушивания",
@@ -51,19 +52,6 @@ def _stats_text(stats: ProjectStats) -> str:
             f"   └ 🧹 можно освободить: {stats.reclaimable_count} "
             f"(~{_format_mb(stats.reclaimable_bytes)}) — уже есть в Telegram"
         )
-    lines += [
-        f"⬆️ Загрузок: {stats.uploads_total}",
-        f"📂 Плейлистов: {stats.playlists_total}",
-        "",
-        f"🎧 Прослушиваний: {stats.listens_total} (за день: {stats.listens_day})",
-        f"⬇️ Скачиваний: {stats.downloads_total} (за день: {stats.downloads_day})",
-    ]
-    if stats.top_tracks:
-        lines += ["", "🔥 Популярные треки:"]
-        lines += [
-            f"{position}. {track.artist} — {track.title} ({plays})"
-            for position, (track, plays) in enumerate(stats.top_tracks, start=1)
-        ]
     return "\n".join(lines)
 
 
@@ -179,16 +167,43 @@ async def process_edit_artist(message: Message, state: FSMContext) -> None:
         await message.answer(f"Имя исполнителя от 1 до {MAX_META_LENGTH} символов. Попробуйте ещё раз.")
         return
     data = await state.get_data()
-    await state.set_state(None)
     async with session_factory() as session:
         track = await update_track_meta(
             session, data["edit_track_id"], data.get("edit_title"), artist
         )
     if track is None:
+        await state.set_state(None)
         await message.answer("Трек не найден.")
         return
+    await state.set_state(TrackEdit.waiting_mood)
     await message.answer(
-        f"✅ Сохранено: {track.artist} — {track.title}\n\n"
+        "Настроение трека для рекомендаций?\n"
+        "happy / sad / energetic / calm / love\n"
+        f"(или «{KEEP_MARK}» — оставить как есть)"
+    )
+
+
+@router.message(TrackEdit.waiting_mood, F.text)
+async def process_edit_mood(message: Message, state: FSMContext) -> None:
+    raw = message.text.strip()
+    data = await state.get_data()
+    await state.set_state(None)
+    async with session_factory() as session:
+        track = await session.get(Track, data["edit_track_id"])
+        if track is None:
+            await message.answer("Трек не найден.")
+            return
+        if raw != KEEP_MARK:
+            mood = raw.lower()
+            if mood in VALID_MOODS:
+                track.mood = mood
+                await session.commit()
+            else:
+                await message.answer("Неизвестное настроение — оставил прежнее.")
+        title, artist, current_mood = track.title, track.artist, track.mood
+    await message.answer(
+        f"✅ Сохранено: {artist} — {title}\n"
+        f"Настроение: {current_mood or '—'}\n\n"
         "Файл будет перетегирован и переименован при следующей выдаче — "
         "пользователи получат его уже с новыми данными."
     )

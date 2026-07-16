@@ -30,10 +30,13 @@ def _auth() -> aiohttp.BasicAuth:
     return aiohttp.BasicAuth(settings.yookassa_shop_id, settings.yookassa_secret_key)
 
 
-async def create_premium_payment(telegram_id: int, bot_username: str) -> str | None:
+async def create_premium_payment(
+    telegram_id: int, bot_username: str, price_rub: int | None = None
+) -> str | None:
     """Создаёт платёж, возвращает confirmation_url или None при ошибке."""
+    amount = settings.premium_price_rub if price_rub is None else price_rub
     payload = {
-        "amount": {"value": f"{settings.premium_price_rub}.00", "currency": "RUB"},
+        "amount": {"value": f"{amount}.00", "currency": "RUB"},
         "capture": True,
         "confirmation": {
             "type": "redirect",
@@ -94,5 +97,9 @@ async def apply_succeeded_payment(session: AsyncSession, payment: dict) -> bool:
         return True  # повторное уведомление — уже обработано
 
     await activate_premium(session, user.id, "yookassa", payment["id"])
+    # Пригласивший получает скидку на следующий месяц (доп. ТЗ, реферальная программа)
+    from app.services.gamification import grant_referrer_discount
+
+    await grant_referrer_discount(session, user)
     logger.info("Premium activated via YooKassa user=%s payment=%s", user.id, payment["id"])
     return True

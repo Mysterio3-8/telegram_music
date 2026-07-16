@@ -1,12 +1,12 @@
 # Telegram Music Bot
 
-**Статус:** 🟢 прод (Этапы 1-3 + инфраструктура Этапа 4 задеплоены)
+**Статус:** 🟢 прод (Этапы 1-5 задеплоены, Mini App живой на keybest.cc)
 **Что это:** Telegram-бот [@tgram_music_bot](https://t.me/tgram_music_bot) — музыкальная платформа: библиотека, плейлисты, поиск, загрузка треков, Premium. Полное ТЗ — в [SPEC.md](SPEC.md).
 
 ## Прод
 
 - VPS: `ssh news-rewriter-vps` (root@38.244.213.132), код в `/opt/tg-music-bot`
-- Домен: keybest.cc → VPS (Mini App статика + API через nginx, HTTPS certbot). DNS настраивает пользователь у регистратора
+- Домен: **keybest.cc — жив, HTTPS выпущен** (Let's Encrypt, автопродление certbot, истекает 2026-10-10). nginx-сайт `/etc/nginx/sites-enabled/keybest.cc` (источник — [deploy/nginx-keybest.conf](deploy/nginx-keybest.conf)): статика Mini App на `/`, `/api/` → uvicorn :8010, `/webhook/` → uvicorn :8010
 - Сервисы: `tg-music-bot` (polling), `tg-music-worker` (Celery, обогащение загрузок), `tg-music-youtube` (Celery, очередь `youtube` — импорт с YouTube), таймер `tg-music-youtube-scan` (автопроверка §11), `tg-music-api` (uvicorn :8010 — API Mini App + webhook ЮKassa). Юниты — в [deploy/](deploy/), nginx-сайт — [deploy/nginx-keybest.conf](deploy/nginx-keybest.conf). `systemctl {status,restart} <сервис>`, логи: `journalctl -u <сервис> -f`
 - Redis (`redis-server`) — FSM + брокер Celery. ffmpeg + libchromaprint-tools (fpcalc) — отпечатки. yt-dlp (pip) — загрузка с YouTube
 - Repo: git@github.com:Mysterio3-8/telegram_music.git (пуш только по SSH — https-креды на машине от другого аккаунта)
@@ -111,8 +111,9 @@ $env:DATABASE_URL="sqlite+aiosqlite:///_tmp.db"; .\.venv\Scripts\python.exe -m a
 2. ~~Поиск по общей базе, плейлисты, загрузка треков, дубликаты по метаданным~~ ✅ (Redis FSM и chromaprint-отпечатки отложены)
 3. ~~Premium (Stars + карта/СБП), реклама~~ ✅ (карта/СБП ждёт `payment_provider_token`; логи оплаты — в journalctl)
 4. ~~Инфраструктура + модуль импорта~~ ✅ (Alembic, S3/local хранилище, Celery+Redis, chromaprint; импортёр: `python -m app.cli.import_catalog <dir> [--instrumental] [--artist X]`, дедуп по отпечатку+метаданным). Коннекторы к внешним источникам — по мере появления прав
-5. FastAPI публичный API ✅ (app/api, JWT + Telegram WebApp initData; как сервис НЕ развёрнут — ждёт Mini App и домена/HTTPS). Mini App — ждёт чертежи пользователя (кнопка скрыта в main_menu.py)
-6. Апдейт по доп. ТЗ (обязательная подписка, минусы, быстрые команды) — независимые срезы ✅: подписка на 2 канала (§14-17), воспроизведение+загрузка минусов через админку (§9-11), /start-/admin scope команд (§12-13). Player Engine и настоящий автоплей через Mini App (§3-8) — отложены осознанно (нужен домен/HTTPS), архитектура (Instrumental, delivery-слой) готова принять Mini App позже без переделки
+5. FastAPI публичный API ✅ развёрнут (`tg-music-api.service`, uvicorn :8010, за nginx на keybest.cc)
+6. Апдейт по доп. ТЗ (обязательная подписка, минусы, быстрые команды) — независимые срезы ✅: подписка на 2 канала (§14-17), воспроизведение+загрузка минусов через админку (§9-11), /start-/admin scope команд (§12-13)
+7. Mini App-плеер (§3-8) ✅ задеплоен на keybest.cc: настоящий автоплей через `<audio>` + `ended` (никаких пачек по QUEUE_BATCH_SIZE для Mini App), очередь-шаффл без повторов, обе темы (Premium Black Amethyst), оплата Premium через ЮKassa (21 ₽, redirect + webhook). Бот-меню: кнопка «🎧 Открыть плеер» первая в списке (WebAppInfo, показывается по `PUBLIC_BASE_URL`)
 
 ## Известные грабли
 
@@ -121,15 +122,50 @@ $env:DATABASE_URL="sqlite+aiosqlite:///_tmp.db"; .\.venv\Scripts\python.exe -m a
 - Обогащение (отпечаток+архив) — асинхронно в воркере: сразу после загрузки трека `storage_path` ещё пуст, появляется через секунды. Если воркер лежит — трек работает по `tg_file_id`, отпечаток не считается
 - Windows-консоль: путь проекта с кириллицей, в PowerShell возможны артефакты кодировки в выводе — на работу не влияет
 
-## Checkpoint (2026-07-13)
+## Checkpoint (2026-07-14, вечер) — редизайн Mini App: блоки B/C/D ЗАВЕРШЕНЫ
 
-- Сделано ранее (задеплоено): обязательная подписка §14-17, минусы §9-11, команды §12-13 (коммит 4d77957); ADMIN_IDS=5852263277 на VPS
-- Сделано сейчас (НЕ задеплоено): Mini App-плеер + инфраструктура keybest.cc:
-  1. API расширен: `audio.py` (байты трека по HMAC-подписи + Range для перемотки), `payments.py` (webhook ЮKassa `/webhook/yookassa` + `POST /premium/pay`), library add/remove/ids, `audio_url` в TrackOut, `page_size` до 100 для Mini App
-  2. ЮKassa (API-протокол, redirect): `services/yookassa_payments.py` — создание платежа 21 ₽, webhook перепроверяет статус у API ЮKassa (телу не доверяем), идемпотентен по payment_id. Кнопка «Карта/СБП» в боте (`prem:yookassa`). Ключи только в `.env` VPS: `YOOKASSA_SHOP_ID=1314296`, `YOOKASSA_SECRET_KEY` (⚠️ ключ засветился в чате — рекомендован перевыпуск)
-  3. Mini App (`miniapp/`, vanilla JS без сборки): реальные данные через API (initData→JWT), настоящий `<audio>` с автопереключением по `ended` (ТЗ §3-4), прогресс через отдельный канал подписки (фикс лагов — без полного re-render на тик), очередь-шаффл без повторов (§5), обложки-градиенты по id, тёмная+светлая тема Premium Black Amethyst, вкладки Текст/Отзыв удалены по требованию
-  4. Деплой-файлы: `deploy/tg-music-api.service` (uvicorn :8010), `deploy/nginx-keybest.conf` (статика miniapp + /api + /webhook). nginx+certbot установлены на VPS, nginx active
-  5. Кнопка «🎧 Открыть плеер» (WebAppInfo) в главном меню бота — показывается когда задан `PUBLIC_BASE_URL`
-- Блокер деплоя Mini App: **DNS keybest.cc пустой** — пользователь должен создать A-запись keybest.cc → 38.244.213.132, потом: certbot --nginx -d keybest.cc, прописать на VPS `PUBLIC_BASE_URL`/`YOOKASSA_*`/`API_CORS_ORIGINS`, включить tg-music-api
-- Dev-стенд Mini App: см. miniapp/README.md (dev_miniapp.db + WAV-сиды + dev-JWT в localStorage)
-- Следующий шаг: дождаться DNS → задеплоить → certbot → e2e-проверка оплаты 21 ₽ и автоплея в Telegram
+Все 4 блока большого ТЗ сделаны (A UI ✅, B геймификация ✅, C тексты ✅, D офлайн ✅). **147 тестов зелёные**, консоль без ошибок, проверено end-to-end в dev-браузере.
+
+- **Блок B — Геймификация** (бэк + фронт):
+  - Модель: `User.referred_by / referral_milestones_claimed / premium_discount_pct` (миграция `c3e4f5a6b7d8`)
+  - `services/gamification.py`: ранги Bronze→Legend, реферальные Premium-награды (1→3д … 100→пожизненно, идемпотентно), 16 достижений (прослушивания/часы/серия дней/избранное/плейлисты/Premium/приглашённые), скидка 50% пригласившему
+  - `/start ref_<id>` привязывает нового пользователя (handlers/start.py); скидка вшита в оплату ЮKassa (эффективная цена + сброс)
+  - API: `GET /profile` (ранг/прогресс/статы/достижения/реф-ссылка), `POST /tracks/{id}/listen` (Mini App пишет прослушивания)
+  - Фронт: профиль (ранг у имени, прогресс-бар, 4 стата, «Пригласить друга» через tg share, превью достижений) + экран `achievements.js` (по категориям, locked/unlocked, прогресс). `tests/test_gamification.py` (7)
+- **Блок C — Тексты песен** (бэк + фронт):
+  - Модель `Lyrics` (миграция `d4f5a6b7c8e9`); `services/lyrics.py`: автопоиск LRCLIB (свободный API, graceful-фолбэк) + ручное добавление пользователями
+  - API: `GET/POST /tracks/{id}/lyrics`; фронт: экран `lyrics.js` (просмотр + редактор), вход из шита трека «Текст песни». `tests/test_lyrics_service.py` (3)
+- **Блок D — Офлайн-кэш Premium** (только фронт): `offline.js` (Cache API + localStorage-индекс), сохранение/удаление трека, воспроизведение из blob без сети (проверено: повторный запуск не даёт сетевого запроса), экран «Загрузки», пункт «Сохранить офлайн» в шите (только Premium)
+- **⚠️ dev-нюансы:** dev-JWT истекает (~сутки) — перегенерировать: `create_access_token(5852263277)`; кэш ES-модулей (см. [[miniapp-dev-module-cache]]) — warm+navigate после правок; scratchpad `nocache_server.py` не переживает рестарт сессии (пересоздавать). **Не задеплоено**
+- **Осталось честно недоделанным:** серверная фильтрация микса под настроение/язык (настройки сохраняются локально, движок рекомендаций — отдельная задача); плейлисты/альбомы/кураторы в «Ещё» (тост «soon»); бот-сторона реферальной ссылки (Mini App-профиль покрывает)
+
+## Checkpoint (2026-07-14) — редизайн Mini App, блок A ЗАВЕРШЁН
+
+- **Большое ТЗ на редизайн** (референсы VK в `kreen/`, эскизы в `MiniAppPhoto/`) разбито на 4 блока: **A** UI-редизайн ✅, **B** геймификация (рефералы/уровни/достижения — нужны новые модели+миграции), **C** тексты песен (источник: LRCLIB + ручное добавление юзерами), **D** офлайн-кэш Premium.
+- **Блок A полностью сделан и проверен в dev-браузере (DOM-верификация всех экранов, 0px горизонт. переполнения, консоль без ошибок):**
+  - `prefs.js` — localStorage: недавние треки (с `audio_url`), недавние запросы, настройки рекомендаций, любимые исполнители
+  - **Главная** (`screens/home.js`): swipe-hero карусель миксов (`play-mix`: catalog/library/discover, scroll-snap+точки), блок «Рекомендации»+«Настроить», карточка подписки (не-Premium, `dismiss-sub`), быстрый доступ, редизайн списка
+  - **Поиск** (`screens/search.js`): убран «Популярное сейчас», добавлены «Популярные запросы» (артисты из базы) + «Недавние запросы» (Enter/чип сохраняют, Очистить)
+  - **Библиотека** (`screens/library.js`): «Мои треки» блоками по 3 со свайпом (`.lib-cols`), кнопки Мой микс/Любимые/Рекомендации, раздел «Ещё» (Premium-карточка + 7 плиток; без данных → тост «soon»)
+  - **Настройки** (`screens/settings.js`): разделы Интерфейс/Предпочтения/Помощь/Документы
+  - Новые экраны: `recommendations.js` (настроение×5/тип×3/язык×3), `recent.js`, `artists.js` (избранные исполнители из базы, toggle), `docs.js` (FAQ/политика/лицензия/о приложении — общий по ключу `docKey`)
+  - `state.js`: `playMix()`, `pushRecentTrack` на старте трека, `recDraft`, `docKey`, `subDismissed`, класс `is-playing` на #app
+  - Адаптивность (`base.css`): `.h-scroll` (ленты не двигают страницу), планшетный max-width 560, отступ под мини-плеер; токены радиусов/отступов/высот
+  - Жест **свайп-вниз** (`main.js` touchstart/touchend) закрывает вложенные страницы/плеер/шит
+- **Осталось для полной готовности блока A:** живой скриншот-пруф (капчур в этом окружении подвисает — проверено через DOM); мелкая полировка (сохранение scroll при ре-рендере — `root.innerHTML` сбрасывает позицию при play/pause). **Не задеплоено** — только dev.
+- **Осталось честно недоделанным (требует бэкенда, блоки B-D):** серверная фильтрация микса под настроение/язык; плейлисты/альбомы/кураторы/загрузки/онлайн в «Ещё» (тост «soon»)
+- **Dev-стенд:** API :8010 (preview `api`) + статика :5500. ⚠️ Из-за агрессивного кэша ES-модулей в dev-браузере нужен no-cache сервер: `scratchpad/nocache_server.py` (Cache-Control: no-store) на 5500 вместо launch-конфига `miniapp`, иначе правки не подхватываются. Вход — dev-JWT в `localStorage["tgmusic-dev-token"]`
+
+## Checkpoint (2026-07-13, вечер)
+
+- **Задеплоено и работает:** Mini App на https://keybest.cc целиком (коммит 1929c02):
+  1. DNS прописан пользователем → certbot выпустил сертификат (Let's Encrypt, автопродление)
+  2. nginx-сайт keybest.cc: статика Mini App + `/api/` + `/webhook/` → uvicorn :8010
+  3. `tg-music-api.service` активен (`systemctl status tg-music-api`)
+  4. `.env` на VPS дополнен: `PUBLIC_BASE_URL`, `BOT_USERNAME`, `API_CORS_ORIGINS`, `YOOKASSA_SHOP_ID`, `YOOKASSA_SECRET_KEY`
+  5. Бот перезапущен — кнопка «🎧 Открыть плеер» первая в главном меню
+  6. Smoke-тесты через curl прошли: статика 200, `/api/login` без initData → 401, `/webhook/yookassa` без валидного тела → 400
+- Что внутри (см. предыдущий срез): аудио-стриминг по HMAC-подписи с Range, ЮKassa redirect-оплата 21 ₽ с перепроверкой статуса у API (не доверяем телу webhook), Mini App на реальных данных без моков (initData→JWT), настоящий `<audio>` с автопереключением по `ended`, прогресс через отдельный канал подписки (не полный re-render на тик — было источником лагов), вкладки Текст/Отзыв удалены
+- ⚠️ **Секретный ключ ЮKassa засветился в чате пользователя** — сейчас на сервере рабочий (боевой) ключ из переписки; после подтверждения что всё работает — перевыпустить в ЛК ЮKassa и обновить `.env` на VPS
+- Не проверено вживую (нужен реальный Telegram-клиент — sandbox блокирует переход на внешний домен): открытие Mini App из бота, автоплей в реальных условиях, прохождение оплаты 21 ₽ до конца (webhook → activate_premium)
+- Dev-стенд для локальной отладки Mini App: см. miniapp/README.md (dev_miniapp.db + WAV-сиды + dev-JWT в localStorage)

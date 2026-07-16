@@ -18,10 +18,10 @@ async def make_track(session, title: str = "Song", artist: str = "Artist") -> Tr
     return track
 
 
-async def test_stats_count_users_tracks_and_events(session):
+async def test_stats_count_users_and_tracks(session):
     user = await make_user(session)
     track = await make_track(session)
-    await record_event(session, user.id, track.id, "listen")
+    # события всё ещё пишутся (нужны для достижений), но в статистике больше не показываются
     await record_event(session, user.id, track.id, "listen")
     await record_event(session, user.id, track.id, "download")
 
@@ -29,26 +29,11 @@ async def test_stats_count_users_tracks_and_events(session):
 
     assert stats.users_total == 1
     assert stats.users_new_day == 1
-    assert stats.users_active_day == 1
+    assert stats.users_active_all_time == 1
     assert stats.tracks_total == 1
-    assert stats.listens_total == 2
-    assert stats.downloads_total == 1
 
 
-async def test_stats_top_tracks_ordered_by_events(session):
-    user = await make_user(session)
-    hit = await make_track(session, "Hit")
-    other = await make_track(session, "Other")
-    for _ in range(3):
-        await record_event(session, user.id, hit.id, "listen")
-    await record_event(session, user.id, other.id, "listen")
-
-    stats = await collect_stats(session)
-
-    assert [(t.id, n) for t, n in stats.top_tracks] == [(hit.id, 3), (other.id, 1)]
-
-
-async def test_stats_old_users_not_counted_as_new_or_active(session):
+async def test_active_all_time_counts_old_users(session):
     user = await make_user(session)
     user.created_at = _utcnow() - timedelta(days=30)
     user.last_login = _utcnow() - timedelta(days=30)
@@ -58,6 +43,15 @@ async def test_stats_old_users_not_counted_as_new_or_active(session):
 
     assert stats.users_total == 1
     assert stats.users_new_day == 0
-    assert stats.users_new_week == 0
-    assert stats.users_active_day == 0
-    assert stats.users_active_week == 0
+    assert stats.users_active_all_time == 1  # заходил хоть раз
+
+
+async def test_active_all_time_ignores_never_logged_in(session):
+    user = User(telegram_id=2, last_login=None)
+    session.add(user)
+    await session.commit()
+
+    stats = await collect_stats(session)
+
+    assert stats.users_total == 1
+    assert stats.users_active_all_time == 0

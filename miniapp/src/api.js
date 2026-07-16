@@ -97,6 +97,51 @@ export function getPremiumStatus() {
   return request("/premium/status");
 }
 
+export function getProfile() {
+  return request("/profile");
+}
+
+export function getMix({ mood, recognizability, language } = {}) {
+  const params = new URLSearchParams();
+  if (mood) params.set("mood", mood);
+  if (recognizability) params.set("recognizability", recognizability);
+  if (language) params.set("language", language);
+  const qs = params.toString();
+  return request(`/mix${qs ? `?${qs}` : ""}`);
+}
+
+export function getPlaylists() {
+  return request("/playlists");
+}
+
+export function getPlaylistTracks(playlistId) {
+  return request(`/playlists/${playlistId}/tracks`);
+}
+
+export function getAlbums() {
+  return request("/albums");
+}
+
+export function getAlbumTracks(name) {
+  return request(`/albums/tracks?name=${encodeURIComponent(name)}`);
+}
+
+// Отметить старт воспроизведения (сырьё для достижений). Fire-and-forget.
+export function recordListen(trackId) {
+  return request(`/tracks/${trackId}/listen`, { method: "POST" }).catch(() => {});
+}
+
+export function getLyrics(trackId) {
+  return request(`/tracks/${trackId}/lyrics`);
+}
+
+export function submitLyrics(trackId, text) {
+  return request(`/tracks/${trackId}/lyrics`, {
+    method: "POST",
+    body: JSON.stringify({ text }),
+  });
+}
+
 export function createPaymentLink() {
   return request("/premium/pay", { method: "POST" });
 }

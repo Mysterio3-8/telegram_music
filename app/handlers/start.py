@@ -10,10 +10,11 @@ from app.handlers.cards import show_track_card
 from app.handlers.common import ensure_user
 from app.keyboards.main_menu import main_menu_keyboard
 from app.keyboards.subscription import subscription_gate_keyboard
+from app.services.gamification import register_referral
 from app.services.library import get_track
 from app.services.premium import is_premium_active
 from app.services.subscription import is_fully_subscribed
-from app.services.users import count_library_tracks, count_playlists
+from app.services.users import count_library_tracks, count_playlists, get_user_by_telegram_id
 
 router = Router()
 
@@ -59,7 +60,13 @@ async def _show_shared_track(message: Message, user: User, args: str) -> bool:
 async def cmd_start(message: Message, state: FSMContext, command: CommandObject) -> None:
     await state.clear()
     async with session_factory() as session:
+        existing = await get_user_by_telegram_id(session, message.from_user.id)
+        is_new = existing is None
         user = await ensure_user(session, message.from_user)
+        if is_new and command.args and command.args.startswith("ref_"):
+            referrer_raw = command.args.removeprefix("ref_")
+            if referrer_raw.isdigit():
+                await register_referral(session, user, int(referrer_raw))
         subscribed = await is_fully_subscribed(
             session, message.bot, user.id, user.telegram_id, force=True
         )
