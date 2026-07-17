@@ -23,10 +23,10 @@ from app.tasks.telegram_channel import (
 logger = logging.getLogger("telegram-channel-cli")
 
 
-async def _add(channel: str, title: str | None) -> None:
+async def _add(channel: str, title: str | None, target: str) -> None:
     async with session_factory() as session:
-        source = await add_source(session, channel, title)
-    logger.info("Источник добавлен: id=%s %s", source.id, source.channel)
+        source = await add_source(session, channel, title, target=target)
+    logger.info("Источник добавлен: id=%s %s → %s", source.id, source.channel, source.target)
     telegram_channel_scan_source.delay(source_id=source.id)
     logger.info("Первичный импорт запущен в фоне (воркер tg-music-telegram-channel)")
 
@@ -52,6 +52,11 @@ def main() -> None:
     p_add = sub.add_parser("add", help="Добавить источник и запустить импорт")
     p_add.add_argument("channel", help="@username, invite-ссылка или id канала")
     p_add.add_argument("--title", default=None, help="Имя канала (fallback-исполнитель)")
+    p_add.add_argument(
+        "--instrumental",
+        action="store_true",
+        help="Канал с минусами: аудио уходит в базу минусов, а не в треки",
+    )
 
     sub.add_parser("list", help="Показать источники")
 
@@ -64,7 +69,9 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.command == "add":
-        asyncio.run(_add(args.channel, args.title))
+        asyncio.run(
+            _add(args.channel, args.title, "instrumentals" if args.instrumental else "tracks")
+        )
     elif args.command == "list":
         asyncio.run(_list())
     elif args.command == "scan":

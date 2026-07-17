@@ -97,6 +97,70 @@ async def import_instrumental(
     return True
 
 
+async def find_existing_instrumental(
+    session: AsyncSession, fingerprint: str | None, title: str, artist: str, duration: int
+) -> Instrumental | None:
+    if fingerprint:
+        found = await session.scalar(
+            select(Instrumental).where(Instrumental.fingerprint == fingerprint).limit(1)
+        )
+        if found is not None:
+            return found
+    return await session.scalar(
+        select(Instrumental)
+        .where(
+            func.lower(Instrumental.title) == title.strip().lower(),
+            func.lower(Instrumental.artist) == artist.strip().lower(),
+            Instrumental.duration.between(
+                duration - DUPLICATE_DURATION_TOLERANCE,
+                duration + DUPLICATE_DURATION_TOLERANCE,
+            ),
+        )
+        .limit(1)
+    )
+
+
+async def import_instrumental_via_telegram_mint(
+    session: AsyncSession,
+    bot: Bot,
+    *,
+    title: str,
+    artist: str,
+    duration: int,
+    file_format: str | None,
+    data: bytes,
+    fingerprint: str | None,
+    archive_chat_id: int,
+    source: str,
+) -> tuple[Instrumental, bool]:
+    """Зеркало import_via_telegram_mint для минусов: дедуп только среди
+    instrumentals (TZ §9), файл минтится через бота — байты на диск не пишутся.
+    Возвращает (минус, создан_ли_новый)."""
+    existing = await find_existing_instrumental(session, fingerprint, title, artist, duration)
+    if existing is not None:
+        return existing, False
+
+    tagged = retag_audio(data, file_format, title, artist)
+    sent = await bot.send_audio(
+        archive_chat_id,
+        BufferedInputFile(tagged, filename=build_filename(artist, title, file_format)),
+        title=title,
+        performer=artist,
+        duration=duration or None,
+    )
+    instrumental = Instrumental(
+        title=title.strip(),
+        artist=artist.strip(),
+        duration=duration,
+        fingerprint=fingerprint,
+        tg_file_id=sent.audio.file_id,
+        source=source,
+    )
+    session.add(instrumental)
+    await session.commit()
+    return instrumental, True
+
+
 async def import_user_track(
     session: AsyncSession, storage: StorageBackend, user_id: int, item: ImportItem
 ) -> Track:

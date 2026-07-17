@@ -168,3 +168,30 @@ def youtube_scan_due() -> None:
     for source_id in ids:
         youtube_scan_source.delay(source_id=source_id)
     logger.info("YouTube scan_due: запущена проверка %s источников", len(ids))
+
+
+@celery_app.task(name="youtube.soundcloud_minus_import", bind=True, max_retries=1)
+def soundcloud_minus_import(self, url: str, chat_id: int) -> None:
+    """Импорт минусов с SoundCloud по ссылке админа (трек/профиль/сет).
+
+    Очередь та же (`youtube`) — воркер с yt-dlp уже настроен. По завершении
+    админу уходит отчёт: сколько импортировано/дублей/ошибок.
+    """
+    from app.services.soundcloud_import import import_soundcloud_minuses
+
+    async def _run(session):
+        bot = Bot(token=settings.bot_token)
+        try:
+            report = await import_soundcloud_minuses(session, bot, url)
+            await bot.send_message(chat_id, f"🎼 SoundCloud-импорт завершён.\n\n{report.summary()}")
+        finally:
+            await bot.session.close()
+
+    try:
+        asyncio.run(_with_session(_run))
+    except Exception as exc:  # noqa: BLE001 — одна повторная попытка, потом отчёт об ошибке
+        if self.request.retries >= self.max_retries:
+            asyncio.run(_notify(chat_id, "❌ SoundCloud-импорт не удался. Попробуйте позже."))
+            logger.warning("SoundCloud-импорт %s не удался: %s", url, exc)
+            return
+        raise self.retry(exc=exc, countdown=120)

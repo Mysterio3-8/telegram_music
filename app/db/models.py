@@ -185,6 +185,8 @@ class TelegramChannelSource(Base):
     channel: Mapped[str] = mapped_column(String(256))  # @username, invite-ссылка или id
     title: Mapped[str | None] = mapped_column(String(256))
     status: Mapped[str] = mapped_column(String(16), default="active")  # active | disabled
+    # Куда складывать аудио: tracks (общая база) | instrumentals (канал с минусами)
+    target: Mapped[str] = mapped_column(String(16), default="tracks", server_default="tracks")
     last_checked_at: Mapped[datetime | None]
     last_message_id: Mapped[int] = mapped_column(default=0, server_default="0")
     found_count: Mapped[int] = mapped_column(default=0, server_default="0")

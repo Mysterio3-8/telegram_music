@@ -14,9 +14,11 @@ def _utcnow() -> datetime:
 
 
 async def add_source(
-    session: AsyncSession, channel: str, title: str | None = None
+    session: AsyncSession, channel: str, title: str | None = None, target: str = "tracks"
 ) -> TelegramChannelSource:
-    source = TelegramChannelSource(channel=channel.strip(), title=title, status="active")
+    source = TelegramChannelSource(
+        channel=channel.strip(), title=title, status="active", target=target
+    )
     session.add(source)
     await session.commit()
     return source

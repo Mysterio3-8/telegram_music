@@ -128,6 +128,14 @@ $env:DATABASE_URL="sqlite+aiosqlite:///_tmp.db"; .\.venv\Scripts\python.exe -m a
 - Обогащение (отпечаток+архив) — асинхронно в воркере: сразу после загрузки трека `storage_path` ещё пуст, появляется через секунды. Если воркер лежит — трек работает по `tg_file_id`, отпечаток не считается
 - Windows-консоль: путь проекта с кириллицей, в PowerShell возможны артефакты кодировки в выводе — на работу не влияет
 
+## Checkpoint (2026-07-18) — парсеры минусов (ТГ-канал, SoundCloud) + YouTube Music
+
+- **ТГ-канал → минусы**: у `telegram_channel_sources` появился `target` (tracks|instrumentals, миграция `b9c0d1e2f3a5`). Источник с `target=instrumentals` кладёт аудио в базу минусов: [importer.py](app/services/telegram_channel/importer.py) ветвится на `import_instrumental_via_telegram_mint` ([catalog_import.py](app/services/catalog_import.py) — зеркало трекового минта: дедуп по отпечатку/метаданным только среди instrumentals, минт tg_file_id через бота, байты не на диске). Добавить канал: `python -m app.cli.telegram_channel add @zvyagaminus --instrumental`
+- **SoundCloud → минусы (админ)**: мастер «Загрузить минус» принимает ссылку на SoundCloud (трек/профиль/сет). [soundcloud.py](app/services/soundcloud.py) (yt-dlp: разбор ссылки, список entries, скачивание + uploader), [soundcloud_import.py](app/services/soundcloud_import.py) (пачка ≤ playlist_import_limit, фильтр длительности 40с-9мин, artist из uploader/parse_title, отчёт). Celery-задача `youtube.soundcloud_minus_import` в очереди `youtube` — по завершении админу приходит отчёт (импортировано/дубли/ошибки). Без брокера — честный отказ
+- **YouTube Music**: одиночные watch-ссылки работали и раньше (regex ловит music.youtube); `normalize_source_url` теперь приводит `music.youtube.com` → `www.youtube.com` (плейлисты/каналы для yt-dlp), подсказки мастера загрузки упоминают YouTube Music
+- Тесты: **184 passed** (+10: test_soundcloud, test_instrumental_mint, importer target, YT Music ссылки)
+- ⏳ Владелец сам добавляет: свой канал минусов через CLI (`--instrumental`), SoundCloud-ссылку — в админке «Загрузить минус». На VPS должен работать воркер очереди `youtube` (tg-music-youtube) для SoundCloud и воркер telegram-channel для канала
+
 ## Checkpoint (2026-07-17, вторая ночь) — большое ТЗ на редизайн 2.0 (26 разделов)
 
 - **Навигация переписана** ([state.js](miniapp/src/state.js)): стек экранов `navigateTo/goBack/resetToTab` — «Назад» всегда ведёт туда, откуда пришли, с восстановлением позиции скролла (ТЗ §3-4). Все `data-action="nav" data-screen=…` на вложенных экранах заменены на `data-action="back"`

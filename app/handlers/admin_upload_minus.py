@@ -7,6 +7,7 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 
 from app.handlers.common import format_duration
 from app.services.instrumentals import create_admin_instrumental, find_duplicate_instrumental
+from app.services.soundcloud import extract_soundcloud_url
 from app.services.uploads import AudioMeta, validate_audio
 from app.services.users import is_admin
 from app.db.base import session_factory
@@ -50,7 +51,11 @@ async def cb_upload_minus_start(callback: CallbackQuery, state: FSMContext) -> N
         await callback.answer("Недоступно", show_alert=True)
         return
     await state.set_state(UploadMinus.waiting_file)
-    await callback.message.answer("Отправьте аудиофайл минуса.", reply_markup=_cancel_keyboard())
+    await callback.message.answer(
+        "Отправьте аудиофайл минуса или ссылку на SoundCloud "
+        "(трек, профиль или сет — заберём всё, что музыка).",
+        reply_markup=_cancel_keyboard(),
+    )
     await callback.answer()
 
 
@@ -79,9 +84,38 @@ async def process_minus_audio(message: Message, state: FSMContext) -> None:
     await message.answer("Введите название.", reply_markup=_cancel_keyboard())
 
 
+@router.message(UploadMinus.waiting_file, F.text)
+async def process_minus_link(message: Message, state: FSMContext) -> None:
+    """Ссылка на SoundCloud → фоновый импорт минусов (запрос владельца)."""
+    url = extract_soundcloud_url(message.text or "")
+    if url is None:
+        await message.answer(
+            "Жду аудиофайл или ссылку на SoundCloud 🎼", reply_markup=_cancel_keyboard()
+        )
+        return
+    from app.tasks.youtube import soundcloud_minus_import
+
+    try:
+        soundcloud_minus_import.delay(url=url, chat_id=message.chat.id)
+    except Exception:  # noqa: BLE001 — брокер недоступен: честно говорим, без падения бота
+        await message.answer(
+            "Импорт по ссылке сейчас недоступен (нет фоновой очереди). "
+            "Отправьте файл вручную.",
+            reply_markup=_cancel_keyboard(),
+        )
+        return
+    await state.clear()
+    await message.answer(
+        "✅ Принял ссылку. Импорт идёт в фоне — пришлю отчёт, когда закончу.",
+        reply_markup=_admin_menu_keyboard(),
+    )
+
+
 @router.message(UploadMinus.waiting_file)
 async def process_minus_not_audio(message: Message) -> None:
-    await message.answer("Жду аудиофайл 🎼", reply_markup=_cancel_keyboard())
+    await message.answer(
+        "Жду аудиофайл или ссылку на SoundCloud 🎼", reply_markup=_cancel_keyboard()
+    )
 
 
 @router.message(UploadMinus.waiting_title, F.text)

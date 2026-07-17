@@ -165,3 +165,40 @@ async def test_process_import_is_idempotent_for_already_imported(session):
 
     assert status == "imported"
     assert len(bot.calls) == 0
+
+
+async def test_process_import_instrumental_target(session):
+    """Источник с target=instrumentals кладёт аудио в базу минусов, не в треки."""
+    from sqlalchemy import func, select
+
+    from app.db.models import Instrumental
+
+    source = TelegramChannelSource(
+        channel="@zvyagaminus", title="Zvyaga", status="active", target="instrumentals"
+    )
+    session.add(source)
+    await session.flush()
+    imp = TelegramChannelImport(source_id=source.id, message_id=77, status="pending")
+    session.add(imp)
+    await session.commit()
+
+    message = FakeMessage(
+        id=77,
+        audio=True,
+        file=FakeFile(title="Night Beat", performer="Zvyaga", duration=140, ext=".mp3"),
+        message="",
+    )
+    status = await process_import(session, FakeBot(), FakeClient(message), imp.id)
+
+    assert status == "imported"
+    await session.refresh(imp)
+    assert imp.status == "imported"
+    assert imp.track_id is None  # трек не создавался
+    tracks_count = await session.scalar(select(func.count()).select_from(Track))
+    assert tracks_count == 0
+    instrumental = await session.scalar(select(Instrumental).limit(1))
+    assert instrumental is not None
+    assert instrumental.title == "Night Beat"
+    assert instrumental.artist == "Zvyaga"
+    assert instrumental.tg_file_id == "tg_file_1"
+    assert instrumental.source == "tg_channel"

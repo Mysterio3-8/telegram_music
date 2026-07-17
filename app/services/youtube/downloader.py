@@ -49,7 +49,10 @@ def _base_opts() -> dict:
 
 
 def normalize_source_url(url: str) -> str:
-    """Плейлист — как есть; канал/handle — вкладка /videos для полного списка загрузок."""
+    """Плейлист — как есть; канал/handle — вкладка /videos для полного списка загрузок.
+    YouTube Music — тот же контент под другим доменом: приводим к www.youtube.com,
+    yt-dlp там надёжнее разворачивает каналы и плейлисты."""
+    url = url.replace("music.youtube.com", "www.youtube.com")
     if "list=" in url or "/playlist" in url:
         return url
     if any(tab in url for tab in ("/videos", "/streams", "/shorts", "/featured")):

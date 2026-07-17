@@ -60,7 +60,7 @@ def _menu_keyboard() -> InlineKeyboardMarkup:
 async def cb_upload(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(UploadTrack.waiting_file)
     await callback.message.answer(
-        "Отправьте аудиофайл или ссылку на YouTube.\n\n"
+        "Отправьте аудиофайл или ссылку на YouTube / YouTube Music.\n\n"
         f"По ссылке принимаем только музыку: от {settings.track_min_seconds} секунд "
         f"до {settings.track_max_seconds // 60} минут, без стримов.",
         reply_markup=_cancel_keyboard(),
@@ -162,7 +162,7 @@ async def process_link(message: Message, state: FSMContext) -> None:
             await _process_playlist_link(message, state)
             return
         await message.answer(
-            "Жду аудиофайл или ссылку на YouTube-видео 🎵", reply_markup=_cancel_keyboard()
+            "Жду аудиофайл или ссылку на YouTube / YouTube Music 🎵", reply_markup=_cancel_keyboard()
         )
         return
 
@@ -215,7 +215,7 @@ async def process_link(message: Message, state: FSMContext) -> None:
 
 @router.message(UploadTrack.waiting_file)
 async def process_not_audio(message: Message) -> None:
-    await message.answer("Жду аудиофайл или ссылку на YouTube 🎵", reply_markup=_cancel_keyboard())
+    await message.answer("Жду аудиофайл или ссылку на YouTube / YouTube Music 🎵", reply_markup=_cancel_keyboard())
 
 
 @router.message(UploadTrack.waiting_title, F.text)

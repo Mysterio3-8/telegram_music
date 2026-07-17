@@ -13,7 +13,10 @@ from telethon import TelegramClient
 
 from app.config import settings
 from app.db.models import TelegramChannelImport, TelegramChannelSource
-from app.services.catalog_import import import_via_telegram_mint
+from app.services.catalog_import import (
+    import_instrumental_via_telegram_mint,
+    import_via_telegram_mint,
+)
 from app.services.fingerprint import compute_fingerprint_from_bytes
 from app.services.title_parser import parse_title
 
@@ -73,30 +76,49 @@ async def process_import(
 
     fingerprint = compute_fingerprint_from_bytes(data, suffix=f".{file_format}")
 
-    track, _created = await import_via_telegram_mint(
-        session,
-        bot,
-        title=title,
-        artist=artist,
-        duration=duration,
-        file_format=file_format,
-        data=data,
-        fingerprint=fingerprint,
-        archive_chat_id=settings.effective_archive_chat_id,
-    )
+    if source.target == "instrumentals":
+        # Канал с минусами: аудио уходит в отдельную таблицу instrumentals (TZ §9)
+        instrumental, _created = await import_instrumental_via_telegram_mint(
+            session,
+            bot,
+            title=title,
+            artist=artist,
+            duration=duration,
+            file_format=file_format,
+            data=data,
+            fingerprint=fingerprint,
+            archive_chat_id=settings.effective_archive_chat_id,
+            source="tg_channel",
+        )
+        imported_id = instrumental.id
+        kind = "instrumental"
+    else:
+        track, _created = await import_via_telegram_mint(
+            session,
+            bot,
+            title=title,
+            artist=artist,
+            duration=duration,
+            file_format=file_format,
+            data=data,
+            fingerprint=fingerprint,
+            archive_chat_id=settings.effective_archive_chat_id,
+        )
+        imp.track_id = track.id
+        imported_id = track.id
+        kind = "track"
     data = None  # заминчено (или дубликат) — локальная копия больше не нужна
 
     imp.detected_title = title[:256]
     imp.detected_artist = artist[:256]
     imp.original_title = (posted_title or message.message or "")[:512]
-    imp.track_id = track.id
     imp.status = "imported"
     imp.last_error = None
     imp.imported_at = _utcnow()
     await session.commit()
     logger.info(
-        "Telegram-канал импорт message=%s → track=%s (%s — %s)",
-        imp.message_id, track.id, artist, title,
+        "Telegram-канал импорт message=%s → %s=%s (%s — %s)",
+        imp.message_id, kind, imported_id, artist, title,
     )
     return "imported"
 

@@ -46,3 +46,24 @@ def test_duration_limits():
 
     too_long = duration_error(settings.track_max_seconds + 1)
     assert too_long is not None and "подкаст" in too_long
+
+
+def test_extract_video_id_youtube_music():
+    from app.services.youtube.user_import import extract_video_id, is_playlist_link
+
+    assert extract_video_id("https://music.youtube.com/watch?v=dQw4w9WgXcQ") == "dQw4w9WgXcQ"
+    assert is_playlist_link("https://music.youtube.com/playlist?list=PLabc")
+    assert is_playlist_link("https://music.youtube.com/channel/UCabcdef")
+
+
+def test_normalize_source_url_youtube_music():
+    from app.services.youtube.downloader import normalize_source_url
+
+    assert (
+        normalize_source_url("https://music.youtube.com/playlist?list=PLabc")
+        == "https://www.youtube.com/playlist?list=PLabc"
+    )
+    assert (
+        normalize_source_url("https://music.youtube.com/channel/UCabc")
+        == "https://www.youtube.com/channel/UCabc/videos"
+    )
