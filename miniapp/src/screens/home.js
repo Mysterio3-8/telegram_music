@@ -10,6 +10,7 @@ function heroSlides(state) {
     {
       action: "play-recommended",
       mix: "",
+      variant: "",
       title: "Слушать TG MIX",
       subtitle: "Музыкальные рекомендации для вас",
       button: `<button class="hero-slide__setup" data-action="open-recommendations">${icon("tune")} Настроить</button>`,
@@ -17,6 +18,7 @@ function heroSlides(state) {
     {
       action: "play-mix",
       mix: "library",
+      variant: " hero-slide--library",
       title: "Мои треки",
       subtitle: state.libraryTotal
         ? "Любимое из вашей библиотеки"
@@ -30,7 +32,7 @@ function renderHero(state) {
   const slides = heroSlides(state)
     .map(
       (slide) => `
-        <div class="hero-slide" data-action="${slide.action}"${slide.mix ? ` data-mix="${slide.mix}"` : ""}>
+        <div class="hero-slide${slide.variant}" data-action="${slide.action}"${slide.mix ? ` data-mix="${slide.mix}"` : ""}>
           <div class="hero-slide__play">${icon("play")}</div>
           <div class="hero-slide__title">${slide.title}</div>
           <div class="hero-slide__subtitle">${slide.subtitle}</div>

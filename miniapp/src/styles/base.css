@@ -131,10 +131,10 @@ a {
 }
 
 .section-title {
-  font-size: 15px;
-  font-weight: 700;
+  font-size: var(--font-heading);
+  font-weight: 800;
   color: var(--text-primary);
-  letter-spacing: 0.01em;
+  letter-spacing: -0.01em;
 }
 
 .section-head {

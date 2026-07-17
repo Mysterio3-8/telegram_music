@@ -20,8 +20,9 @@
   --raw-violet: #7b46e8;
   --raw-white: #ffffff;
   --raw-white-soft: #e8e8ea;
-  --raw-grey-text: #9a9aa1;
-  --raw-grey-muted: #6e6e75;
+  /* Контраст на #0f0f10 (WCAG): text ≈ 6.2:1, muted ≈ 4.6:1 — мелкий текст читается */
+  --raw-grey-text: #a3a3ab;
+  --raw-grey-muted: #8b8b93;
 
   /* --- Фон приложения --- */
   --bg-base: var(--raw-black);
@@ -66,8 +67,8 @@
   --nav-border: rgba(255, 255, 255, 0.05);
   --nav-icon-active: #ffffff;
   --nav-text-active: #ffffff;
-  --nav-icon-inactive: #6e6e75;
-  --nav-text-inactive: #77777d;
+  --nav-icon-inactive: #85858d;
+  --nav-text-inactive: #85858d;
   --nav-active-bg: rgba(255, 255, 255, 0.08);
 
   /* --- Плеер --- */
@@ -107,4 +108,18 @@
   /* --- Единая высота интерактивных элементов --- */
   --control-h: 46px;
   --tap-min: 44px;
+
+  /* --- Типографическая шкала (ui-ux-pro-max: единый ритм вместо разнобоя) --- */
+  --font-display: 27px; /* hero-заголовки */
+  --font-title: 21px; /* заголовки экранов/плеера */
+  --font-heading: 16.5px; /* секции, page-head */
+  --font-body: 14px; /* названия треков, кнопки */
+  --font-caption: 12.5px; /* подписи, исполнители */
+  --font-micro: 11px; /* метки, счётчики */
+
+  /* --- Движение: конкретные кривые вместо generic ease --- */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --duration-fast: 150ms;
+  --duration-normal: 280ms;
 }

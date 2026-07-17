@@ -259,7 +259,7 @@
 }
 
 .track-title {
-  font-size: 13.5px;
+  font-size: var(--font-body);
   font-weight: 700;
   white-space: nowrap;
   overflow: hidden;
@@ -267,12 +267,12 @@
 }
 
 .track-artist {
-  font-size: 12px;
+  font-size: var(--font-caption);
   color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  margin-top: 1px;
+  margin-top: 2px;
 }
 
 .track-actions {
@@ -671,8 +671,9 @@
 }
 
 .player-meta__title {
-  font-size: 19px;
+  font-size: var(--font-title);
   font-weight: 800;
+  letter-spacing: -0.01em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -823,6 +824,19 @@
   color: #111;
   box-shadow: var(--play-glow);
   flex-shrink: 0;
+  transition: transform var(--duration-fast) var(--ease-spring);
+}
+
+.player-controls__play:active {
+  transform: scale(0.9);
+}
+
+.mini-player__play {
+  transition: transform var(--duration-fast) var(--ease-spring);
+}
+
+.mini-player__play:active {
+  transform: scale(0.88);
 }
 
 .player-controls__play svg {
@@ -1093,6 +1107,22 @@
   justify-content: center;
 }
 
+/* Слой глубины: два мягких световых пятна поверх градиента */
+.hero-slide::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(58% 42% at 22% 12%, rgba(255, 255, 255, 0.16), transparent 70%),
+    radial-gradient(70% 55% at 85% 95%, rgba(0, 0, 0, 0.28), transparent 70%);
+  pointer-events: none;
+}
+
+/* Второй слайд («Мои треки») — своя, более глубокая гамма: слайды различимы боковым зрением */
+.hero-slide--library {
+  background: linear-gradient(200deg, #123a8f 0%, #2e55f2 55%, #37d1ce 130%);
+}
+
 .hero-slide:active {
   filter: brightness(0.96);
 }
@@ -1108,6 +1138,34 @@
   justify-content: center;
   background: #fff;
   box-shadow: var(--play-glow);
+  transition: transform var(--duration-fast) var(--ease-spring);
+}
+
+.hero-slide:active .hero-slide__play {
+  transform: scale(0.93);
+}
+
+/* Дышащее кольцо вокруг Play — приглашение к действию, не декорация */
+.hero-slide__play::after {
+  content: "";
+  position: absolute;
+  inset: -9px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.55);
+  animation: play-breathe 2.6s var(--ease-out-expo) infinite;
+  pointer-events: none;
+}
+
+@keyframes play-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  50% {
+    transform: scale(1.12);
+    opacity: 0.15;
+  }
 }
 
 .hero-slide__play svg {
@@ -1119,16 +1177,18 @@
 
 .hero-slide__title {
   position: relative;
-  font-size: 26px;
+  font-size: var(--font-display);
   font-weight: 800;
+  letter-spacing: -0.02em;
   color: #fff;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.25);
 }
 
 .hero-slide__subtitle {
   position: relative;
   margin-top: 7px;
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.82);
+  font-size: var(--font-body);
+  color: rgba(255, 255, 255, 0.85);
 }
 
 .hero-slide__setup {
@@ -1363,9 +1423,10 @@
 }
 
 .page-head span {
-  font-size: 15px;
+  font-size: var(--font-heading);
   font-weight: 800;
   color: var(--text-primary);
+  letter-spacing: -0.01em;
 }
 
 /* ============ Настройки рекомендаций ============ */
