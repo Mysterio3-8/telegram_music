@@ -128,6 +128,13 @@ $env:DATABASE_URL="sqlite+aiosqlite:///_tmp.db"; .\.venv\Scripts\python.exe -m a
 - Обогащение (отпечаток+архив) — асинхронно в воркере: сразу после загрузки трека `storage_path` ещё пуст, появляется через секунды. Если воркер лежит — трек работает по `tg_file_id`, отпечаток не считается
 - Windows-консоль: путь проекта с кириллицей, в PowerShell возможны артефакты кодировки в выводе — на работу не влияет
 
+## Checkpoint (2026-07-18, продолжение) — SoundCloud-источники с автопроверкой
+
+- **SoundCloud-ссылка = постоянный источник** (запрос владельца «я часто делаю новые биты»): таблица `soundcloud_sources` (миграция `c0d1e2f3a4b6`), [soundcloud_sources.py](app/services/soundcloud_sources.py) (add с дедупом по url + реактивация, mark_checked, sources_due_for_check). Ссылка в «Загрузить минус» теперь сохраняется источником и сканится ежедневно; дедуп импорта делает скан инкрементальным
+- Celery: `youtube.soundcloud_scan_source` (ручной запуск — отчёт всегда; автоскан пишет первому админу только когда есть новое), `youtube.soundcloud_scan_due`. Ежедневный таймер `tg-music-youtube-scan` (CLI `youtube scan-due`) теперь дёргает и SoundCloud — отдельный юнит не нужен
+- Интервал: `SOUNDCLOUD_CHECK_INTERVAL_DAYS` (дефолт 1). На VPS в `.env` добавлен `YOUTUBE_CHECK_INTERVAL_DAYS=1` — YouTube-источники владельца тоже проверяются ежедневно (было 30 дней)
+- Тесты: **186 passed** (+2: дедуп/реактивация источника, due-выборка)
+
 ## Checkpoint (2026-07-18) — парсеры минусов (ТГ-канал, SoundCloud) + YouTube Music
 
 - **ТГ-канал → минусы**: у `telegram_channel_sources` появился `target` (tracks|instrumentals, миграция `b9c0d1e2f3a5`). Источник с `target=instrumentals` кладёт аудио в базу минусов: [importer.py](app/services/telegram_channel/importer.py) ветвится на `import_instrumental_via_telegram_mint` ([catalog_import.py](app/services/catalog_import.py) — зеркало трекового минта: дедуп по отпечатку/метаданным только среди instrumentals, минт tg_file_id через бота, байты не на диске). Добавить канал: `python -m app.cli.telegram_channel add @zvyagaminus --instrumental`

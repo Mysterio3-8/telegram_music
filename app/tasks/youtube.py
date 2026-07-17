@@ -170,20 +170,37 @@ def youtube_scan_due() -> None:
     logger.info("YouTube scan_due: запущена проверка %s источников", len(ids))
 
 
-@celery_app.task(name="youtube.soundcloud_minus_import", bind=True, max_retries=1)
-def soundcloud_minus_import(self, url: str, chat_id: int) -> None:
-    """Импорт минусов с SoundCloud по ссылке админа (трек/профиль/сет).
+def _first_admin_id() -> int | None:
+    admins = sorted(settings.admin_id_set)
+    return admins[0] if admins else None
 
-    Очередь та же (`youtube`) — воркер с yt-dlp уже настроен. По завершении
-    админу уходит отчёт: сколько импортировано/дублей/ошибок.
+
+@celery_app.task(name="youtube.soundcloud_scan_source", bind=True, max_retries=1)
+def soundcloud_scan_source(self, source_id: int, chat_id: int | None = None) -> None:
+    """Скан одного SoundCloud-источника: дедуп делает импорт инкрементальным —
+    забираются только новые биты. chat_id задан (ручной запуск из админки) —
+    отчёт всегда; автоскан молчит, если ничего нового, и пишет первому админу,
+    когда появились новые минусы.
     """
+    from app.db.models import SoundcloudSource
     from app.services.soundcloud_import import import_soundcloud_minuses
+    from app.services.soundcloud_sources import mark_checked
 
     async def _run(session):
+        source = await session.get(SoundcloudSource, source_id)
+        if source is None or source.status != "active":
+            return
         bot = Bot(token=settings.bot_token)
         try:
-            report = await import_soundcloud_minuses(session, bot, url)
-            await bot.send_message(chat_id, f"🎼 SoundCloud-импорт завершён.\n\n{report.summary()}")
+            report = await import_soundcloud_minuses(session, bot, source.url)
+            await mark_checked(session, source_id, report.found, report.imported)
+            notify_chat = chat_id or (_first_admin_id() if report.imported else None)
+            if notify_chat:
+                await bot.send_message(
+                    notify_chat,
+                    f"🎼 SoundCloud-скан {source.url}\n\n{report.summary()}\n\n"
+                    "Источник сохранён — новые биты будут подтягиваться автоматически.",
+                )
         finally:
             await bot.session.close()
 
@@ -191,7 +208,19 @@ def soundcloud_minus_import(self, url: str, chat_id: int) -> None:
         asyncio.run(_with_session(_run))
     except Exception as exc:  # noqa: BLE001 — одна повторная попытка, потом отчёт об ошибке
         if self.request.retries >= self.max_retries:
-            asyncio.run(_notify(chat_id, "❌ SoundCloud-импорт не удался. Попробуйте позже."))
-            logger.warning("SoundCloud-импорт %s не удался: %s", url, exc)
+            if chat_id:
+                asyncio.run(_notify(chat_id, "❌ SoundCloud-импорт не удался. Попробуйте позже."))
+            logger.warning("SoundCloud-скан source=%s не удался: %s", source_id, exc)
             return
         raise self.retry(exc=exc, countdown=120)
+
+
+@celery_app.task(name="youtube.soundcloud_scan_due")
+def soundcloud_scan_due() -> None:
+    """Периодическая проверка SoundCloud-источников (владелец публикует новые биты часто)."""
+    from app.services.soundcloud_sources import sources_due_for_check as sc_due
+
+    ids = asyncio.run(_with_session(sc_due))
+    for source_id in ids:
+        soundcloud_scan_source.delay(source_id=source_id)
+    logger.info("SoundCloud scan_due: запущена проверка %s источников", len(ids))

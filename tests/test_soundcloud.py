@@ -37,3 +37,53 @@ def test_collect_entries_profile_dedups():
     }
     entries = collect_soundcloud_entries(info)
     assert [e.title for e in entries] == ["Beat 1", "Beat 2"]
+
+
+async def test_add_source_dedup_and_reactivate(session):
+    from app.services.soundcloud_sources import add_source, list_sources
+
+    source, created = await add_source(session, "https://soundcloud.com/zvyaga/")
+    assert created is True
+    assert source.url == "https://soundcloud.com/zvyaga"  # хвостовой слэш срезан
+
+    again, created_again = await add_source(session, "https://soundcloud.com/zvyaga")
+    assert created_again is False
+    assert again.id == source.id
+
+    source.status = "disabled"
+    await session.commit()
+    revived, _ = await add_source(session, "https://soundcloud.com/zvyaga")
+    assert revived.status == "active"
+    assert len(await list_sources(session)) == 1
+
+
+async def test_sources_due_for_check(session):
+    from datetime import timedelta
+
+    from app.services.soundcloud_sources import (
+        _utcnow,
+        add_source,
+        mark_checked,
+        sources_due_for_check,
+    )
+
+    never_checked, _ = await add_source(session, "https://soundcloud.com/a")
+    fresh, _ = await add_source(session, "https://soundcloud.com/b")
+    stale, _ = await add_source(session, "https://soundcloud.com/c")
+    disabled, _ = await add_source(session, "https://soundcloud.com/d")
+
+    await mark_checked(session, fresh.id, found=5, imported=2)
+    stale.last_checked_at = _utcnow() - timedelta(days=3)
+    disabled.status = "disabled"
+    disabled.last_checked_at = None
+    await session.commit()
+
+    due = await sources_due_for_check(session)
+
+    assert never_checked.id in due
+    assert stale.id in due
+    assert fresh.id not in due
+    assert disabled.id not in due
+    await session.refresh(fresh)
+    assert fresh.found_count == 5
+    assert fresh.imported_count == 2

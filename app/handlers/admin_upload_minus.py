@@ -86,27 +86,33 @@ async def process_minus_audio(message: Message, state: FSMContext) -> None:
 
 @router.message(UploadMinus.waiting_file, F.text)
 async def process_minus_link(message: Message, state: FSMContext) -> None:
-    """Ссылка на SoundCloud → фоновый импорт минусов (запрос владельца)."""
+    """Ссылка на SoundCloud → постоянный источник с автопроверкой новых битов."""
     url = extract_soundcloud_url(message.text or "")
     if url is None:
         await message.answer(
             "Жду аудиофайл или ссылку на SoundCloud 🎼", reply_markup=_cancel_keyboard()
         )
         return
-    from app.tasks.youtube import soundcloud_minus_import
+    from app.services.soundcloud_sources import add_source
+    from app.tasks.youtube import soundcloud_scan_source
 
+    async with session_factory() as session:
+        source, created = await add_source(session, url)
     try:
-        soundcloud_minus_import.delay(url=url, chat_id=message.chat.id)
+        soundcloud_scan_source.delay(source_id=source.id, chat_id=message.chat.id)
     except Exception:  # noqa: BLE001 — брокер недоступен: честно говорим, без падения бота
         await message.answer(
-            "Импорт по ссылке сейчас недоступен (нет фоновой очереди). "
-            "Отправьте файл вручную.",
-            reply_markup=_cancel_keyboard(),
+            "Источник сохранён, но фоновая очередь недоступна — импорт запустится "
+            "при ближайшей автопроверке.",
+            reply_markup=_admin_menu_keyboard(),
         )
+        await state.clear()
         return
     await state.clear()
+    note = "добавил как источник" if created else "источник уже был — перепроверяю"
     await message.answer(
-        "✅ Принял ссылку. Импорт идёт в фоне — пришлю отчёт, когда закончу.",
+        f"✅ Принял ссылку, {note}. Импорт идёт в фоне — пришлю отчёт.\n"
+        "Новые биты с этой страницы будут подтягиваться автоматически каждый день.",
         reply_markup=_admin_menu_keyboard(),
     )
 

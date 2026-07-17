@@ -194,6 +194,22 @@ class TelegramChannelSource(Base):
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
 
+class SoundcloudSource(Base):
+    """SoundCloud-профиль/сет как источник минусов с автопроверкой новых битов.
+    Дедуп при повторном скане делает импорт инкрементальным — забираются только новые."""
+
+    __tablename__ = "soundcloud_sources"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    url: Mapped[str] = mapped_column(String(512), unique=True)
+    title: Mapped[str | None] = mapped_column(String(256))
+    status: Mapped[str] = mapped_column(String(16), default="active")  # active | disabled
+    last_checked_at: Mapped[datetime | None]
+    found_count: Mapped[int] = mapped_column(default=0, server_default="0")  # в последнем скане
+    imported_count: Mapped[int] = mapped_column(default=0, server_default="0")  # всего
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
 class RequiredChannel(Base):
     """Обязательный канал подписки (TZ §14-17). Управляется из админки; таблица пустая →
     гейт подписки выключен. Бот должен быть админом канала (иначе getChatMember не работает)."""

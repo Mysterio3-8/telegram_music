@@ -12,7 +12,12 @@ import logging
 
 from app.db.base import session_factory
 from app.services.youtube.sources import add_source, list_sources
-from app.tasks.youtube import youtube_recover, youtube_scan_due, youtube_scan_source
+from app.tasks.youtube import (
+    soundcloud_scan_due,
+    youtube_recover,
+    youtube_scan_due,
+    youtube_scan_source,
+)
 
 logger = logging.getLogger("youtube-cli")
 
@@ -70,7 +75,8 @@ def main() -> None:
             logger.info("Сканирование источника %s запущено в фоне", args.source)
     elif args.command == "scan-due":
         youtube_scan_due.delay()
-        logger.info("Проверка просроченных источников запущена в фоне")
+        soundcloud_scan_due.delay()  # SoundCloud-источники минусов едут тем же ежедневным таймером
+        logger.info("Проверка просроченных источников (YouTube + SoundCloud) запущена в фоне")
     elif args.command == "recover":
         youtube_recover.delay()
         logger.info("Восстановление очереди запущено в фоне")

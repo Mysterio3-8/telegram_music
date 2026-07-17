@@ -95,6 +95,8 @@ class Settings(BaseSettings):
     youtube_concurrency: int = 2  # одновременных загрузок (§14): 1-5
     youtube_max_retries: int = 3  # попыток при временной ошибке (§13)
     youtube_check_interval_days: int = 30  # период автопроверки новых видео (§11)
+    # SoundCloud-источники минусов: автопроверка новых битов (владелец публикует часто)
+    soundcloud_check_interval_days: int = 1
 
     # Личный Telegram-канал: импорт своих аудиопостов через MTProto (Telethon).
     # api_id/api_hash — на my.telegram.org. session_path — файл входа, вне git,
