@@ -1,7 +1,7 @@
 import { icon } from "../components/icons.js";
 import { getRecentTracks } from "../prefs.js";
 
-// Главная по референсам VK Music: большой hero «Слушать ТегаМикс» (рекомендации
+// Главная по референсам VK Music: большой hero «Слушать TG MIX» (рекомендации
 // и настройки объединены внутри — ТЗ §1), карточка подписки, плитки быстрого
 // доступа. Списков треков на главной НЕТ (решение владельца — навсегда).
 
@@ -10,7 +10,7 @@ function heroSlides(state) {
     {
       action: "play-recommended",
       mix: "",
-      title: "Слушать ТегаМикс",
+      title: "Слушать TG MIX",
       subtitle: "Музыкальные рекомендации для вас",
       button: `<button class="hero-slide__setup" data-action="open-recommendations">${icon("tune")} Настроить</button>`,
     },

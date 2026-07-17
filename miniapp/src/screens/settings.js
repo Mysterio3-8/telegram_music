@@ -21,7 +21,7 @@ export function renderSettings(state) {
 
     <div class="rec-section-label">Музыка</div>
     <div class="card card--rows">
-      ${navRow("Настройки ТегаМикса", "tune", "open-recommendations")}
+      ${navRow("Настройки TG MIX", "tune", "open-recommendations")}
       ${navRow("Любимые исполнители", "mic", "open-artists")}
     </div>
 

@@ -46,7 +46,7 @@ export function renderRecommendations(state) {
   return `
     <div class="page-head" data-role="page-head">
       <button class="icon-btn" data-action="back" aria-label="Назад">${icon("back")}</button>
-      <span>Настройки ТегаМикса</span>
+      <span>Настройки TG MIX</span>
     </div>
 
     <div class="rec-section-label">Настроение</div>

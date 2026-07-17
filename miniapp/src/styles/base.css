@@ -153,7 +153,60 @@ a {
   gap: 2px;
 }
 
-/* Плавная смена темы без "мигания" всех цветов сразу */
-* {
-  transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+/* ---------- Полировка: доступность, focus, motion (ui-ux-pro-max) ---------- */
+
+/* Видимый фокус только для клавиатуры — тач/мышь не рисуют рамку */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+button:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Единый отклик на нажатие интерактивных строк-кнопок (cause→effect) */
+.settings-row,
+.pl-row,
+.artist-row,
+.vk-tile,
+.plan-card,
+.seg,
+.sheet-item {
+  transition: background-color var(--duration-fast, 150ms) ease, transform var(--duration-fast, 150ms) ease;
+}
+
+.settings-row:active,
+.pl-row:active,
+.plan-card:active {
+  transform: scale(0.99);
+}
+
+/* Инерционный вертикальный скролл на мобильных */
+html {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Расширяем hit-область мелких иконок списка до 44px без визуальной перерисовки */
+.track-actions .icon-btn::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+}
+
+.track-actions .icon-btn {
+  position: relative;
+}
+
+/* Пользователь просил меньше движения — убираем все переходы и анимации входа */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }

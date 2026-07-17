@@ -800,6 +800,9 @@ root.addEventListener("click", (event) => {
       handlePayPremium();
       break;
     case "open-support":
+      if (tg) tg.openTelegramLink("https://t.me/Mystadm");
+      else window.open("https://t.me/Mystadm", "_blank");
+      break;
     case "open-bot":
       if (tg) tg.openTelegramLink("https://t.me/tgram_music_bot");
       else window.open("https://t.me/tgram_music_bot", "_blank");

@@ -48,7 +48,7 @@ export function renderLibrary(state) {
       </button>
       <button class="lib-mix-btn" data-action="play-recommended">
         <span class="lib-mix-btn__icon">${icon("sparkles")}</span>
-        <span>ТегаМикс</span>
+        <span>TG MIX</span>
       </button>
     </div>
 

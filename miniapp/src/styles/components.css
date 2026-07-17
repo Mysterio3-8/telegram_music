@@ -39,6 +39,10 @@
   flex-shrink: 0;
 }
 
+.icon-btn {
+  transition: transform 0.14s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.2s ease, color 0.2s ease;
+}
+
 .icon-btn:active {
   transform: scale(0.94);
   border-color: var(--glass-border-amethyst);
@@ -307,6 +311,14 @@
   border-radius: 15px;
   font-size: 14px;
   font-weight: 700;
+}
+
+.btn {
+  transition: transform 0.14s cubic-bezier(0.16, 1, 0.3, 1), filter 0.18s ease, background-color 0.18s ease;
+}
+
+.btn:active {
+  transform: scale(0.98);
 }
 
 .btn--primary {
