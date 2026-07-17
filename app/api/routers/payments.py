@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user, get_db
 from app.config import settings
 from app.db.models import User
+from app.services.premium import PREMIUM_PLAN_MONTHS, plan_price_rub
 from app.services.yookassa_payments import (
     apply_succeeded_payment,
     create_premium_payment,
@@ -24,16 +25,24 @@ class PaymentLinkOut(BaseModel):
     confirmation_url: str
 
 
+class PaymentIn(BaseModel):
+    months: int = 1
+
+
 @router.post("/premium/pay", response_model=PaymentLinkOut)
 async def create_payment_link(
+    payload: PaymentIn | None = None,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> PaymentLinkOut:
     if not is_yookassa_configured():
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Оплата временно недоступна")
+    months = payload.months if payload else 1
+    if months not in PREMIUM_PLAN_MONTHS:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Неизвестный тариф")
     discount = user.premium_discount_pct or 0
-    price = settings.premium_price_rub * (100 - discount) // 100 if discount else settings.premium_price_rub
-    url = await create_premium_payment(user.telegram_id, settings.bot_username, price)
+    price = plan_price_rub(months, discount)
+    url = await create_premium_payment(user.telegram_id, settings.bot_username, price, months=months)
     if url is None:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Не удалось создать платёж")
     if discount:

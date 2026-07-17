@@ -1,128 +1,63 @@
 import { icon } from "../components/icons.js";
-import { renderTrackRow, renderTrackList } from "../components/trackRow.js";
 
-const COLUMN_SIZE = 3;
+// Библиотека: разделы-строки в стиле VK. «Онлайн-треки» удалены (ТЗ §15),
+// «Кураторы» заменены на «Исполнители» — куратор и есть исполнитель (ТЗ §14).
 
-function chunk(list, size) {
-  const out = [];
-  for (let i = 0; i < list.length; i += size) out.push(list.slice(i, i + size));
-  return out;
-}
-
-// «Мои треки»: блоки по 3 трека, свайп вправо открывает следующий блок.
-function renderMyTracks(state) {
-  const { libraryPageItems, libraryTotal } = state;
-  if (!libraryTotal) {
-    return `
-      <div class="empty-state">
-        Библиотека пуста.<br />Добавляйте треки кнопкой «+» из поиска.
-      </div>
-    `;
-  }
-
-  const columns = chunk(libraryPageItems, COLUMN_SIZE)
-    .map(
-      (col) => `
-        <div class="lib-col">
-          ${col
-            .map((t) =>
-              renderTrackRow(t, {
-                context: "library",
-                inLibrary: state.libraryIds.has(t.id),
-                playing: state.currentTrack && state.currentTrack.id === t.id,
-              })
-            )
-            .join("")}
-        </div>
-      `
-    )
-    .join("");
-
-  const more =
-    libraryPageItems.length < libraryTotal
-      ? '<button class="btn btn--ghost btn--block" style="margin-top:12px" data-action="library-more">Показать ещё</button>'
-      : "";
-
-  return `<div class="lib-cols h-scroll">${columns}</div>${more}`;
-}
-
-function renderMixButtons() {
-  const buttons = [
-    { action: "play-mix", mix: "library-shuffle", ic: "shuffle", label: "Мой микс" },
-    { action: "play-mix", mix: "library", ic: "heart", label: "Любимые" },
-    { action: "play-recommended", ic: "sparkles", label: "Рекомендации" },
-  ];
+function row(label, ic, action, sub = "") {
   return `
-    <div class="lib-mix-row">
-      ${buttons
-        .map(
-          (b) => `
-        <button class="lib-mix-btn" data-action="${b.action}"${b.mix ? ` data-mix="${b.mix}"` : ""}>
-          <span class="lib-mix-btn__icon">${icon(b.ic)}</span>
-          <span>${b.label}</span>
-        </button>
-      `
-        )
-        .join("")}
-    </div>
+    <button class="pl-row" data-action="${action}">
+      <span class="pl-cover pl-cover--icon">${icon(ic)}</span>
+      <span class="pl-row__text">
+        <span class="pl-row__title">${label}</span>
+        ${sub ? `<span class="pl-row__sub">${sub}</span>` : ""}
+      </span>
+      ${icon("chevron")}
+    </button>
   `;
 }
 
-function renderMore(state) {
-  const premiumCard =
-    state.premium && state.premium.active
-      ? `
-        <div class="premium-card">
-          <div class="premium-card__icon">${icon("crown")}</div>
-          <div>
-            <div class="premium-card__title">TG Music Premium активен</div>
-            <div class="premium-card__subtitle">Без рекламы и лимитов</div>
-          </div>
+function renderPremiumCard(state) {
+  if (state.premium && state.premium.active) {
+    return `
+      <div class="premium-card">
+        <div class="premium-card__icon">${icon("crown")}</div>
+        <div>
+          <div class="premium-card__title">TG Music Premium активен</div>
+          <div class="premium-card__subtitle">Без рекламы и лимитов</div>
         </div>
-      `
-      : `
-        <div class="premium-card" data-action="pay-premium">
-          <div class="premium-card__icon">${icon("crown")}</div>
-          <div>
-            <div class="premium-card__title">TG Music Premium</div>
-            <div class="premium-card__subtitle">30 дней — ${state.premium ? state.premium.price_rub : 21} ₽</div>
-          </div>
-        </div>
-      `;
-
-  const tiles = [
-    { ic: "history", label: "Недавно прослушанные", action: "open-recent" },
-    { ic: "playlist", label: "Плейлисты", action: "open-playlists" },
-    { ic: "album", label: "Альбомы", action: "open-albums" },
-    { ic: "mic", label: "Исполнители", action: "open-artists" },
-    { ic: "star", label: "Кураторы", action: "open-curators" },
-    { ic: "download", label: "Загрузки", action: "open-downloads" },
-    { ic: "globe", label: "Онлайн-треки", action: "nav", screen: "search" },
-  ];
-
-  const grid = tiles
-    .map(
-      (t) => `
-        <button class="more-tile" data-action="${t.action}"${t.screen ? ` data-screen="${t.screen}"` : ""}>
-          <span class="more-tile__icon">${icon(t.ic)}</span>
-          <span class="more-tile__label">${t.label}</span>
-        </button>
-      `
-    )
-    .join("");
-
+      </div>
+    `;
+  }
   return `
-    <div class="section-head"><span class="section-title">Ещё</span></div>
-    ${premiumCard}
-    <div class="more-grid">${grid}</div>
+    <div class="premium-card" data-action="open-premium">
+      <div class="premium-card__icon">${icon("crown")}</div>
+      <div>
+        <div class="premium-card__title">TG Music Premium</div>
+        <div class="premium-card__subtitle">от ${state.premium ? state.premium.price_rub : 21} ₽ в месяц</div>
+      </div>
+    </div>
   `;
 }
 
 export function renderLibrary(state) {
   return `
-    <div class="lib-row"><span class="section-title">Мои треки · ${state.libraryTotal}</span></div>
-    ${renderMyTracks(state)}
-    ${renderMixButtons()}
-    ${renderMore(state)}
+    <div class="lib-mix-row">
+      <button class="lib-mix-btn" data-action="play-mix" data-mix="library">
+        <span class="lib-mix-btn__icon">${icon("shuffle")}</span>
+        <span>Мой микс</span>
+      </button>
+      <button class="lib-mix-btn" data-action="play-recommended">
+        <span class="lib-mix-btn__icon">${icon("sparkles")}</span>
+        <span>ТегаМикс</span>
+      </button>
+    </div>
+
+    ${row("Мои треки", "library", "open-mytracks", `${state.libraryTotal} треков`)}
+    ${row("Недавно прослушанные", "history", "open-recent")}
+    ${row("Плейлисты", "playlist", "open-playlists")}
+    ${row("Альбомы", "album", "open-albums")}
+    ${row("Исполнители", "mic", "open-artists")}
+
+    <div style="margin-top:16px">${renderPremiumCard(state)}</div>
   `;
 }

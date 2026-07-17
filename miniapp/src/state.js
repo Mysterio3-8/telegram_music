@@ -42,6 +42,7 @@ const state = {
   lyricsEditing: false,
   playlists: [],
   playlistsStatus: "idle",
+  playlistCreating: false, // инлайн-форма «Создать плейлист»
   albums: [],
   albumsStatus: "idle",
   curators: [],
@@ -50,6 +51,16 @@ const state = {
   collectionTitle: "",
   collectionTracks: [],
   collectionStatus: "idle",
+  collectionType: "playlist", // playlist | album | artist — влияет на шапку экрана
+  popularQueries: [], // реальные популярные запросы с сервера (ТЗ §11)
+  artists: [], // [{name, track_count}] с сервера, дедуп (ТЗ §13)
+  artistsStatus: "idle",
+  myTracksTab: "all", // all | downloaded (ТЗ §5)
+  myTracksQuery: "",
+  myTracksSort: "default", // default | newest | oldest | title | artist
+  myTracksEdit: false,
+  sortSheetOpen: false,
+  premiumMonths: 12, // выбранный тариф на экране Premium (ТЗ §24)
 };
 
 const structureListeners = new Set();
@@ -124,9 +135,55 @@ export function mutate(patch) {
   notify();
 }
 
-export function setScreen(screen) {
+// ---------- Навигация: стек экранов + позиции прокрутки (ТЗ §3-4) ----------
+// Возврат всегда ведёт туда, откуда открыли страницу, и на ту же позицию скролла.
+
+const navStack = [{ screen: "home", patch: {}, scroll: 0 }];
+
+function readScrollTop() {
+  return typeof document !== "undefined" && document.scrollingElement
+    ? document.scrollingElement.scrollTop
+    : 0;
+}
+
+function applyScrollTop(value) {
+  if (typeof document === "undefined" || !document.scrollingElement) return;
+  document.scrollingElement.scrollTop = value;
+  // второй проход после отрисовки — высота контента могла появиться позже
+  requestAnimationFrame(() => {
+    document.scrollingElement.scrollTop = value;
+  });
+}
+
+export function navigateTo(screen, patch = {}) {
+  navStack[navStack.length - 1].scroll = readScrollTop();
+  navStack.push({ screen, patch, scroll: 0 });
+  Object.assign(state, patch);
   state.screen = screen;
   notify();
+  applyScrollTop(0);
+}
+
+export function goBack() {
+  if (navStack.length <= 1) {
+    resetToTab("home");
+    return;
+  }
+  navStack.pop();
+  const top = navStack[navStack.length - 1];
+  Object.assign(state, top.patch);
+  state.screen = top.screen;
+  notify();
+  applyScrollTop(top.scroll);
+}
+
+// Таб нижней навигации: стек сбрасывается — «Назад» внутри таба не скачет между табами
+export function resetToTab(tab) {
+  navStack.length = 1;
+  navStack[0] = { screen: tab, patch: {}, scroll: 0 };
+  state.screen = tab;
+  notify();
+  applyScrollTop(0);
 }
 
 let toastTimer = null;

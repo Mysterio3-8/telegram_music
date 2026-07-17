@@ -2,50 +2,47 @@ import { icon } from "../components/icons.js";
 import { escapeHtml } from "../components/trackRow.js";
 import { getFavoriteArtists } from "../prefs.js";
 
-// Исполнители из базы. В избранное — локально (предпочтения пользователя).
-function distinctArtists(state) {
-  const map = new Map(); // ключ в нижнем регистре → { name: исходный регистр, count }
-  for (const track of state.catalog) {
-    const artist = (track.artist || "").trim();
-    if (!artist) continue;
-    const key = artist.toLowerCase();
-    const entry = map.get(key);
-    if (entry) entry.count += 1;
-    else map.set(key, { name: artist, count: 1 });
-  }
-  return [...map.values()].sort((a, b) => b.count - a.count);
-}
+// Исполнители (ТЗ §13-14): дедуплицированный список с сервера, тап открывает
+// треки исполнителя. Сердечко — «любимый исполнитель» для рекомендаций.
 
 export function renderArtists(state) {
-  const artists = distinctArtists(state);
+  const head = `
+    <div class="page-head" data-role="page-head">
+      <button class="icon-btn" data-action="back" aria-label="Назад">${icon("back")}</button>
+      <span>Исполнители</span>
+    </div>
+  `;
+
+  if (state.artistsStatus === "loading") {
+    return `${head}<div class="empty-state">Загружаю…</div>`;
+  }
+
+  const artists = state.artists || [];
+  if (!artists.length) {
+    return `${head}<div class="empty-state">В базе пока нет исполнителей</div>`;
+  }
+
   const favorites = new Set(getFavoriteArtists().map((a) => a.toLowerCase()));
 
   const list = artists
     .map((a) => {
       const active = favorites.has(a.name.toLowerCase());
       return `
-        <button class="artist-row${active ? " is-fav" : ""}" data-action="toggle-artist" data-artist="${escapeHtml(a.name)}">
-          <span class="artist-row__avatar">${escapeHtml(a.name[0] || "?").toUpperCase()}</span>
+        <div class="artist-row${active ? " is-fav" : ""}" data-action="open-artist" data-artist="${escapeHtml(a.name)}">
+          <span class="artist-row__avatar">${escapeHtml((a.name[0] || "?").toUpperCase())}</span>
           <span class="artist-row__info">
             <span class="artist-row__name">${escapeHtml(a.name)}</span>
-            <span class="artist-row__count">${a.count} треков</span>
+            <span class="artist-row__count">${a.track_count} треков</span>
           </span>
-          <span class="artist-row__heart">${icon("heart")}</span>
-        </button>
+          <button class="artist-row__heart icon-btn" data-action="toggle-artist" data-artist="${escapeHtml(a.name)}" aria-label="В любимые">${icon("heart")}</button>
+        </div>
       `;
     })
     .join("");
 
   return `
-    <div class="page-head" data-role="page-head">
-      <button class="icon-btn" data-action="nav" data-screen="settings" aria-label="Назад">${icon("back")}</button>
-      <span>Любимые исполнители</span>
-    </div>
-    <p class="page-hint">Отметьте исполнителей, чтобы улучшить рекомендации.</p>
-    ${
-      artists.length
-        ? `<div class="artist-list">${list}</div>`
-        : '<div class="empty-state">В базе пока нет исполнителей</div>'
-    }
+    ${head}
+    <p class="page-hint">Отмечайте сердечком любимых — это улучшит рекомендации.</p>
+    <div class="artist-list">${list}</div>
   `;
 }

@@ -10,11 +10,15 @@ function initials(user) {
 
 export function renderHeader(state) {
   const premium = state.premium && state.premium.active;
+  const user = state.user;
+  const face = user && user.photo_url
+    ? `<img class="avatar__img" src="${user.photo_url}" alt="" />`
+    : initials(user);
   return `
     <header class="header">
       <button class="icon-btn" data-action="open-settings" aria-label="Настройки">${icon("settings")}</button>
       <div class="brand"><span class="brand__tg">TG</span><span class="brand__music">MUSIC</span></div>
-      <button class="avatar${premium ? " avatar--premium" : ""}" data-action="open-profile" aria-label="Профиль">${initials(state.user)}</button>
+      <button class="avatar${premium ? " avatar--premium" : ""}" data-action="open-profile" aria-label="Профиль">${face}</button>
     </header>
   `;
 }

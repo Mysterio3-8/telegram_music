@@ -6,7 +6,7 @@ export function renderDownloads(state) {
   const tracks = offlineTracks();
   const head = `
     <div class="page-head" data-role="page-head">
-      <button class="icon-btn" data-action="nav" data-screen="library" aria-label="Назад">${icon("back")}</button>
+      <button class="icon-btn" data-action="back" aria-label="Назад">${icon("back")}</button>
       <span>Загрузки</span>
     </div>
   `;

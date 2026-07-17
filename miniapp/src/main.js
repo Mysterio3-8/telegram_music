@@ -6,36 +6,41 @@ import {
   getLibraryIds,
   getAlbums,
   getAlbumTracks,
-  getCurators,
-  getCuratorTracks,
+  getArtists,
+  getArtistTracks,
   getInstrumentals,
   getLyrics,
   getPlaylists,
   getPlaylistTracks,
+  getPopularQueries,
   getPremiumStatus,
   getProfile,
   getTracks,
   login,
+  logSearchQuery,
+  createPlaylist,
   submitLyrics,
   removeFromLibrary,
   resolveAudioUrl,
+  sendTrackToChat,
   telegramUser,
 } from "./api.js";
 import {
   closePlayer,
   closeSheet,
   getState,
+  goBack,
   mutate,
+  navigateTo,
   openPlayer,
   openSheet,
-  playAll,
   playMix,
   playRecommended,
   playNext,
   playPrev,
   playTrack,
+  resetToTab,
   seekToFraction,
-  setScreen,
   showToast,
   subscribe,
   subscribeProgress,
@@ -47,9 +52,11 @@ import { renderBottomNav } from "./components/bottomNav.js";
 import { renderMiniPlayer } from "./components/miniPlayer.js";
 import { renderPlayerScreen } from "./components/playerScreen.js";
 import { renderTrackSheet } from "./components/trackSheet.js";
+import { icon } from "./components/icons.js";
 import { renderHome } from "./screens/home.js";
 import { renderSearch, renderSearchResults } from "./screens/search.js";
 import { renderLibrary } from "./screens/library.js";
+import { renderMyTracks, renderMyTracksBody, myTracksList } from "./screens/mytracks.js";
 import { renderProfile } from "./screens/profile.js";
 import { renderSettings } from "./screens/settings.js";
 import { renderRecommendations } from "./screens/recommendations.js";
@@ -61,8 +68,9 @@ import { renderLyrics } from "./screens/lyrics.js";
 import { renderDownloads } from "./screens/downloads.js";
 import { renderPlaylists } from "./screens/playlists.js";
 import { renderAlbums } from "./screens/albums.js";
-import { renderCurators } from "./screens/curators.js";
 import { renderCollection } from "./screens/collection.js";
+import { renderReferral } from "./screens/referral.js";
+import { renderPremium } from "./screens/premium.js";
 import { isOffline, saveOffline, removeOffline, offlineTracks } from "./offline.js";
 import {
   getRecentTracks,
@@ -85,6 +93,7 @@ const SCREENS = {
   home: renderHome,
   search: renderSearch,
   library: renderLibrary,
+  mytracks: renderMyTracks,
   profile: renderProfile,
   settings: renderSettings,
   recommendations: renderRecommendations,
@@ -96,8 +105,9 @@ const SCREENS = {
   downloads: renderDownloads,
   playlists: renderPlaylists,
   albums: renderAlbums,
-  curators: renderCurators,
   collection: renderCollection,
+  referral: renderReferral,
+  premium: renderPremium,
 };
 
 const TAB_SCREENS = new Set(["home", "search", "library"]);
@@ -126,24 +136,30 @@ function render() {
 
   const showNav = TAB_SCREENS.has(state.screen);
   const screenRenderer = SCREENS[state.screen] || renderHome;
-  root.classList.toggle("is-playing", Boolean(state.currentTrack));
+  root.classList.toggle("is-playing", Boolean(state.currentTrack) && !state.playerOpen);
+  root.classList.toggle("has-nav", showNav);
 
   const focused = document.activeElement;
-  const wasSearchFocused = focused && focused.dataset && focused.dataset.role === "search-input";
-  const caret = wasSearchFocused ? focused.selectionStart : null;
+  const focusedRole = focused && focused.dataset ? focused.dataset.role : null;
+  const keepFocus = focusedRole === "search-input" || focusedRole === "mytracks-search";
+  const caret = keepFocus ? focused.selectionStart : null;
 
+  // Мини-плеер и нижняя навигация живут в одном фиксированном доке —
+  // не перекрывают друг друга и контент (ТЗ §2).
   root.innerHTML = `
     ${renderHeader(state)}
     <main class="screen">${screenRenderer(state)}</main>
-    ${showNav ? renderBottomNav(state.screen) : ""}
-    ${renderMiniPlayer(state)}
+    <div class="bottom-dock">
+      ${renderMiniPlayer(state)}
+      ${showNav ? renderBottomNav(state.screen) : ""}
+    </div>
     ${renderPlayerScreen(state)}
     ${renderTrackSheet(state)}
     ${state.toast ? `<div class="toast">${state.toast}</div>` : ""}
   `;
 
-  if (wasSearchFocused) {
-    const input = root.querySelector('[data-role="search-input"]');
+  if (keepFocus) {
+    const input = root.querySelector(`[data-role="${focusedRole}"]`);
     if (input) {
       input.focus();
       input.setSelectionRange(caret, caret);
@@ -191,6 +207,9 @@ async function boot() {
       libraryTotal: libraryPage.total,
       premium,
     });
+    getPopularQueries()
+      .then((queries) => mutate({ popularQueries: queries }))
+      .catch(() => {});
   } catch (error) {
     mutate({
       bootStatus: "error",
@@ -222,21 +241,14 @@ async function loadProfile() {
   }
 }
 
-let lyricsReturn = "home"; // экран, куда вернуться с экрана текста
-
 async function loadLyrics(track) {
-  mutate({
-    lyricsTrack: track,
-    lyrics: null,
-    lyricsStatus: "loading",
-    lyricsEditing: false,
-    screen: "lyrics",
-  });
   try {
     const data = await getLyrics(track.id);
-    mutate({ lyrics: data, lyricsStatus: "ready", lyricsEditing: !data.found });
+    if (getState().lyricsTrack !== track) return;
+    mutate({ lyrics: data, lyricsStatus: "ready", lyricsEditing: false });
   } catch {
-    mutate({ lyrics: { found: false, text: null }, lyricsStatus: "ready", lyricsEditing: true });
+    if (getState().lyricsTrack !== track) return;
+    mutate({ lyrics: { found: false, text: null }, lyricsStatus: "ready", lyricsEditing: false });
   }
 }
 
@@ -256,10 +268,8 @@ function saveLyrics() {
     .catch(() => showToast("Не удалось сохранить"));
 }
 
-let collectionReturn = "library"; // экран, куда вернуться из подборки
-
 async function loadPlaylists() {
-  mutate({ playlistsStatus: "loading", screen: "playlists" });
+  navigateTo("playlists", { playlistsStatus: "loading", playlistCreating: false });
   try {
     mutate({ playlists: await getPlaylists(), playlistsStatus: "ready" });
   } catch {
@@ -268,7 +278,7 @@ async function loadPlaylists() {
 }
 
 async function loadAlbums() {
-  mutate({ albumsStatus: "loading", screen: "albums" });
+  navigateTo("albums", { albumsStatus: "loading" });
   try {
     mutate({ albums: await getAlbums(), albumsStatus: "ready" });
   } catch {
@@ -276,22 +286,21 @@ async function loadAlbums() {
   }
 }
 
-async function loadCurators() {
-  mutate({ curatorsStatus: "loading", screen: "curators" });
+async function loadArtists() {
+  navigateTo("artists", { artistsStatus: "loading" });
   try {
-    mutate({ curators: await getCurators(), curatorsStatus: "ready" });
+    mutate({ artists: await getArtists(), artistsStatus: "ready" });
   } catch {
-    mutate({ curators: [], curatorsStatus: "ready" });
+    mutate({ artists: [], artistsStatus: "ready" });
   }
 }
 
-async function openCollection(title, fetcher, from) {
-  collectionReturn = from;
-  mutate({
+async function openCollection(title, type, fetcher) {
+  navigateTo("collection", {
     collectionTitle: title,
+    collectionType: type,
     collectionTracks: [],
     collectionStatus: "loading",
-    screen: "collection",
   });
   try {
     mutate({ collectionTracks: await fetcher(), collectionStatus: "ready" });
@@ -333,60 +342,112 @@ function mutateSearch(patch) {
   if (container) container.innerHTML = renderSearchResults(getState());
 }
 
-// Запуск поиска по чипу (популярный/недавний запрос): подставляем в инпут,
-// сохраняем в недавние и ищем.
+// Запуск поиска по чипу: подставляем в инпут, сохраняем в недавние + лог на сервер.
 function runSearch(query) {
   const value = (query || "").trim();
   if (!value) return;
   const input = root.querySelector('[data-role="search-input"]');
   if (input) input.value = value;
   pushRecentSearch(value);
+  logSearchQuery(value);
   scheduleSearch(value);
+}
+
+// «Мои треки»: ввод в поиске перерисовывает только тело списка (фокус живёт)
+function refreshMyTracksBody() {
+  const container = document.getElementById("mytracks-body");
+  if (container) container.innerHTML = renderMyTracksBody(getState());
 }
 
 function contextTracks(context) {
   const state = getState();
   if (context === "search") return state.searchResults;
   if (context === "library") return state.libraryPageItems;
+  if (context === "mytracks") return myTracksList(state);
   if (context === "recent") return getRecentTracks();
   if (context === "offline") return offlineTracks();
   if (context === "collection") return state.collectionTracks;
   return state.catalog;
 }
 
+// Точечное обновление кнопок «в библиотеке» — без полного рендера (ТЗ §10: без мерцания)
+function refreshLibraryButtons(trackId, inLibrary) {
+  root.querySelectorAll(`[data-action="toggle-library"][data-id="${trackId}"]`).forEach((btn) => {
+    btn.classList.toggle("is-added", inLibrary);
+    btn.classList.toggle("is-active", inLibrary);
+    btn.innerHTML = icon(inLibrary ? "check" : "plus");
+  });
+}
+
 async function handleToggleLibrary(trackId, fromSheet) {
+  if (fromSheet) closeSheet();
+  if (!trackId || trackId < 0) return; // минусы в библиотеку не добавляются
   const state = getState();
-  const inLibrary = state.libraryIds.has(trackId);
+  const prevIds = state.libraryIds;
+  const inLibrary = prevIds.has(trackId);
   // Оптимистично: интерфейс мгновенный, при ошибке откатываем
-  const nextIds = new Set(state.libraryIds);
+  const nextIds = new Set(prevIds);
   if (inLibrary) nextIds.delete(trackId);
   else nextIds.add(trackId);
-  mutate({ libraryIds: nextIds });
+  state.libraryIds = nextIds;
+  if (fromSheet) {
+    // шит закрылся — нужен полный рендер, иначе кнопки под ним не обновятся
+    mutate({});
+  } else {
+    refreshLibraryButtons(trackId, !inLibrary);
+  }
   try {
     if (inLibrary) {
       await removeFromLibrary(trackId);
-      mutate({
-        libraryPageItems: getState().libraryPageItems.filter((t) => t.id !== trackId),
-        libraryTotal: Math.max(0, getState().libraryTotal - 1),
-      });
+      const current = getState();
+      current.libraryPageItems = current.libraryPageItems.filter((t) => t.id !== trackId);
+      current.libraryTotal = Math.max(0, current.libraryTotal - 1);
+      if (current.screen === "mytracks") refreshMyTracksBody();
     } else {
       await addToLibrary(trackId);
+      const track = findTrack(trackId);
+      const current = getState();
+      if (track && !current.libraryPageItems.some((t) => t.id === trackId)) {
+        current.libraryPageItems = [track, ...current.libraryPageItems];
+        current.libraryTotal += 1;
+      }
       showToast("Добавлено в библиотеку");
     }
   } catch {
-    mutate({ libraryIds: state.libraryIds }); // откат
+    getState().libraryIds = prevIds;
+    refreshLibraryButtons(trackId, inLibrary);
     showToast("Не получилось — попробуйте ещё раз");
   }
-  if (fromSheet) closeSheet();
 }
 
 async function handlePayPremium() {
   try {
-    const { confirmation_url: url } = await createPaymentLink();
+    const months = getState().premiumMonths || 1;
+    const { confirmation_url: url } = await createPaymentLink(months);
     if (tg) tg.openLink(url);
     else window.open(url, "_blank");
   } catch {
     showToast("Оплата временно недоступна");
+  }
+}
+
+// «Скачать» (ТЗ §9): бот присылает аудиофайл в чат — без браузера и Google
+async function handleDownload(trackId) {
+  closeSheet();
+  if (!trackId || trackId < 0) {
+    showToast("Минусы скачиваются в поиске бота");
+    return;
+  }
+  showToast("Отправляю файл в чат…");
+  try {
+    await sendTrackToChat(trackId);
+    showToast("Готово! Файл у вас в чате с ботом");
+  } catch (error) {
+    showToast(
+      error && error.status === 409
+        ? "Файл ещё обрабатывается — попробуйте позже"
+        : "Не удалось отправить — попробуйте позже"
+    );
   }
 }
 
@@ -419,6 +480,53 @@ function toggleOffline(trackId) {
     .catch(() => showToast("Не удалось сохранить офлайн"));
 }
 
+function openLyrics(trackId) {
+  const track = findTrack(trackId);
+  if (!track || track.id < 0) return;
+  closeSheet();
+  closePlayer(); // иначе оверлей плеера закрывает экран текста (ТЗ §8)
+  navigateTo("lyrics", {
+    lyricsTrack: track,
+    lyrics: null,
+    lyricsStatus: "loading",
+    lyricsEditing: false,
+  });
+  loadLyrics(track);
+}
+
+function submitCreatePlaylist() {
+  const input = root.querySelector('[data-role="playlist-title"]');
+  const title = input ? input.value.trim() : "";
+  if (!title) {
+    showToast("Введите название");
+    return;
+  }
+  createPlaylist(title)
+    .then(async () => {
+      mutate({ playlistCreating: false });
+      showToast("Плейлист создан");
+      try {
+        mutate({ playlists: await getPlaylists() });
+      } catch {
+        // список обновится при следующем открытии
+      }
+    })
+    .catch((error) =>
+      showToast(error && error.status === 403 ? "Лимит плейлистов — нужен Premium" : "Не удалось создать")
+    );
+}
+
+function copyText(text) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(
+      () => showToast("Ссылка скопирована"),
+      () => showToast("Не удалось скопировать")
+    );
+    return;
+  }
+  showToast("Не удалось скопировать");
+}
+
 function mixTracks(mix) {
   const state = getState();
   if (mix === "library" || mix === "library-shuffle") return state.libraryPageItems;
@@ -442,18 +550,57 @@ root.addEventListener("click", (event) => {
       boot();
       break;
     case "nav":
-      setScreen(el.dataset.screen);
+      resetToTab(el.dataset.screen);
+      break;
+    case "back":
+      goBack();
       break;
     case "open-settings":
-      setScreen("settings");
+      navigateTo("settings");
       break;
     case "open-profile":
-      setScreen("profile");
+      navigateTo("profile");
       loadProfile();
       break;
     case "open-achievements":
-      setScreen("achievements");
+      navigateTo("achievements");
       if (!getState().profile) loadProfile();
+      break;
+    case "open-referral":
+      navigateTo("referral");
+      if (!getState().profile) loadProfile();
+      break;
+    case "open-premium":
+      navigateTo("premium");
+      break;
+    case "premium-plan":
+      mutate({ premiumMonths: Number(el.dataset.months) || 1 });
+      break;
+    case "open-mytracks":
+      navigateTo("mytracks", { myTracksQuery: "", myTracksEdit: false, sortSheetOpen: false });
+      break;
+    case "mytracks-tab":
+      mutate({ myTracksTab: el.dataset.tab });
+      break;
+    case "mytracks-edit":
+      mutate({ myTracksEdit: !getState().myTracksEdit });
+      break;
+    case "mytracks-remove":
+      event.stopPropagation();
+      handleToggleLibrary(id, false);
+      break;
+    case "mytracks-shuffle":
+      playMix(myTracksList(getState()), "Здесь пока нет треков");
+      break;
+    case "open-sort-sheet":
+      mutate({ sortSheetOpen: true });
+      break;
+    case "close-sort-sheet":
+      mutate({ sortSheetOpen: false });
+      break;
+    case "mytracks-sort":
+      event.stopPropagation();
+      mutate({ myTracksSort: el.dataset.value, sortSheetOpen: false });
       break;
     case "invite-friend": {
       const profile = getState().profile;
@@ -463,8 +610,8 @@ root.addEventListener("click", (event) => {
       else window.open(shareUrl, "_blank");
       break;
     }
-    case "play-all":
-      playAll();
+    case "copy-referral":
+      copyText(el.dataset.link);
       break;
     case "play-mix": {
       const mix = el.dataset.mix;
@@ -473,30 +620,24 @@ root.addEventListener("click", (event) => {
       break;
     }
     case "open-artists":
-      setScreen("artists");
+      loadArtists();
       break;
+    case "open-artist": {
+      const name = el.dataset.artist;
+      openCollection(name, "artist", () => getArtistTracks(name));
+      break;
+    }
     case "open-doc":
-      mutate({ docKey: el.dataset.doc, screen: "docs" });
+      navigateTo("docs", { docKey: el.dataset.doc });
       break;
     case "toggle-artist":
+      event.stopPropagation();
       toggleFavoriteArtist(el.dataset.artist);
       mutate({});
       break;
-    case "soon":
-      showToast("Появится в следующем обновлении");
-      break;
-    case "open-lyrics": {
+    case "open-lyrics":
       event.stopPropagation();
-      const track = findTrack(id);
-      if (!track) break;
-      const current = getState().screen;
-      lyricsReturn = TAB_SCREENS.has(current) ? current : "home";
-      closeSheet();
-      loadLyrics(track);
-      break;
-    }
-    case "lyrics-back":
-      setScreen(lyricsReturn);
+      openLyrics(id);
       break;
     case "lyrics-edit":
       mutate({ lyricsEditing: true });
@@ -512,40 +653,48 @@ root.addEventListener("click", (event) => {
       toggleOffline(id);
       break;
     case "open-downloads":
-      setScreen("downloads");
+      navigateTo("mytracks", { myTracksTab: "downloaded", myTracksQuery: "", myTracksEdit: false });
       break;
     case "play-recommended":
       playRecommended();
       break;
+    case "open-recommendations":
+      event.stopPropagation();
+      navigateTo("recommendations");
+      break;
     case "open-playlists":
       loadPlaylists();
+      break;
+    case "playlist-create":
+      mutate({ playlistCreating: true });
+      break;
+    case "playlist-create-cancel":
+      mutate({ playlistCreating: false });
+      break;
+    case "playlist-create-submit":
+      submitCreatePlaylist();
       break;
     case "open-albums":
       loadAlbums();
       break;
-    case "open-curators":
-      loadCurators();
-      break;
-    case "open-curator":
-      openCollection(el.dataset.title || "Подборка", () => getCuratorTracks(id), "curators");
-      break;
     case "open-playlist":
-      openCollection(el.dataset.title || "Плейлист", () => getPlaylistTracks(id), "playlists");
+      openCollection(el.dataset.title || "Плейлист", "playlist", () => getPlaylistTracks(id));
       break;
     case "open-album":
-      openCollection(el.dataset.name, () => getAlbumTracks(el.dataset.name), "albums");
+      openCollection(el.dataset.name, "album", () => getAlbumTracks(el.dataset.name));
       break;
-    case "collection-back":
-      setScreen(collectionReturn);
+    case "collection-play": {
+      const tracks = getState().collectionTracks;
+      if (!tracks.length) break;
+      playTrack(tracks[0], tracks);
+      openPlayer();
       break;
-    case "collection-play":
+    }
+    case "collection-shuffle":
       playMix(getState().collectionTracks, "Здесь пока пусто");
       break;
-    case "open-recommendations":
-      setScreen("recommendations");
-      break;
     case "open-recent":
-      setScreen("recent");
+      navigateTo("recent");
       break;
     case "set-mood":
     case "set-recog":
@@ -558,7 +707,7 @@ root.addEventListener("click", (event) => {
     }
     case "apply-rec":
       saveRecSettings(getState().recDraft);
-      setScreen("home");
+      goBack();
       playRecommended();
       break;
     case "clear-rec":
@@ -586,6 +735,7 @@ root.addEventListener("click", (event) => {
       mutateSearch({});
       break;
     case "play-track": {
+      if (getState().myTracksEdit && el.dataset.context === "mytracks") break;
       const track = findTrack(id);
       if (!track) return;
       playTrack(track, contextTracks(el.dataset.context));
@@ -593,6 +743,7 @@ root.addEventListener("click", (event) => {
       break;
     }
     case "toggle-library":
+      event.stopPropagation();
       handleToggleLibrary(id, el.dataset.fromSheet === "1");
       break;
     case "open-sheet": {
@@ -628,17 +779,10 @@ root.addEventListener("click", (event) => {
       seekToFraction((event.clientX - rect.left) / rect.width);
       break;
     }
-    case "download": {
-      const track = findTrack(id);
-      const url = track ? resolveAudioUrl(track) : null;
-      if (url) {
-        const absolute = url.startsWith("http") ? url : location.origin + url;
-        if (tg) tg.openLink(absolute);
-        else window.open(absolute, "_blank");
-      }
-      closeSheet();
+    case "download":
+      event.stopPropagation();
+      handleDownload(id);
       break;
-    }
     case "share": {
       const track = findTrack(id);
       if (track) {
@@ -655,6 +799,7 @@ root.addEventListener("click", (event) => {
     case "pay-premium":
       handlePayPremium();
       break;
+    case "open-support":
     case "open-bot":
       if (tg) tg.openTelegramLink("https://t.me/tgram_music_bot");
       else window.open("https://t.me/tgram_music_bot", "_blank");
@@ -665,22 +810,35 @@ root.addEventListener("click", (event) => {
 });
 
 root.addEventListener("input", (event) => {
-  if (event.target.dataset && event.target.dataset.role === "search-input") {
+  const role = event.target.dataset ? event.target.dataset.role : null;
+  if (role === "search-input") {
     scheduleSearch(event.target.value);
+  }
+  if (role === "mytracks-search") {
+    getState().myTracksQuery = event.target.value;
+    refreshMyTracksBody();
   }
 });
 
-// Enter в поиске — сохранить запрос в «Недавние» и убрать клавиатуру
+// Enter в поиске — сохранить запрос в «Недавние», залогировать и убрать клавиатуру
 root.addEventListener("keydown", (event) => {
   if (event.key !== "Enter") return;
-  if (event.target.dataset && event.target.dataset.role === "search-input") {
+  const role = event.target.dataset ? event.target.dataset.role : null;
+  if (role === "search-input") {
     const value = event.target.value.trim();
-    if (value) pushRecentSearch(value);
+    if (value) {
+      pushRecentSearch(value);
+      logSearchQuery(value);
+    }
+    event.target.blur();
+  }
+  if (role === "mytracks-search" || role === "playlist-title") {
+    if (role === "playlist-title") submitCreatePlaylist();
     event.target.blur();
   }
 });
 
-// Свайп вниз закрывает открытую страницу/плеер/шит (ТЗ: закрытие жестом).
+// Свайп вниз закрывает плеер/шит, на вложенных страницах — шаг назад (ТЗ §3).
 let gestureStartY = null;
 let gestureStartX = null;
 let gestureScrollTop = 0;
@@ -711,18 +869,22 @@ root.addEventListener("touchend", (event) => {
     closeSheet();
     return;
   }
+  if (state.sortSheetOpen) {
+    mutate({ sortSheetOpen: false });
+    return;
+  }
   if (state.playerOpen) {
     closePlayer();
     return;
   }
   if (!TAB_SCREENS.has(state.screen) && startedNearTop && gestureScrollTop <= 4) {
-    setScreen("home");
+    goBack();
   }
 });
 
 // Пробел — play/pause (десктопная отладка)
 document.addEventListener("keydown", (event) => {
-  if (event.code === "Space" && event.target.tagName !== "INPUT") {
+  if (event.code === "Space" && event.target.tagName !== "INPUT" && event.target.tagName !== "TEXTAREA") {
     event.preventDefault();
     togglePlay();
   }

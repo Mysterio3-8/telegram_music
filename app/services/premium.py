@@ -8,6 +8,16 @@ from app.services.uploads import count_user_uploads
 from app.services.users import count_playlists
 
 
+# Тарифы Premium (ТЗ §24): месяцы → множитель цены. Цена = premium_price_rub * месяцы.
+PREMIUM_PLAN_MONTHS: tuple[int, ...] = (1, 3, 6, 12)
+
+
+def plan_price_rub(months: int, discount_pct: int = 0) -> int:
+    """Цена тарифа в рублях с учётом персональной скидки."""
+    base = settings.premium_price_rub * months
+    return base * (100 - discount_pct) // 100 if discount_pct else base
+
+
 def _utcnow() -> datetime:
     # Наивный UTC — SQLite хранит datetime без таймзоны, сравнения не должны падать на mix naive/aware
     return datetime.now(timezone.utc).replace(tzinfo=None)
@@ -26,13 +36,13 @@ async def refresh_premium_status(session: AsyncSession, user: User) -> User:
 
 
 async def activate_premium(
-    session: AsyncSession, user_id: int, payment_type: str, payment_id: str
+    session: AsyncSession, user_id: int, payment_type: str, payment_id: str, months: int = 1
 ) -> User:
     now = _utcnow()
     user = await session.get(User, user_id)
     # Продление действующей подписки прибавляется к остатку, а не обнуляет его
     base = user.premium_until if is_premium_active(user) else now
-    end = base + timedelta(days=settings.premium_duration_days)
+    end = base + timedelta(days=settings.premium_duration_days * max(1, months))
 
     user.premium = True
     user.premium_until = end

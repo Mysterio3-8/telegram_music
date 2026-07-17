@@ -13,12 +13,15 @@ def _library_tracks(user_id: int):
     )
 
 
-async def get_library_page(session: AsyncSession, user_id: int, page: int) -> list[Track]:
+async def get_library_page(
+    session: AsyncSession, user_id: int, page: int, page_size: int | None = None
+) -> list[Track]:
+    size = page_size or settings.page_size
     stmt = (
         _library_tracks(user_id)
         .order_by(UserLibrary.added_at.desc(), Track.id.desc())
-        .offset((page - 1) * settings.page_size)
-        .limit(settings.page_size)
+        .offset((page - 1) * size)
+        .limit(size)
     )
     return list((await session.scalars(stmt)).all())
 

@@ -1,5 +1,8 @@
 import { icon } from "../components/icons.js";
 
+// Настройки по референсу VK Music (ТЗ §16, §21): секции строк, «Поддержка
+// Telegram» вместо «Написать боту», версия — внутри «О приложении».
+
 function navRow(label, ic, action, data = "") {
   return `
     <button class="settings-row" data-action="${action}"${data} style="width:100%">
@@ -12,20 +15,26 @@ function navRow(label, ic, action, data = "") {
 export function renderSettings(state) {
   return `
     <div class="page-head" data-role="page-head">
-      <button class="icon-btn" data-action="nav" data-screen="home" aria-label="Назад">${icon("back")}</button>
+      <button class="icon-btn" data-action="back" aria-label="Назад">${icon("back")}</button>
       <span>Настройки</span>
     </div>
 
-    <div class="rec-section-label">Предпочтения</div>
+    <div class="rec-section-label">Музыка</div>
     <div class="card card--rows">
+      ${navRow("Настройки ТегаМикса", "tune", "open-recommendations")}
       ${navRow("Любимые исполнители", "mic", "open-artists")}
-      ${navRow("Настроить рекомендации", "tune", "open-recommendations")}
+    </div>
+
+    <div class="rec-section-label">Подписка</div>
+    <div class="card card--rows">
+      ${navRow("TG Music Premium", "crown", "open-premium")}
+      ${navRow("Реферальная программа", "gift", "open-referral")}
     </div>
 
     <div class="rec-section-label">Помощь</div>
     <div class="card card--rows">
       ${navRow("Вопросы и ответы", "help", "open-doc", ' data-doc="faq"')}
-      ${navRow("Написать боту", "bell", "open-bot")}
+      ${navRow("Поддержка Telegram", "headset", "open-support")}
     </div>
 
     <div class="rec-section-label">Документы</div>

@@ -31,7 +31,7 @@ def _auth() -> aiohttp.BasicAuth:
 
 
 async def create_premium_payment(
-    telegram_id: int, bot_username: str, price_rub: int | None = None
+    telegram_id: int, bot_username: str, price_rub: int | None = None, months: int = 1
 ) -> str | None:
     """Создаёт платёж, возвращает confirmation_url или None при ошибке."""
     amount = settings.premium_price_rub if price_rub is None else price_rub
@@ -42,8 +42,8 @@ async def create_premium_payment(
             "type": "redirect",
             "return_url": f"https://t.me/{bot_username}",
         },
-        "description": f"Premium на {settings.premium_duration_days} дней",
-        "metadata": {"telegram_id": str(telegram_id)},
+        "description": f"Premium на {settings.premium_duration_days * months} дней",
+        "metadata": {"telegram_id": str(telegram_id), "months": str(months)},
     }
     try:
         async with aiohttp.ClientSession(auth=_auth()) as http:
@@ -96,7 +96,9 @@ async def apply_succeeded_payment(session: AsyncSession, payment: dict) -> bool:
     if subscription is not None and subscription.payment_id == payment["id"]:
         return True  # повторное уведомление — уже обработано
 
-    await activate_premium(session, user.id, "yookassa", payment["id"])
+    months_raw = (payment.get("metadata") or {}).get("months", "1")
+    months = int(months_raw) if str(months_raw).isdigit() else 1
+    await activate_premium(session, user.id, "yookassa", payment["id"], months=months)
     # Пригласивший получает скидку на следующий месяц (доп. ТЗ, реферальная программа)
     from app.services.gamification import grant_referrer_discount
 

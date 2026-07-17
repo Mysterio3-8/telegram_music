@@ -77,16 +77,24 @@ a {
   }
 }
 
+/* Отступ снизу = высота дока (мини-плеер + навигация), чтобы контент никогда
+   не уходил под нижнюю панель (ТЗ §2). Высоты задаются классами на #app. */
 .screen {
   flex: 1;
-  padding: 20px 20px calc(104px + env(safe-area-inset-bottom));
+  padding: 20px 20px calc(24px + env(safe-area-inset-bottom));
   animation: screen-in 0.32s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* Играет трек — снизу висит мини-плеер: увеличиваем отступ, чтобы контент
-   не уходил под него и под навигацию (ТЗ: не скрывать контент нижней панелью) */
+#app.has-nav .screen {
+  padding-bottom: calc(104px + env(safe-area-inset-bottom));
+}
+
 #app.is-playing .screen {
-  padding-bottom: calc(168px + env(safe-area-inset-bottom));
+  padding-bottom: calc(96px + env(safe-area-inset-bottom));
+}
+
+#app.has-nav.is-playing .screen {
+  padding-bottom: calc(178px + env(safe-area-inset-bottom));
 }
 
 /* Горизонтальные ленты (hero-карусель, быстрый доступ, блоки библиотеки):

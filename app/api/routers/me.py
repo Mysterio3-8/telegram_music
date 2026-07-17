@@ -6,6 +6,7 @@ from app.api.deps import get_current_user, get_db
 from app.api.schemas import (
     AchievementOut,
     AlbumOut,
+    ArtistOut,
     LyricsIn,
     LyricsOut,
     Page,
@@ -16,6 +17,7 @@ from app.api.schemas import (
     ProfileOut,
     RankOut,
     ReferralOut,
+    SearchLogIn,
     TrackOut,
     UserStatsOut,
     track_out,
@@ -47,9 +49,12 @@ from app.services.playlists import (
     get_playlist,
     get_playlist_tracks_page,
 )
+from app.services.artists import artist_tracks, list_artists
 from app.services.recommendations import build_mix, instrumental_mix
 from app.services.premium import can_create_playlist, can_upload, is_premium_active
+from app.services.search_log import log_search_query, popular_queries
 from app.services.stats import record_event
+from app.services.telegram_send import send_audio_by_file_id
 from app.services.uploads import detect_format
 from app.services.users import count_library_tracks
 from app.storage import get_storage
@@ -60,13 +65,17 @@ router = APIRouter(tags=["me"])
 @router.get("/library", response_model=Page[TrackOut])
 async def my_library(
     page: int = Query(1, ge=1),
+    page_size: int = Query(None, ge=1, le=100),
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> Page[TrackOut]:
     total = await count_library_tracks(session, user.id)
-    tracks = await get_library_page(session, user.id, page)
+    tracks = await get_library_page(session, user.id, page, page_size)
     return Page(
-        items=[track_out(t) for t in tracks], total=total, page=page, page_size=settings.page_size
+        items=[track_out(t) for t in tracks],
+        total=total,
+        page=page,
+        page_size=page_size or settings.page_size,
     )
 
 
@@ -227,6 +236,62 @@ async def curated_playlist_tracks(
             break
         page += 1
     return [track_out(t) for t in tracks]
+
+
+@router.get("/artists", response_model=list[ArtistOut])
+async def artists(
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+) -> list[ArtistOut]:
+    """Исполнители с дедупликацией по нормализованному имени (ТЗ §13)."""
+    return [ArtistOut(name=a.name, track_count=a.track_count) for a in await list_artists(session)]
+
+
+@router.get("/artists/tracks", response_model=list[TrackOut])
+async def tracks_by_artist(
+    name: str = Query(..., min_length=1),
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+) -> list[TrackOut]:
+    return [track_out(t) for t in await artist_tracks(session, name)]
+
+
+@router.post("/search/log", status_code=status.HTTP_204_NO_CONTENT)
+async def log_search(
+    payload: SearchLogIn,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+) -> None:
+    """Mini App фиксирует «закоммиченный» запрос — сырьё для популярных (ТЗ §11)."""
+    await log_search_query(session, user.id, payload.query)
+
+
+@router.get("/search/popular", response_model=list[str])
+async def popular_search_queries(
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+) -> list[str]:
+    return await popular_queries(session)
+
+
+@router.post("/tracks/{track_id}/send", status_code=status.HTTP_204_NO_CONTENT)
+async def send_track_to_chat(
+    track_id: int,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+) -> None:
+    """«Скачать» в Mini App: бот присылает аудиофайл в чат пользователя (ТЗ §9)."""
+    track = await get_track(session, track_id)
+    if track is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Трек не найден")
+    if not track.tg_file_id:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Файл ещё обрабатывается — попробуйте позже")
+    sent = await send_audio_by_file_id(
+        user.telegram_id, track.tg_file_id, title=track.title, performer=track.artist
+    )
+    if not sent:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Не удалось отправить файл")
+    await record_event(session, user.id, track_id, "download")
 
 
 @router.get("/albums", response_model=list[AlbumOut])

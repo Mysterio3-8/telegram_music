@@ -235,3 +235,14 @@ class TelegramChannelImport(Base):
     last_error: Mapped[str | None] = mapped_column(String(512))
     discovered_at: Mapped[datetime] = mapped_column(server_default=func.now())
     imported_at: Mapped[datetime | None]
+
+
+class SearchQuery(Base):
+    """Реальные поисковые запросы Mini App — сырьё для «Популярных запросов» (ТЗ §11)."""
+
+    __tablename__ = "search_queries"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    query: Mapped[str] = mapped_column(String(256), index=True)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())

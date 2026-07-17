@@ -4,7 +4,7 @@
     {
       "name": "miniapp",
       "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "http.server", "5500", "--directory", "miniapp"],
+      "runtimeArgs": ["dev_server.py"],
       "port": 5500
     },
     {

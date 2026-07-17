@@ -99,3 +99,18 @@ async def test_premium_user_bypasses_upload_limit(session):
     user = await make_user(session, premium=True, premium_until=_utcnow() + timedelta(days=5))
 
     assert await can_upload(session, user) is True
+
+
+async def test_activate_premium_months_multiplier(session):
+    from app.services.premium import PREMIUM_PLAN_MONTHS, plan_price_rub
+
+    user = await make_user(session)
+
+    updated = await activate_premium(session, user.id, "yookassa", "charge_year", months=12)
+
+    expected_min = _utcnow() + timedelta(days=settings.premium_duration_days * 12 - 1)
+    assert updated.premium_until > expected_min
+    assert PREMIUM_PLAN_MONTHS == (1, 3, 6, 12)
+    assert plan_price_rub(1) == settings.premium_price_rub
+    assert plan_price_rub(12) == settings.premium_price_rub * 12
+    assert plan_price_rub(12, discount_pct=50) == settings.premium_price_rub * 12 // 2

@@ -35,7 +35,7 @@ export function renderTrackSheet(state) {
           ${inLibrary ? "Убрать из библиотеки" : "Добавить в библиотеку"}
         </button>
         <button class="sheet-item" data-action="download" data-id="${track.id}">
-          ${icon("download")} Скачать
+          ${icon("download")} Скачать — бот пришлёт файл в чат
         </button>
         ${offlineItem}
         <button class="sheet-item" data-action="open-lyrics" data-id="${track.id}">

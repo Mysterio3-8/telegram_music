@@ -83,8 +83,8 @@ export function getInstrumentals(query = "", page = 1, pageSize = 50) {
   return request(`/instrumentals?${params}`);
 }
 
-export function getLibrary(page = 1) {
-  return request(`/library?page=${page}`);
+export function getLibrary(page = 1, pageSize = 100) {
+  return request(`/library?page=${page}&page_size=${pageSize}`);
 }
 
 export function getLibraryIds() {
@@ -120,6 +120,10 @@ export function getPlaylists() {
   return request("/playlists");
 }
 
+export function createPlaylist(title) {
+  return request("/playlist", { method: "POST", body: JSON.stringify({ title }) });
+}
+
 export function getPlaylistTracks(playlistId) {
   return request(`/playlists/${playlistId}/tracks`);
 }
@@ -128,16 +132,31 @@ export function getAlbums() {
   return request("/albums");
 }
 
-export function getCurators() {
-  return request("/curators");
-}
-
-export function getCuratorTracks(playlistId) {
-  return request(`/curators/${playlistId}/tracks`);
-}
-
 export function getAlbumTracks(name) {
   return request(`/albums/tracks?name=${encodeURIComponent(name)}`);
+}
+
+// Исполнители с дедупликацией по нормализованному имени (ТЗ §13-14)
+export function getArtists() {
+  return request("/artists");
+}
+
+export function getArtistTracks(name) {
+  return request(`/artists/tracks?name=${encodeURIComponent(name)}`);
+}
+
+// Реальные популярные запросы (ТЗ §11). Лог — только «закоммиченный» запрос.
+export function getPopularQueries() {
+  return request("/search/popular");
+}
+
+export function logSearchQuery(query) {
+  return request("/search/log", { method: "POST", body: JSON.stringify({ query }) }).catch(() => {});
+}
+
+// «Скачать»: бот присылает аудиофайл в чат пользователя (ТЗ §9)
+export function sendTrackToChat(trackId) {
+  return request(`/tracks/${trackId}/send`, { method: "POST" });
 }
 
 // Отметить старт воспроизведения (сырьё для достижений). Fire-and-forget.
@@ -156,8 +175,8 @@ export function submitLyrics(trackId, text) {
   });
 }
 
-export function createPaymentLink() {
-  return request("/premium/pay", { method: "POST" });
+export function createPaymentLink(months = 1) {
+  return request("/premium/pay", { method: "POST", body: JSON.stringify({ months }) });
 }
 
 export function formatDuration(totalSeconds) {

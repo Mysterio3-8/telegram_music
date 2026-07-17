@@ -80,17 +80,29 @@
   font-size: 30px;
 }
 
-/* ============ Bottom navigation ============ */
+/* ============ Нижний док: мини-плеер + навигация одной колонкой ============ */
+/* Один fixed-контейнер исключает наложения панелей друг на друга (ТЗ §2). */
 
-.bottom-nav {
+.bottom-dock {
   position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
   z-index: 40;
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
   padding: 0 16px calc(14px + env(safe-area-inset-bottom));
+  pointer-events: none;
+}
+
+/* ============ Bottom navigation ============ */
+
+.bottom-nav {
+  display: flex;
+  justify-content: center;
+  width: 100%;
   pointer-events: none;
 }
 
@@ -476,14 +488,9 @@
 /* ============ Mini player (persistent bar) ============ */
 
 .mini-player {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 82px;
-  z-index: 39;
   display: flex;
   justify-content: center;
-  padding: 0 16px;
+  width: 100%;
   pointer-events: none;
 }
 
@@ -614,7 +621,9 @@
 }
 
 .player-art {
-  margin: 18px 0 26px;
+  /* Размер обложки ограничен высотой экрана — контролы не выталкиваются вниз */
+  margin: 10px auto 20px;
+  width: min(100%, 42dvh);
   aspect-ratio: 1;
   border-radius: 28px;
   background: var(--gradient-dark);
@@ -635,20 +644,92 @@
   background: radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.1), transparent 55%);
 }
 
+/* Метаданные по VK: текст слева, «+» и «…» справа (ТЗ §7) */
 .player-meta {
-  text-align: center;
-  margin-bottom: 22px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.player-meta__text {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
 }
 
 .player-meta__title {
-  font-size: 20px;
+  font-size: 19px;
   font-weight: 800;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .player-meta__artist {
-  margin-top: 5px;
+  margin-top: 3px;
   font-size: 13.5px;
   color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.player-meta__actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.player-meta__actions .icon-btn {
+  border-radius: 50%;
+}
+
+.player-meta__actions .icon-btn.is-added {
+  color: var(--icon-active);
+}
+
+/* Чипы действий: Скачать / Текст / Поделиться */
+.player-chips {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 18px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.player-chips::-webkit-scrollbar {
+  display: none;
+}
+
+.player-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: var(--radius-pill);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  color: var(--text-soft);
+  font-size: 13px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.player-chip svg {
+  width: 16px;
+  height: 16px;
+  color: var(--icon-active);
+}
+
+.player-chip:active {
+  background: var(--accent-soft);
+}
+
+.player-topbar__spacer {
+  width: 40px;
+  flex-shrink: 0;
 }
 
 .player-progress {
@@ -718,21 +799,23 @@
   color: var(--icon-active);
 }
 
+/* Play разумного размера — не «огромная кнопка» (ТЗ §7) */
 .player-controls__play {
-  width: 72px;
-  height: 72px;
+  width: 60px;
+  height: 60px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 2.5px solid var(--play-border);
-  box-shadow: var(--play-glow), inset 0 0 0 4px rgba(255, 255, 255, 0.06);
-  color: var(--text-primary);
+  background: #fff;
+  color: #111;
+  box-shadow: var(--play-glow);
+  flex-shrink: 0;
 }
 
 .player-controls__play svg {
-  width: 26px;
-  height: 26px;
+  width: 22px;
+  height: 22px;
 }
 
 .player-tabs {
@@ -1859,4 +1942,541 @@
 /* Переключатель «Треки / Минусы» в поиске */
 .search-mode {
   margin-bottom: 12px;
+}
+
+/* ============ Аватар-фото из Telegram (ТЗ §22) ============ */
+
+.avatar {
+  overflow: hidden;
+}
+
+.avatar__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* ============ Сегменты-вкладки: Все / Скачанные (ТЗ §5) ============ */
+
+.seg-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.seg {
+  flex: 1;
+  height: 42px;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13.5px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.seg.is-active {
+  background: var(--surface-card);
+  color: var(--text-primary);
+}
+
+.seg__count {
+  font-weight: 600;
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+
+/* ============ Мои треки: тулбар Shuffle / Sort ============ */
+
+.search-input--compact {
+  height: 44px;
+  margin-bottom: 4px;
+}
+
+.mt-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 12px 2px 10px;
+}
+
+.mt-shuffle {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-accent);
+}
+
+.mt-shuffle svg {
+  width: 19px;
+  height: 19px;
+}
+
+.mt-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-accent);
+}
+
+.mt-sort svg {
+  width: 15px;
+  height: 15px;
+}
+
+.mt-remove {
+  color: #ff5d73;
+}
+
+.page-head__action {
+  margin-left: auto;
+}
+
+.page-head__action.is-active {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.sheet__title {
+  text-align: center;
+  font-size: 15px;
+  font-weight: 800;
+  padding: 2px 0 10px;
+  border-bottom: 1px solid var(--divider);
+  margin-bottom: 6px;
+}
+
+/* ============ Плейлисты: строки с обложкой (ТЗ §6) ============ */
+
+.pl-row {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  width: 100%;
+  padding: 9px 10px;
+  margin-top: 6px;
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  border: 1px solid var(--glass-border);
+  text-align: left;
+}
+
+.pl-row:active {
+  background: var(--accent-soft);
+}
+
+.pl-row > svg {
+  width: 16px;
+  height: 16px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.pl-cover {
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  font-weight: 800;
+  color: #fff;
+  background: var(--gradient-dark);
+  flex-shrink: 0;
+}
+
+.pl-cover--create {
+  background: var(--surface-elevated);
+  color: var(--text-accent);
+}
+
+.pl-cover--create svg,
+.pl-cover--icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.pl-cover--icon {
+  background: var(--accent-soft);
+  color: var(--icon-active);
+}
+
+.pl-row__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.pl-row__title {
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pl-row__sub {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 1px;
+}
+
+.pl-create-form {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.pl-create-form input {
+  flex: 1;
+  min-width: 0;
+  height: 46px;
+  padding: 0 14px;
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  border: 1px solid var(--glass-border);
+  color: var(--text-primary);
+  font-size: 14px;
+  outline: none;
+}
+
+.pl-create-form .btn {
+  padding: 0 14px;
+}
+
+/* ============ Страница подборки: hero (ТЗ §6) ============ */
+
+.coll-hero {
+  text-align: center;
+  margin-bottom: 18px;
+}
+
+.coll-hero__cover {
+  width: 168px;
+  height: 168px;
+  margin: 6px auto 14px;
+  border-radius: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 54px;
+  font-weight: 800;
+  color: #fff;
+  background: var(--gradient-dark);
+  box-shadow: var(--glass-shadow);
+}
+
+.coll-hero__title {
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.coll-hero__meta {
+  margin-top: 4px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.coll-hero__actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.coll-hero__actions .btn {
+  flex: 1;
+}
+
+/* ============ Реферальная программа (ТЗ §23) ============ */
+
+.ref-intro {
+  text-align: center;
+  padding: 6px 8px 2px;
+}
+
+.ref-intro__emoji {
+  font-size: 44px;
+}
+
+.ref-intro__title {
+  margin-top: 8px;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.ref-intro__text {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.ref-progress {
+  margin-top: 16px;
+  padding: 16px 18px;
+}
+
+.ref-progress__row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.ref-progress__count {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--text-accent);
+}
+
+.ref-progress__label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  flex: 1;
+}
+
+.ref-steps .ref-step {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 13px 0;
+}
+
+.ref-steps .ref-step + .ref-step {
+  border-top: 1px solid var(--divider);
+}
+
+.ref-step__num {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-soft);
+  color: var(--text-accent);
+  font-size: 13px;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.ref-step__text {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.ref-rewards {
+  padding: 6px 16px;
+}
+
+.ref-reward {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 0;
+}
+
+.ref-reward + .ref-reward {
+  border-top: 1px solid var(--divider);
+}
+
+.ref-reward__check {
+  display: flex;
+  color: var(--icon-inactive);
+  flex-shrink: 0;
+}
+
+.ref-reward__check svg {
+  width: 18px;
+  height: 18px;
+}
+
+.ref-reward.is-done .ref-reward__check {
+  color: var(--accent);
+}
+
+.ref-reward__friends {
+  font-size: 13.5px;
+  font-weight: 700;
+  flex: 1;
+}
+
+.ref-reward__prize {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-accent);
+}
+
+.ref-reward.is-done .ref-reward__friends {
+  color: var(--text-muted);
+}
+
+.pstat-grid--3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+/* ============ Premium: тарифы (ТЗ §24) ============ */
+
+.premium-hero {
+  text-align: center;
+  padding: 8px 0 4px;
+}
+
+.premium-hero__icon {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--gradient-premium-card);
+  color: #fff;
+}
+
+.premium-hero__icon svg {
+  width: 30px;
+  height: 30px;
+}
+
+.premium-hero__title {
+  margin-top: 12px;
+  font-size: 19px;
+  font-weight: 800;
+}
+
+.premium-hero__sub {
+  margin-top: 4px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+.plan-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.plan-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 16px 14px 14px;
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  border: 1.5px solid var(--glass-border);
+  text-align: left;
+}
+
+.plan-card.is-active {
+  border-color: var(--accent);
+  box-shadow: var(--accent-glow);
+}
+
+.plan-card--best {
+  background: var(--gradient-premium-card);
+}
+
+.plan-card--best .plan-card__monthly,
+.plan-card--best .plan-card__label {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.plan-card--best .plan-card__price {
+  color: #fff;
+}
+
+.plan-card__badge {
+  position: absolute;
+  top: -9px;
+  right: 10px;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  background: #fff;
+  color: #14141a;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+}
+
+.plan-card__label {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.plan-card__price {
+  font-size: 19px;
+  font-weight: 800;
+}
+
+.plan-card__price s {
+  font-size: 13px;
+  color: var(--text-muted);
+  font-weight: 600;
+  margin-left: 4px;
+}
+
+.plan-card__monthly {
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+/* ============ О приложении (ТЗ §20) ============ */
+
+.about-hero {
+  text-align: center;
+  padding: 18px 0 16px;
+}
+
+.about-hero__logo {
+  width: 84px;
+  height: 84px;
+  margin: 0 auto;
+  border-radius: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 40px;
+  background: var(--gradient-dark);
+  box-shadow: var(--glass-shadow);
+}
+
+.about-hero__name {
+  margin-top: 12px;
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.about-hero__version {
+  margin-top: 3px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+/* ============ Текст песни: шапка трека (ТЗ §8) ============ */
+
+.lyrics-track__title {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.lyrics-track__artist {
+  margin-top: 2px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
 }

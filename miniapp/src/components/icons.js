@@ -49,6 +49,12 @@ const PATHS = {
   globe: '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17"/><path d="M12 3.5c2.5 2.4 3.8 5.4 3.8 8.5S14.5 18.1 12 20.5c-2.5-2.4-3.8-5.4-3.8-8.5S9.5 5.9 12 3.5Z"/>',
   lyrics: '<path d="M5 5h14"/><path d="M5 9h10"/><path d="M5 13h8"/><path d="M5 17h11"/>',
   "chevron-left": '<path d="m14.5 6-5.5 6 5.5 6"/>',
+  pencil: '<path d="M4 20h4L19.5 8.5a2.1 2.1 0 0 0-3-3L5 17v3Z"/><path d="m13.5 6.5 3 3"/>',
+  trash: '<path d="M5 7h14"/><path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/><path d="M7 7l1 12a1.5 1.5 0 0 0 1.5 1.5h5A1.5 1.5 0 0 0 16 19l1-12"/><path d="M10 11v6"/><path d="M14 11v6"/>',
+  sort: '<path d="M7 4v13"/><path d="m4 14.5 3 3 3-3"/><path d="M17 20V7"/><path d="m14 9.5 3-3 3 3"/>',
+  copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/>',
+  gift: '<rect x="4" y="9" width="16" height="4"/><path d="M6 13v7h12v-7"/><path d="M12 9v11"/><path d="M12 9C9 9 7 7.5 7 5.8 7 4.2 8.4 3.5 9.6 4.1 11 4.8 12 9 12 9Z"/><path d="M12 9c3 0 5-1.5 5-3.2 0-1.6-1.4-2.3-2.6-1.7C13 4.8 12 9 12 9Z"/>',
+  headset: '<path d="M4 14v-2a8 8 0 0 1 16 0v2"/><rect x="3.5" y="13" width="4" height="6.5" rx="1.6"/><rect x="16.5" y="13" width="4" height="6.5" rx="1.6"/><path d="M20 18v1a2.5 2.5 0 0 1-2.5 2.5H13"/>',
 };
 
 export function icon(name) {

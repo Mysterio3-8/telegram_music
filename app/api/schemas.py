@@ -77,6 +77,15 @@ class PlaylistSummaryOut(BaseModel):
     track_count: int
 
 
+class ArtistOut(BaseModel):
+    name: str
+    track_count: int
+
+
+class SearchLogIn(BaseModel):
+    query: str
+
+
 class AlbumOut(BaseModel):
     name: str
     track_count: int

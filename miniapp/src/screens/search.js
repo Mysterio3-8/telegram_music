@@ -2,42 +2,22 @@ import { icon } from "../components/icons.js";
 import { renderTrackList, escapeHtml } from "../components/trackRow.js";
 import { getRecentSearches } from "../prefs.js";
 
-const POPULAR_LIMIT = 8;
+// Поиск (ТЗ §11): недавние запросы пользователя, затем реальные популярные
+// запросы (статистика сервера, без выдуманных списков). Placeholder — «Search».
 
-// «Популярные запросы» — исполнители из базы (данные реальные, не выдуманный список).
-function popularQueries(state) {
-  const seen = new Set();
-  const out = [];
-  for (const track of state.catalog) {
-    const artist = (track.artist || "").trim();
-    const key = artist.toLowerCase();
-    if (artist && !seen.has(key)) {
-      seen.add(key);
-      out.push(artist);
-    }
-    if (out.length >= POPULAR_LIMIT) break;
-  }
-  return out;
-}
-
-function chip(query, action) {
+function chip(query) {
   return `
-    <button class="search-chip" data-action="${action}" data-q="${escapeHtml(query)}">
+    <button class="search-chip" data-action="search-chip" data-q="${escapeHtml(query)}">
       ${icon("search")}<span>${escapeHtml(query)}</span>
     </button>
   `;
 }
 
 function renderSuggestions(state) {
-  const popular = popularQueries(state);
   const recent = getRecentSearches();
-
-  const popularBlock = popular.length
-    ? `
-      <div class="section-head"><span class="section-title">Популярные запросы</span></div>
-      <div class="chip-cloud">${popular.map((q) => chip(q, "search-chip")).join("")}</div>
-    `
-    : "";
+  const popular = (state.popularQueries || []).filter(
+    (q) => !recent.some((r) => r.toLowerCase() === q.toLowerCase())
+  );
 
   const recentBlock = recent.length
     ? `
@@ -45,14 +25,21 @@ function renderSuggestions(state) {
         <span class="section-title">Недавние запросы</span>
         <button class="link-more" data-action="clear-recent-searches">Очистить</button>
       </div>
-      <div class="chip-cloud">${recent.map((q) => chip(q, "search-chip")).join("")}</div>
+      <div class="chip-cloud">${recent.map(chip).join("")}</div>
     `
     : "";
 
-  if (!popularBlock && !recentBlock) {
-    return '<div class="empty-state">В базе пока нет треков</div>';
+  const popularBlock = popular.length
+    ? `
+      <div class="section-head"><span class="section-title">Популярные запросы</span></div>
+      <div class="chip-cloud">${popular.map(chip).join("")}</div>
+    `
+    : "";
+
+  if (!recentBlock && !popularBlock) {
+    return '<div class="empty-state">Введите название трека или исполнителя</div>';
   }
-  return `${popularBlock}${recentBlock}`;
+  return `${recentBlock}${popularBlock}`;
 }
 
 // Результаты живут в отдельном контейнере: ввод перерисовывает только его,
@@ -83,7 +70,7 @@ export function renderSearch(state) {
     </div>
     <div class="search-input">
       ${icon("search")}
-      <input type="text" data-role="search-input" placeholder="${isInstrumentals ? "Минус или исполнитель" : "Трек или исполнитель"}" value="${escapeHtml(state.searchQuery)}" />
+      <input type="text" data-role="search-input" placeholder="Search" value="${escapeHtml(state.searchQuery)}" />
     </div>
     <div id="search-results">${renderSearchResults(state)}</div>
   `;

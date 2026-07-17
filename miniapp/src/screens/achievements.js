@@ -21,7 +21,7 @@ function achievementCard(a) {
 export function renderAchievements(state) {
   const head = `
     <div class="page-head" data-role="page-head">
-      <button class="icon-btn" data-action="nav" data-screen="profile" aria-label="Назад">${icon("back")}</button>
+      <button class="icon-btn" data-action="back" aria-label="Назад">${icon("back")}</button>
       <span>Достижения</span>
     </div>
   `;
