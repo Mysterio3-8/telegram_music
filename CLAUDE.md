@@ -128,6 +128,12 @@ $env:DATABASE_URL="sqlite+aiosqlite:///_tmp.db"; .\.venv\Scripts\python.exe -m a
 - Обогащение (отпечаток+архив) — асинхронно в воркере: сразу после загрузки трека `storage_path` ещё пуст, появляется через секунды. Если воркер лежит — трек работает по `tg_file_id`, отпечаток не считается
 - Windows-консоль: путь проекта с кириллицей, в PowerShell возможны артефакты кодировки в выводе — на работу не влияет
 
+## Checkpoint (2026-07-18, уточнение владельца) — SoundCloud/YT Music = ТРЕКИ, минусы только из ТГ-канала
+
+- **SoundCloud → треки** (не минусы): [soundcloud_import.py](app/services/soundcloud_import.py) → `import_soundcloud_tracks` через `import_via_telegram_mint` (общая база). Приём ссылки перенесён из мастера «Загрузить минус» (там снова только файл) в админ-раздел «🎬 Источники треков» (`adm:yt:add` принимает YouTube/YT Music/SoundCloud; SoundCloud-источники видны списком в тексте раздела, управление — пока CLI/БД)
+- Минусы — только ТГ-канал (`--instrumental` у telegram_channel add); `import_instrumental_via_telegram_mint` остаётся для этой ветки
+- Автопроверка без изменений: SoundCloud ежедневно, YouTube на проде `YOUTUBE_CHECK_INTERVAL_DAYS=1`
+
 ## Checkpoint (2026-07-18, продолжение) — SoundCloud-источники с автопроверкой
 
 - **SoundCloud-ссылка = постоянный источник** (запрос владельца «я часто делаю новые биты»): таблица `soundcloud_sources` (миграция `c0d1e2f3a4b6`), [soundcloud_sources.py](app/services/soundcloud_sources.py) (add с дедупом по url + реактивация, mark_checked, sources_due_for_check). Ссылка в «Загрузить минус» теперь сохраняется источником и сканится ежедневно; дедуп импорта делает скан инкрементальным

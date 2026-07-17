@@ -178,12 +178,12 @@ def _first_admin_id() -> int | None:
 @celery_app.task(name="youtube.soundcloud_scan_source", bind=True, max_retries=1)
 def soundcloud_scan_source(self, source_id: int, chat_id: int | None = None) -> None:
     """Скан одного SoundCloud-источника: дедуп делает импорт инкрементальным —
-    забираются только новые биты. chat_id задан (ручной запуск из админки) —
+    забираются только новые треки. chat_id задан (ручной запуск из админки) —
     отчёт всегда; автоскан молчит, если ничего нового, и пишет первому админу,
-    когда появились новые минусы.
+    когда появились новые треки.
     """
     from app.db.models import SoundcloudSource
-    from app.services.soundcloud_import import import_soundcloud_minuses
+    from app.services.soundcloud_import import import_soundcloud_tracks
     from app.services.soundcloud_sources import mark_checked
 
     async def _run(session):
@@ -192,14 +192,14 @@ def soundcloud_scan_source(self, source_id: int, chat_id: int | None = None) -> 
             return
         bot = Bot(token=settings.bot_token)
         try:
-            report = await import_soundcloud_minuses(session, bot, source.url)
+            report = await import_soundcloud_tracks(session, bot, source.url)
             await mark_checked(session, source_id, report.found, report.imported)
             notify_chat = chat_id or (_first_admin_id() if report.imported else None)
             if notify_chat:
                 await bot.send_message(
                     notify_chat,
-                    f"🎼 SoundCloud-скан {source.url}\n\n{report.summary()}\n\n"
-                    "Источник сохранён — новые биты будут подтягиваться автоматически.",
+                    f"🎧 SoundCloud-скан {source.url}\n\n{report.summary()}\n\n"
+                    "Источник сохранён — новые треки будут подтягиваться автоматически.",
                 )
         finally:
             await bot.session.close()

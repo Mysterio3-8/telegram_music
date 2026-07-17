@@ -7,7 +7,6 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 
 from app.handlers.common import format_duration
 from app.services.instrumentals import create_admin_instrumental, find_duplicate_instrumental
-from app.services.soundcloud import extract_soundcloud_url
 from app.services.uploads import AudioMeta, validate_audio
 from app.services.users import is_admin
 from app.db.base import session_factory
@@ -51,11 +50,7 @@ async def cb_upload_minus_start(callback: CallbackQuery, state: FSMContext) -> N
         await callback.answer("Недоступно", show_alert=True)
         return
     await state.set_state(UploadMinus.waiting_file)
-    await callback.message.answer(
-        "Отправьте аудиофайл минуса или ссылку на SoundCloud "
-        "(трек, профиль или сет — заберём всё, что музыка).",
-        reply_markup=_cancel_keyboard(),
-    )
+    await callback.message.answer("Отправьте аудиофайл минуса.", reply_markup=_cancel_keyboard())
     await callback.answer()
 
 
@@ -84,44 +79,9 @@ async def process_minus_audio(message: Message, state: FSMContext) -> None:
     await message.answer("Введите название.", reply_markup=_cancel_keyboard())
 
 
-@router.message(UploadMinus.waiting_file, F.text)
-async def process_minus_link(message: Message, state: FSMContext) -> None:
-    """Ссылка на SoundCloud → постоянный источник с автопроверкой новых битов."""
-    url = extract_soundcloud_url(message.text or "")
-    if url is None:
-        await message.answer(
-            "Жду аудиофайл или ссылку на SoundCloud 🎼", reply_markup=_cancel_keyboard()
-        )
-        return
-    from app.services.soundcloud_sources import add_source
-    from app.tasks.youtube import soundcloud_scan_source
-
-    async with session_factory() as session:
-        source, created = await add_source(session, url)
-    try:
-        soundcloud_scan_source.delay(source_id=source.id, chat_id=message.chat.id)
-    except Exception:  # noqa: BLE001 — брокер недоступен: честно говорим, без падения бота
-        await message.answer(
-            "Источник сохранён, но фоновая очередь недоступна — импорт запустится "
-            "при ближайшей автопроверке.",
-            reply_markup=_admin_menu_keyboard(),
-        )
-        await state.clear()
-        return
-    await state.clear()
-    note = "добавил как источник" if created else "источник уже был — перепроверяю"
-    await message.answer(
-        f"✅ Принял ссылку, {note}. Импорт идёт в фоне — пришлю отчёт.\n"
-        "Новые биты с этой страницы будут подтягиваться автоматически каждый день.",
-        reply_markup=_admin_menu_keyboard(),
-    )
-
-
 @router.message(UploadMinus.waiting_file)
 async def process_minus_not_audio(message: Message) -> None:
-    await message.answer(
-        "Жду аудиофайл или ссылку на SoundCloud 🎼", reply_markup=_cancel_keyboard()
-    )
+    await message.answer("Жду аудиофайл 🎼", reply_markup=_cancel_keyboard())
 
 
 @router.message(UploadMinus.waiting_title, F.text)

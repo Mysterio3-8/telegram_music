@@ -16,6 +16,9 @@ from app.services.app_settings import (
     is_youtube_enabled,
     set_flag,
 )
+from app.services.soundcloud import extract_soundcloud_url, is_soundcloud_link
+from app.services.soundcloud_sources import add_source as sc_add_source
+from app.services.soundcloud_sources import list_sources as sc_list_sources
 from app.services.users import is_admin
 from app.services.youtube.sources import (
     add_source,
@@ -24,7 +27,7 @@ from app.services.youtube.sources import (
     list_sources,
     set_source_status,
 )
-from app.tasks.youtube import youtube_scan_source
+from app.tasks.youtube import soundcloud_scan_source, youtube_scan_source
 
 router = Router()
 
@@ -35,15 +38,22 @@ class YoutubeAdd(StatesGroup):
     waiting_url = State()
 
 
-def _sources_text(count: int, importer_enabled: bool) -> str:
+def _sources_text(count: int, importer_enabled: bool, sc_sources: list | None = None) -> str:
     state = "🟢 импортёр включён" if importer_enabled else "🔴 импортёр выключен"
     if count == 0:
-        return (
-            f"🎬 YouTube-источники · {state}\n\n"
+        text = (
+            f"🎬 Источники треков · {state}\n\n"
             "Пока не добавлено ни одного канала.\n"
-            "«➕ Добавить канал» — пришлёте ссылку, импорт запустится сам."
+            "«➕ Добавить канал» — YouTube / YouTube Music / SoundCloud, импорт запустится сам."
         )
-    return f"🎬 YouTube-источники · {state}\n\nВсего: {count}\nФормат: импортировано / найдено"
+    else:
+        text = f"🎬 Источники треков · {state}\n\nYouTube: {count}\nФормат: импортировано / найдено"
+    if sc_sources:
+        lines = "\n".join(
+            f"· #{s.id} {s.url} — импортировано {s.imported_count}" for s in sc_sources
+        )
+        text += f"\n\n☁️ SoundCloud (автопроверка ежедневно):\n{lines}"
+    return text
 
 
 def _source_text(source: YoutubeSource) -> str:
@@ -72,9 +82,10 @@ async def cb_sources(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(None)
     async with session_factory() as session:
         sources = await list_sources(session)
+        sc_sources = await sc_list_sources(session)
         enabled = await is_youtube_enabled(session)
     await callback.message.edit_text(
-        _sources_text(len(sources), enabled),
+        _sources_text(len(sources), enabled, sc_sources),
         reply_markup=sources_keyboard(sources, enabled),
     )
     await callback.answer()
@@ -116,8 +127,9 @@ async def cb_add_prompt(callback: CallbackQuery, state: FSMContext) -> None:
         return
     await state.set_state(YoutubeAdd.waiting_url)
     await callback.message.answer(
-        "Пришлите ссылку на YouTube-канал или плейлист.\n"
-        "Импорт запустится автоматически."
+        "Пришлите ссылку на YouTube / YouTube Music (канал или плейлист) "
+        "или SoundCloud (профиль, сет или трек).\n"
+        "Источник сохранится, новые треки будут подтягиваться автоматически."
     )
     await callback.answer()
 
@@ -128,9 +140,23 @@ async def process_add_url(message: Message, state: FSMContext) -> None:
         return
     url = message.text.strip()
     if not url.startswith("http") or len(url) > MAX_URL_LENGTH:
-        await message.answer("Похоже, это не ссылка. Пришлите URL канала или плейлиста.")
+        await message.answer("Похоже, это не ссылка. Пришлите URL канала, плейлиста или SoundCloud.")
         return
     await state.set_state(None)
+
+    if is_soundcloud_link(url):
+        # SoundCloud — треки в общую базу, постоянный источник с автопроверкой
+        clean = extract_soundcloud_url(url)
+        async with session_factory() as session:
+            sc_source, created = await sc_add_source(session, clean)
+        soundcloud_scan_source.delay(source_id=sc_source.id, chat_id=message.chat.id)
+        note = "добавлен" if created else "уже был — перепроверяю"
+        await message.answer(
+            f"✅ SoundCloud-источник #{sc_source.id} {note}. Импорт идёт в фоне — пришлю отчёт.\n"
+            "Новые треки с этой страницы будут подтягиваться автоматически каждый день."
+        )
+        return
+
     async with session_factory() as session:
         source = await add_source(session, url)
     youtube_scan_source.delay(source_id=source.id)

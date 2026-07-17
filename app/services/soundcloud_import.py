@@ -1,7 +1,8 @@
-"""Импорт минусов с SoundCloud (админ, по ссылке): трек/профиль/сет → instrumentals.
+"""Импорт треков с SoundCloud (админ, по ссылке): трек/профиль/сет → общая база.
 
 Каждый трек скачивается yt-dlp, проходит музыкальные границы длительности,
-минтится через бота (tg_file_id) и попадает в базу минусов с дедупом.
+минтится через бота (tg_file_id) и попадает в tracks с дедупом — повторный скан
+источника забирает только новое.
 """
 import logging
 from dataclasses import dataclass
@@ -10,7 +11,7 @@ from aiogram import Bot
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.services.catalog_import import import_instrumental_via_telegram_mint
+from app.services.catalog_import import import_via_telegram_mint
 from app.services.fingerprint import compute_fingerprint_from_bytes
 from app.services.soundcloud import download_soundcloud_audio, list_soundcloud_entries
 from app.services.title_parser import parse_title
@@ -28,7 +29,7 @@ class SoundcloudReport:
     failed: int = 0
 
     def summary(self) -> str:
-        lines = [f"Найдено треков: {self.found}", f"✅ Импортировано минусов: {self.imported}"]
+        lines = [f"Найдено треков: {self.found}", f"✅ Импортировано: {self.imported}"]
         if self.duplicates:
             lines.append(f"↩️ Уже были в базе: {self.duplicates}")
         if self.rejected:
@@ -38,7 +39,7 @@ class SoundcloudReport:
         return "\n".join(lines)
 
 
-async def import_soundcloud_minuses(
+async def import_soundcloud_tracks(
     session: AsyncSession, bot: Bot, url: str
 ) -> SoundcloudReport:
     report = SoundcloudReport()
@@ -66,7 +67,7 @@ async def import_soundcloud_minuses(
 
         artist, title = parse_title(audio.video_title, uploader or "Unknown")
         fingerprint = compute_fingerprint_from_bytes(audio.data, suffix=f".{audio.file_format}")
-        _instrumental, created = await import_instrumental_via_telegram_mint(
+        _track, created = await import_via_telegram_mint(
             session,
             bot,
             title=title,
@@ -76,7 +77,6 @@ async def import_soundcloud_minuses(
             data=audio.data,
             fingerprint=fingerprint,
             archive_chat_id=settings.effective_archive_chat_id,
-            source="soundcloud",
         )
         if created:
             report.imported += 1
