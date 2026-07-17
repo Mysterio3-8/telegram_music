@@ -10,7 +10,6 @@ import { isOffline, offlineBlobUrl } from "./offline.js";
 
 const state = {
   screen: "home",
-  theme: localStorage.getItem("tgmusic-theme") || "dark",
   bootStatus: "loading", // loading | ready | error
   bootError: "",
   user: null, // из Telegram initData
@@ -127,13 +126,6 @@ export function mutate(patch) {
 
 export function setScreen(screen) {
   state.screen = screen;
-  notify();
-}
-
-export function toggleTheme() {
-  state.theme = state.theme === "dark" ? "light" : "dark";
-  localStorage.setItem("tgmusic-theme", state.theme);
-  document.documentElement.setAttribute("data-theme", state.theme);
   notify();
 }
 

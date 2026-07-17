@@ -1,35 +1,31 @@
 import { icon } from "../components/icons.js";
-import { renderTrackList } from "../components/trackRow.js";
 import { getRecentTracks } from "../prefs.js";
 
-const HOME_LIST_LIMIT = 6;
-const REC_STRIP_LIMIT = 5;
+// Главная по референсам VK Music (disigner/): большой hero-микс со свайпом,
+// карточка подписки, плитки быстрого доступа. Списков треков на главной НЕТ
+// (решение владельца — навсегда).
 
-function greeting(user) {
-  const hour = new Date().getHours();
-  const timeWord = hour < 5 ? "Доброй ночи" : hour < 12 ? "Доброе утро" : hour < 18 ? "Добрый день" : "Добрый вечер";
-  const name = user && user.first_name ? `, ${user.first_name}` : "";
-  return `${timeWord}${name}`;
-}
-
-// Карусель «миксов» — свайп по горизонтали (scroll-snap), каждый вариант на всю
-// ширину. Реализует паттерн «Play my tracks / Swipe to play VK Mix» из референса.
 function heroSlides(state) {
   return [
     {
       mix: "catalog",
       title: "Слушать TG Mix",
-      subtitle: `${state.catalogTotal} треков в случайном порядке`,
+      subtitle: "Вся музыка в случайном порядке",
+      button: "",
     },
     {
       mix: "library",
-      title: "Любимые треки",
-      subtitle: state.libraryTotal ? `${state.libraryTotal} в вашей библиотеке` : "Добавьте треки в библиотеку",
+      title: "Мои треки",
+      subtitle: state.libraryTotal
+        ? "Любимое из вашей библиотеки"
+        : "Добавьте треки в библиотеку",
+      button: "",
     },
     {
-      mix: "discover",
-      title: "Открытия",
-      subtitle: "Случайная подборка из базы",
+      mix: "recommended",
+      title: "Рекомендации",
+      subtitle: "Музыкальные рекомендации для вас",
+      button: `<button class="hero-slide__setup" data-action="open-recommendations">${icon("tune")} Настроить</button>`,
     },
   ];
 }
@@ -38,10 +34,11 @@ function renderHero(state) {
   const slides = heroSlides(state)
     .map(
       (slide) => `
-        <div class="hero-slide" data-action="play-mix" data-mix="${slide.mix}">
+        <div class="hero-slide" data-action="${slide.mix === "recommended" ? "play-recommended" : "play-mix"}" data-mix="${slide.mix}">
           <div class="hero-slide__play">${icon("play")}</div>
           <div class="hero-slide__title">${slide.title}</div>
           <div class="hero-slide__subtitle">${slide.subtitle}</div>
+          ${slide.button}
         </div>
       `
     )
@@ -50,31 +47,7 @@ function renderHero(state) {
   return `
     <div class="hero">
       <div class="hero__track h-scroll" data-role="hero-scroll">${slides}</div>
-      <div class="hero__dots">
-        <span class="hero__dot is-active"></span>
-        <span class="hero__dot"></span>
-        <span class="hero__dot"></span>
-      </div>
-    </div>
-  `;
-}
-
-function renderRecommendations(state) {
-  const strip = state.catalog.slice(HOME_LIST_LIMIT, HOME_LIST_LIMIT + REC_STRIP_LIMIT);
-  return `
-    <div class="section-head section-head--stack">
-      <div>
-        <span class="section-title">Рекомендации</span>
-        <span class="section-sub">Музыкальные рекомендации для вас</span>
-      </div>
-      <button class="chip-btn" data-action="open-recommendations">${icon("tune")}Настроить</button>
-    </div>
-    <div class="card home-track-card">
-      ${
-        strip.length
-          ? renderTrackList(strip, { context: "catalog", state })
-          : '<div class="empty-state empty-state--sm">Рекомендации появятся, когда в базе станет больше треков</div>'
-      }
+      <div class="hero__hint">${icon("chevron-left")}<span>Свайпните — другой микс</span>${icon("chevron")}</div>
     </div>
   `;
 }
@@ -85,63 +58,53 @@ function renderSubscription(state) {
     <div class="sub-card" data-action="pay-premium">
       <button class="sub-card__close" data-action="dismiss-sub" aria-label="Скрыть">${icon("close")}</button>
       <div class="sub-card__title">Целый месяц — ${state.premium.price_rub} ₽</div>
-      <div class="sub-card__subtitle">Без рекламы, офлайн-доступ и рекомендации</div>
+      <div class="sub-card__subtitle">Premium: без рекламы и офлайн</div>
       <span class="sub-card__cta">Подключить</span>
     </div>
   `;
 }
 
-function renderQuickAccess(state) {
+function renderTiles(state) {
   const recentCount = getRecentTracks().length;
   const tiles = [
-    { action: "nav", screen: "library", ic: "library", title: "Мои треки", sub: `${state.libraryTotal} всего` },
+    {
+      action: "nav",
+      screen: "library",
+      ic: "library",
+      title: "Мои треки",
+      sub: String(state.libraryTotal),
+    },
     {
       action: "open-recent",
       ic: "history",
       title: "Недавно прослушанные",
-      sub: recentCount ? `${recentCount} треков` : "Пока пусто",
+      sub: recentCount ? String(recentCount) : "",
     },
-    { action: "open-playlists", ic: "playlist", title: "Плейлисты", sub: "Ваши подборки" },
+    { action: "open-playlists", ic: "playlist", title: "Плейлисты", sub: "" },
+    { action: "open-downloads", ic: "download", title: "Загрузки", sub: "" },
   ];
 
   const items = tiles
     .map(
       (t) => `
-        <button class="quick-tile" data-action="${t.action}"${t.screen ? ` data-screen="${t.screen}"` : ""}>
-          <span class="quick-tile__icon">${icon(t.ic)}</span>
-          <span class="quick-tile__text">
-            <span class="quick-tile__title">${t.title}</span>
-            <span class="quick-tile__sub">${t.sub}</span>
+        <button class="vk-tile" data-action="${t.action}"${t.screen ? ` data-screen="${t.screen}"` : ""}>
+          <span class="vk-tile__text">
+            <span class="vk-tile__title">${t.title}</span>
+            ${t.sub ? `<span class="vk-tile__sub">${t.sub}</span>` : ""}
           </span>
+          <span class="vk-tile__icon">${icon(t.ic)}</span>
         </button>
       `
     )
     .join("");
 
-  return `<div class="quick-access">${items}</div>`;
+  return `<div class="vk-grid">${items}</div>`;
 }
 
 export function renderHome(state) {
-  const fresh = state.catalog.slice(0, HOME_LIST_LIMIT);
-
   return `
-    <p class="home-greeting">${greeting(state.user)}</p>
-
     ${renderHero(state)}
     ${renderSubscription(state)}
-    ${renderQuickAccess(state)}
-    ${renderRecommendations(state)}
-
-    <div class="section-head">
-      <span class="section-title">Новое в базе</span>
-      <button class="link-more" data-action="nav" data-screen="search">Все ${icon("chevron")}</button>
-    </div>
-    <div class="card home-track-card">
-      ${
-        fresh.length
-          ? renderTrackList(fresh, { context: "catalog", state })
-          : '<div class="empty-state">Треков пока нет</div>'
-      }
-    </div>
+    ${renderTiles(state)}
   `;
 }

@@ -1,98 +1,95 @@
 /*
- * Premium Black Amethyst / Obsidian Amethyst — design tokens.
- * Тёмная тема — основная (:root). Светлая — [data-theme="light"], та же
- * ролевая система, тот же акцент (аметист), но нейтрали инвертированы.
- * Формула: 70% почти-чёрный/почти-белый база, 20% поверхности/стекло,
- * 8% глубокий аметист, 2% яркий аметист (глянец/акцент).
+ * Тёмный минимализм по референсам VK Music (disigner/): почти чёрный фон,
+ * нейтральные серые карточки, цвет — только в акцентах (сине-розовый градиент
+ * hero, синяя карточка подписки, синий акцент интерактива).
+ * Тема одна — тёмная (решение владельца). Имена токенов сохранены со времён
+ * «аметиста», чтобы не трогать компонентные стили.
  */
 
 :root {
   color-scheme: dark;
 
-  /* --- Палитра (сырые значения, см. ТЗ) --- */
-  --raw-black-absolute: #050507;
-  --raw-black-premium: #08080c;
-  --raw-obsidian: #0d0b12;
-  --raw-black-amethyst: #120d1a;
-  --raw-surface-black: #15111c;
-  --raw-surface-elevated: #1b1426;
-  --raw-amethyst-deep: #3b1266;
-  --raw-amethyst-royal: #6425a8;
-  --raw-amethyst-primary: #9b4dff;
-  --raw-amethyst-light: #c078ff;
-  --raw-violet-crystal: #d5a6ff;
-  --raw-white-pure: #f8f7fa;
-  --raw-white-soft: #e8e4ed;
-  --raw-text-secondary: #96909f;
-  --raw-text-muted: #625d69;
+  /* --- Палитра --- */
+  --raw-black: #0f0f10;
+  --raw-card: #202022;
+  --raw-card-elevated: #2a2a2d;
+  --raw-blue: #3b7bfe;
+  --raw-blue-deep: #2e55f2;
+  --raw-blue-light: #4a7bfb;
+  --raw-magenta: #ee3fc8;
+  --raw-violet: #7b46e8;
+  --raw-white: #ffffff;
+  --raw-white-soft: #e8e8ea;
+  --raw-grey-text: #9a9aa1;
+  --raw-grey-muted: #6e6e75;
 
   /* --- Фон приложения --- */
-  --bg-base: var(--raw-black-absolute);
-  --bg-glow: radial-gradient(circle at 70% 20%, rgba(100, 37, 168, 0.1), transparent 45%);
+  --bg-base: var(--raw-black);
+  --bg-glow: none;
 
   /* --- Поверхности / карточки --- */
-  --surface-card: var(--raw-obsidian);
-  --surface-card-translucent: rgba(21, 17, 28, 0.82);
-  --surface-elevated: var(--raw-surface-elevated);
+  --surface-card: var(--raw-card);
+  --surface-card-translucent: rgba(32, 32, 34, 0.88);
+  --surface-elevated: var(--raw-card-elevated);
 
-  /* --- Стекло --- */
-  --glass-bg: rgba(18, 13, 26, 0.72);
-  --glass-bg-card: rgba(24, 17, 33, 0.68);
-  --glass-blur: 24px;
-  --glass-border: rgba(255, 255, 255, 0.06);
-  --glass-border-amethyst: rgba(192, 120, 255, 0.16);
-  --glass-border-card: rgba(192, 120, 255, 0.14);
-  --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  --glass-shadow: 0 18px 60px rgba(0, 0, 0, 0.45);
+  /* --- Стекло (роль сохранена, вид — нейтральный) --- */
+  --glass-bg: rgba(28, 28, 30, 0.86);
+  --glass-bg-card: rgba(32, 32, 34, 0.82);
+  --glass-blur: 20px;
+  --glass-border: rgba(255, 255, 255, 0.05);
+  --glass-border-amethyst: rgba(255, 255, 255, 0.09);
+  --glass-border-card: rgba(255, 255, 255, 0.06);
+  --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  --glass-shadow: 0 14px 40px rgba(0, 0, 0, 0.4);
 
-  /* --- Акцент --- */
-  --accent: var(--raw-amethyst-primary);
-  --accent-hover: #b867ff;
-  --accent-pressed: #7c35d9;
-  --accent-soft: rgba(155, 77, 255, 0.15);
-  --accent-glow: 0 0 32px rgba(155, 77, 255, 0.22);
+  /* --- Акцент (интерактив) --- */
+  --accent: var(--raw-blue);
+  --accent-hover: #5a8ffe;
+  --accent-pressed: #2f63d6;
+  --accent-soft: rgba(59, 123, 254, 0.14);
+  --accent-glow: 0 0 24px rgba(59, 123, 254, 0.22);
 
   /* --- Градиенты --- */
-  --gradient-brand: linear-gradient(135deg, #3b1266 0%, #6425a8 45%, #9b4dff 75%, #c078ff 100%);
-  --gradient-dark: linear-gradient(135deg, #0d0b12 0%, #1b1028 45%, #3b1266 100%);
-  --gradient-premium-card: linear-gradient(135deg, #15101f 0%, #241238 55%, #3b1266 100%);
+  --gradient-brand: linear-gradient(135deg, #2e6ff2 0%, #7b46e8 50%, #ee3fc8 100%);
+  --gradient-dark: linear-gradient(185deg, #2e6ff2 0%, #b93be2 55%, #f02fc2 100%);
+  --gradient-premium-card: linear-gradient(100deg, #2e55f2 0%, #4a7bfb 100%);
 
   /* --- Типографика --- */
-  --text-primary: var(--raw-white-pure);
+  --text-primary: var(--raw-white);
   --text-soft: var(--raw-white-soft);
-  --text-secondary: var(--raw-text-secondary);
-  --text-muted: var(--raw-text-muted);
-  --text-accent: var(--raw-amethyst-light);
+  --text-secondary: var(--raw-grey-text);
+  --text-muted: var(--raw-grey-muted);
+  --text-accent: #7ea4ff;
 
   /* --- Нижняя навигация --- */
-  --nav-bg: rgba(10, 8, 14, 0.88);
-  --nav-border: rgba(255, 255, 255, 0.06);
-  --nav-icon-active: #b867ff;
-  --nav-text-active: #c078ff;
-  --nav-icon-inactive: #66616e;
-  --nav-text-inactive: #77717f;
-  --nav-active-bg: rgba(155, 77, 255, 0.1);
+  --nav-bg: rgba(15, 15, 16, 0.94);
+  --nav-border: rgba(255, 255, 255, 0.05);
+  --nav-icon-active: #ffffff;
+  --nav-text-active: #ffffff;
+  --nav-icon-inactive: #6e6e75;
+  --nav-text-inactive: #77777d;
+  --nav-active-bg: rgba(255, 255, 255, 0.08);
 
   /* --- Плеер --- */
-  --player-bg: linear-gradient(135deg, rgba(18, 13, 26, 0.96), rgba(42, 18, 62, 0.94));
-  --progress-track: #29242f;
-  --progress-active: linear-gradient(90deg, #7c35d9, #b867ff);
-  --progress-thumb: var(--raw-violet-crystal);
-  --play-border: var(--raw-amethyst-primary);
-  --play-glow: 0 0 28px rgba(155, 77, 255, 0.2);
+  --player-bg: linear-gradient(160deg, #1c1c1f 0%, #232327 100%);
+  --progress-track: #333338;
+  --progress-active: linear-gradient(90deg, #3b7bfe, #ee3fc8);
+  --progress-thumb: #ffffff;
+  --play-border: rgba(255, 255, 255, 0.16);
+  --play-glow: 0 8px 24px rgba(0, 0, 0, 0.35);
 
   /* --- Иконки --- */
   --icon-primary: var(--raw-white-soft);
-  --icon-inactive: #696370;
-  --icon-active: #b867ff;
-  --icon-premium: var(--raw-amethyst-light);
+  --icon-inactive: #6e6e75;
+  --icon-active: var(--raw-blue);
+  --icon-premium: #9db9ff;
 
   /* --- Прочее --- */
-  --shadow-elevated: 0 18px 60px rgba(0, 0, 0, 0.45);
+  --shadow-elevated: 0 14px 40px rgba(0, 0, 0, 0.4);
   --divider: rgba(255, 255, 255, 0.06);
-  --overlay-scrim: rgba(5, 5, 7, 0.72);
+  --overlay-scrim: rgba(0, 0, 0, 0.66);
 
-  /* --- Унифицированные радиусы (ТЗ: единые скругления) --- */
+  /* --- Унифицированные радиусы --- */
   --radius-sm: 12px;
   --radius-md: 16px;
   --radius-lg: 20px;
@@ -109,71 +106,5 @@
 
   /* --- Единая высота интерактивных элементов --- */
   --control-h: 46px;
-  --tap-min: 44px; /* минимальная зона нажатия (доступность) */
-}
-
-/*
- * Светлая тема: чёрное стекло → белый фарфор с аметистовым отсветом.
- * Роль каждого токена сохранена, инвертированы только нейтрали.
- * Акцент остаётся аметистом — просто чуть темнее там, где нужен контраст
- * на белом (hover/pressed идут ГЛУБЖЕ, а не светлее, как в тёмной теме).
- */
-:root[data-theme="light"] {
-  color-scheme: light;
-
-  --bg-base: #f8f5fb;
-  --bg-glow: radial-gradient(circle at 70% 15%, rgba(155, 77, 255, 0.08), transparent 45%);
-
-  --surface-card: #ffffff;
-  --surface-card-translucent: rgba(255, 255, 255, 0.86);
-  --surface-elevated: #f1eaf9;
-
-  --glass-bg: rgba(255, 255, 255, 0.66);
-  --glass-bg-card: rgba(255, 255, 255, 0.72);
-  --glass-blur: 24px;
-  --glass-border: rgba(28, 16, 41, 0.06);
-  --glass-border-amethyst: rgba(100, 37, 168, 0.14);
-  --glass-border-card: rgba(100, 37, 168, 0.12);
-  --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.7);
-  --glass-shadow: 0 18px 44px rgba(100, 37, 168, 0.12);
-
-  --accent: var(--raw-amethyst-primary);
-  --accent-hover: #7c35d9;
-  --accent-pressed: #5c1f94;
-  --accent-soft: rgba(155, 77, 255, 0.1);
-  --accent-glow: 0 0 28px rgba(155, 77, 255, 0.16);
-
-  --gradient-brand: linear-gradient(135deg, #3b1266 0%, #6425a8 45%, #9b4dff 75%, #c078ff 100%);
-  --gradient-dark: linear-gradient(135deg, #ece1f8 0%, #d8bdf2 45%, #9b4dff 100%);
-  --gradient-premium-card: linear-gradient(135deg, #f3ecfc 0%, #ddc3f6 55%, #9b4dff 100%);
-
-  --text-primary: #1c1424;
-  --text-soft: #2f2438;
-  --text-secondary: #6b6473;
-  --text-muted: #9a93a3;
-  --text-accent: #7c35d9;
-
-  --nav-bg: rgba(255, 255, 255, 0.86);
-  --nav-border: rgba(28, 16, 41, 0.06);
-  --nav-icon-active: #7c35d9;
-  --nav-text-active: #6425a8;
-  --nav-icon-inactive: #aca3b8;
-  --nav-text-inactive: #948da2;
-  --nav-active-bg: rgba(155, 77, 255, 0.08);
-
-  --player-bg: linear-gradient(135deg, rgba(255, 255, 255, 0.97), rgba(233, 214, 250, 0.96));
-  --progress-track: #e5dcef;
-  --progress-active: linear-gradient(90deg, #7c35d9, #9b4dff);
-  --progress-thumb: #7c35d9;
-  --play-border: var(--raw-amethyst-primary);
-  --play-glow: 0 0 24px rgba(155, 77, 255, 0.18);
-
-  --icon-primary: #29202f;
-  --icon-inactive: #b0a8bb;
-  --icon-active: #7c35d9;
-  --icon-premium: #6425a8;
-
-  --shadow-elevated: 0 18px 44px rgba(100, 37, 168, 0.12);
-  --divider: rgba(28, 16, 41, 0.06);
-  --overlay-scrim: rgba(28, 16, 41, 0.45);
+  --tap-min: 44px;
 }

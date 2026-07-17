@@ -41,7 +41,6 @@ import {
   subscribeProgress,
   togglePlay,
   toggleShuffle,
-  toggleTheme,
 } from "./state.js";
 import { renderHeader } from "./components/header.js";
 import { renderBottomNav } from "./components/bottomNav.js";
@@ -77,7 +76,6 @@ import {
 const root = document.getElementById("app");
 const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
 
-document.documentElement.setAttribute("data-theme", getState().theme);
 if (tg) {
   tg.ready();
   tg.expand();
@@ -465,9 +463,6 @@ root.addEventListener("click", (event) => {
       else window.open(shareUrl, "_blank");
       break;
     }
-    case "theme-toggle":
-      toggleTheme();
-      break;
     case "play-all":
       playAll();
       break;

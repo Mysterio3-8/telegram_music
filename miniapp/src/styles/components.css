@@ -58,7 +58,7 @@
   justify-content: center;
   font-weight: 800;
   font-size: 14px;
-  color: var(--raw-white-pure);
+  color: #fff;
   background: var(--gradient-brand);
   position: relative;
   flex-shrink: 0;
@@ -161,61 +161,6 @@
   box-shadow: none;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
-}
-
-/* ============ Mix hero (главный экран) ============ */
-
-.mix-hero {
-  margin-top: 18px;
-  padding: 30px 20px 26px;
-  border-radius: 26px;
-  text-align: center;
-  background: var(--gradient-dark);
-  border: 1px solid var(--glass-border-amethyst);
-  box-shadow: var(--glass-shadow);
-  position: relative;
-  overflow: hidden;
-}
-
-.mix-hero::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at 50% -10%, rgba(155, 77, 255, 0.22), transparent 60%);
-  pointer-events: none;
-}
-
-.mix-hero__play {
-  position: relative;
-  width: 76px;
-  height: 76px;
-  margin: 0 auto 16px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--gradient-brand);
-  box-shadow: var(--play-glow);
-}
-
-.mix-hero__play svg {
-  width: 28px;
-  height: 28px;
-  color: #fff;
-  margin-left: 3px;
-}
-
-.mix-hero__title {
-  position: relative;
-  font-size: 17px;
-  font-weight: 800;
-}
-
-.mix-hero__subtitle {
-  position: relative;
-  margin-top: 4px;
-  font-size: 12.5px;
-  color: var(--text-secondary);
 }
 
 /* ============ Quick stat tiles ============ */
@@ -1022,60 +967,15 @@
   height: 30%;
 }
 
-.home-greeting {
-  margin: 4px 2px 0;
-  font-size: 13px;
-  color: var(--text-secondary);
-  font-weight: 600;
-}
-
 .track-row.is-playing .track-title {
   color: var(--text-accent);
 }
 
-/* ============ Section head — вариант со стеком (заголовок + подпись + чип) ============ */
-
-.section-head--stack {
-  align-items: flex-start;
-}
-
-.section-sub {
-  display: block;
-  margin-top: 3px;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-secondary);
-}
-
-.chip-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 36px;
-  padding: 0 15px;
-  border-radius: var(--radius-pill);
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border-amethyst);
-  color: var(--text-primary);
-  font-size: 12.5px;
-  font-weight: 700;
-  flex-shrink: 0;
-}
-
-.chip-btn svg {
-  width: 15px;
-  height: 15px;
-  color: var(--icon-active);
-}
-
-.chip-btn:active {
-  transform: scale(0.96);
-}
-
-/* ============ Hero-карусель (свайп между миксами) ============ */
+/* ============ Hero-карусель (свайп между миксами, VK-стиль) ============ */
 
 .hero {
-  margin-top: 16px;
+  position: relative;
+  margin-top: 12px;
 }
 
 .hero__track {
@@ -1085,13 +985,11 @@
 .hero-slide {
   flex: 0 0 100%;
   width: 100%;
-  min-height: 188px;
-  padding: 26px 22px;
+  min-height: 320px;
+  padding: 34px 22px 58px;
   border-radius: var(--radius-xl);
   text-align: center;
   background: var(--gradient-dark);
-  border: 1px solid var(--glass-border-amethyst);
-  box-shadow: var(--glass-shadow);
   position: relative;
   overflow: hidden;
   display: flex;
@@ -1100,84 +998,156 @@
   justify-content: center;
 }
 
-.hero-slide::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at 50% -5%, rgba(155, 77, 255, 0.24), transparent 62%);
-  pointer-events: none;
-}
-
 .hero-slide:active {
-  filter: brightness(0.95);
+  filter: brightness(0.96);
 }
 
 .hero-slide__play {
   position: relative;
-  width: 72px;
-  height: 72px;
-  margin-bottom: 15px;
+  width: 84px;
+  height: 84px;
+  margin-bottom: 20px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--gradient-brand);
+  background: #fff;
   box-shadow: var(--play-glow);
 }
 
 .hero-slide__play svg {
-  width: 27px;
-  height: 27px;
-  color: #fff;
-  margin-left: 3px;
+  width: 30px;
+  height: 30px;
+  color: #111;
+  margin-left: 4px;
 }
 
 .hero-slide__title {
   position: relative;
-  font-size: 19px;
+  font-size: 26px;
   font-weight: 800;
+  color: #fff;
 }
 
 .hero-slide__subtitle {
   position: relative;
-  margin-top: 5px;
-  font-size: 12.5px;
-  color: var(--text-secondary);
+  margin-top: 7px;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.82);
 }
 
-.hero__dots {
-  display: flex;
-  justify-content: center;
-  gap: 6px;
-  margin-top: 12px;
-}
-
-.hero__dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--text-muted);
-  opacity: 0.4;
-  transition: opacity 0.25s ease, width 0.25s ease;
-}
-
-.hero__dot.is-active {
-  width: 18px;
+.hero-slide__setup {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 18px;
+  height: 42px;
+  padding: 0 20px;
   border-radius: var(--radius-pill);
-  background: var(--accent);
-  opacity: 1;
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  backdrop-filter: blur(8px);
+}
+
+.hero-slide__setup svg {
+  width: 16px;
+  height: 16px;
+}
+
+.hero__hint {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 13.5px;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.hero__hint svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* ============ Плитки быстрого доступа (VK-стиль, 2×2) ============ */
+
+.vk-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.vk-tile {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 96px;
+  padding: 16px;
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  text-align: left;
+  overflow: hidden;
+}
+
+.vk-tile:active {
+  background: var(--surface-elevated);
+}
+
+.vk-tile__text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.vk-tile__title {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.vk-tile__sub {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.vk-tile__icon {
+  position: absolute;
+  right: 12px;
+  bottom: 10px;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  opacity: 0.85;
+}
+
+.vk-tile__icon svg {
+  width: 26px;
+  height: 26px;
 }
 
 /* ============ Карточка подписки (только не-Premium) ============ */
 
 .sub-card {
   position: relative;
-  margin-top: 18px;
+  margin-top: 14px;
   padding: 20px 20px 18px;
   border-radius: var(--radius-lg);
   background: var(--gradient-premium-card);
-  border: 1px solid var(--glass-border-amethyst);
-  box-shadow: var(--glass-shadow);
   overflow: hidden;
 }
 
@@ -1191,8 +1161,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-secondary);
-  background: rgba(0, 0, 0, 0.18);
+  color: rgba(255, 255, 255, 0.75);
+  background: rgba(0, 0, 0, 0.16);
 }
 
 .sub-card__close svg {
@@ -1201,15 +1171,16 @@
 }
 
 .sub-card__title {
-  font-size: 18px;
+  font-size: 19px;
   font-weight: 800;
   padding-right: 32px;
+  color: #fff;
 }
 
 .sub-card__subtitle {
   margin-top: 4px;
-  font-size: 12.5px;
-  color: var(--text-soft);
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.78);
 }
 
 .sub-card__cta {
@@ -1219,8 +1190,8 @@
   margin-top: 15px;
   padding: 0 22px;
   border-radius: var(--radius-md);
-  background: var(--raw-white-pure);
-  color: #1a1022;
+  background: #fff;
+  color: #14141a;
   font-size: 13.5px;
   font-weight: 800;
 }

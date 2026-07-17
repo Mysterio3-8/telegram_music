@@ -48,6 +48,7 @@ const PATHS = {
   star: '<path d="M12 4l2.3 4.9 5.2.6-3.9 3.6 1 5.3-4.6-2.7-4.6 2.7 1-5.3-3.9-3.6 5.2-.6L12 4Z"/>',
   globe: '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17"/><path d="M12 3.5c2.5 2.4 3.8 5.4 3.8 8.5S14.5 18.1 12 20.5c-2.5-2.4-3.8-5.4-3.8-8.5S9.5 5.9 12 3.5Z"/>',
   lyrics: '<path d="M5 5h14"/><path d="M5 9h10"/><path d="M5 13h8"/><path d="M5 17h11"/>',
+  "chevron-left": '<path d="m14.5 6-5.5 6 5.5 6"/>',
 };
 
 export function icon(name) {
