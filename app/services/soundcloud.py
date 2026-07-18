@@ -19,6 +19,21 @@ logger = logging.getLogger(__name__)
 
 _SOUNDCLOUD_RE = re.compile(r"(?:https?://)?(?:www\.|m\.|on\.)?soundcloud\.com/\S+")
 
+# Вкладки профиля, которые yt-dlp не открывает напрямую (дают 404): их
+# сворачиваем к корню профиля — оттуда yt-dlp достаёт все треки автора.
+# /sets/<name> (конкретный плейлист) и /user/<track> (трек) НЕ трогаем.
+_PROFILE_TABS = {
+    "popular-tracks",
+    "tracks",
+    "reposts",
+    "likes",
+    "albums",
+    "sets",
+    "comments",
+    "following",
+    "followers",
+}
+
 
 @dataclass(frozen=True)
 class SoundcloudEntry:
@@ -30,19 +45,37 @@ def is_soundcloud_link(text: str) -> bool:
     return bool(_SOUNDCLOUD_RE.search(text or ""))
 
 
+def normalize_soundcloud_url(url: str) -> str:
+    """Сворачивает вкладки профиля (/popular-tracks, /tracks, /likes…) к корню
+    профиля — yt-dlp не открывает эти страницы напрямую, но с корня берёт все треки."""
+    url = url.split("?", 1)[0].split("#", 1)[0].rstrip("/")
+    marker = "soundcloud.com/"
+    idx = url.find(marker)
+    if idx == -1:
+        return url
+    head, path = url[: idx + len(marker)], url[idx + len(marker) :]
+    parts = path.split("/")
+    if len(parts) == 2 and parts[1] in _PROFILE_TABS:
+        return head + parts[0]
+    return url
+
+
 def extract_soundcloud_url(text: str) -> str | None:
     match = _SOUNDCLOUD_RE.search(text or "")
     if not match:
         return None
     url = match.group(0)
-    return url if url.startswith("http") else f"https://{url}"
+    if not url.startswith("http"):
+        url = f"https://{url}"
+    return normalize_soundcloud_url(url)
 
 
 def list_soundcloud_entries(url: str) -> list[SoundcloudEntry]:
-    """Трек → один элемент; профиль/сет → список треков (без скачивания)."""
+    """Трек → один элемент; профиль/сет → список треков (без скачивания).
+    Нормализуем URL и здесь — чинит уже сохранённые источники с вкладкой-суффиксом."""
     opts = {**_base_opts(), "extract_flat": "in_playlist", "skip_download": True}
     with yt_dlp.YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(url, download=False)
+        info = ydl.extract_info(normalize_soundcloud_url(url), download=False)
     if info is None:
         return []
     return collect_soundcloud_entries(info)

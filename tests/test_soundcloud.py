@@ -2,7 +2,27 @@ from app.services.soundcloud import (
     collect_soundcloud_entries,
     extract_soundcloud_url,
     is_soundcloud_link,
+    normalize_soundcloud_url,
 )
+
+
+def test_normalize_collapses_profile_tabs():
+    # Вкладки профиля (yt-dlp даёт по ним 404) сворачиваются к корню профиля
+    assert normalize_soundcloud_url("https://soundcloud.com/ilya-sokruta/popular-tracks") == "https://soundcloud.com/ilya-sokruta"
+    assert normalize_soundcloud_url("https://soundcloud.com/user/tracks") == "https://soundcloud.com/user"
+    assert normalize_soundcloud_url("https://soundcloud.com/user/likes/") == "https://soundcloud.com/user"
+    assert normalize_soundcloud_url("https://soundcloud.com/user/popular-tracks?x=1") == "https://soundcloud.com/user"
+
+
+def test_normalize_preserves_tracks_and_sets():
+    # Реальный трек и конкретный сет трогать нельзя
+    assert normalize_soundcloud_url("https://soundcloud.com/user/my-beat") == "https://soundcloud.com/user/my-beat"
+    assert normalize_soundcloud_url("https://soundcloud.com/user/sets/my-pack") == "https://soundcloud.com/user/sets/my-pack"
+    assert normalize_soundcloud_url("https://soundcloud.com/user") == "https://soundcloud.com/user"
+
+
+def test_extract_normalizes():
+    assert extract_soundcloud_url("глянь soundcloud.com/beatmaker/popular-tracks") == "https://soundcloud.com/beatmaker"
 
 
 def test_is_soundcloud_link():
