@@ -5,7 +5,7 @@ track_max_seconds — джинглы, обрезки, подкасты, виде
 import logging
 from dataclasses import dataclass
 
-from sqlalchemy import delete, or_, select, update
+from sqlalchemy import delete, false, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 
@@ -26,10 +26,13 @@ logger = logging.getLogger(__name__)
 
 
 def _junk_condition():
-    return or_(
-        Track.duration < settings.track_min_seconds,
-        Track.duration > settings.track_max_seconds,
-    )
+    # Границы 0 = лимит снят: без них понятие «не-музыка по длительности» не определено
+    conditions = []
+    if settings.track_min_seconds:
+        conditions.append(Track.duration < settings.track_min_seconds)
+    if settings.track_max_seconds:
+        conditions.append(Track.duration > settings.track_max_seconds)
+    return or_(*conditions) if conditions else false()
 
 
 @dataclass(frozen=True)

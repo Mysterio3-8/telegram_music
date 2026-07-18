@@ -68,4 +68,6 @@ async def can_create_playlist(session: AsyncSession, user: User) -> bool:
 async def can_upload(session: AsyncSession, user: User) -> bool:
     if is_premium_active(user):
         return True
+    if settings.free_upload_limit <= 0:  # лимит на количество загрузок снят
+        return True
     return await count_user_uploads(session, user.id) < settings.free_upload_limit

@@ -36,15 +36,20 @@ def test_is_playlist_link():
     assert extract_video_id("https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=RD1") == "dQw4w9WgXcQ"
 
 
-def test_duration_limits():
-    assert duration_error(settings.track_min_seconds) is None
-    assert duration_error(settings.track_max_seconds) is None
+def test_duration_no_limits_by_default():
+    # Владелец снял лимиты (track_min/max_seconds = 0) — любая длительность проходит
+    assert duration_error(1) is None
+    assert duration_error(10_000) is None
+
+
+def test_duration_limits_when_configured(monkeypatch):
+    monkeypatch.setattr(settings, "track_min_seconds", 40)
+    monkeypatch.setattr(settings, "track_max_seconds", 540)
+
     assert duration_error(200) is None
-
-    too_short = duration_error(settings.track_min_seconds - 1)
+    too_short = duration_error(39)
     assert too_short is not None and "короткое" in too_short
-
-    too_long = duration_error(settings.track_max_seconds + 1)
+    too_long = duration_error(541)
     assert too_long is not None and "подкаст" in too_long
 
 

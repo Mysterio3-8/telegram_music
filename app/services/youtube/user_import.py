@@ -54,13 +54,14 @@ def is_playlist_link(text: str) -> bool:
 
 
 def duration_error(seconds: int) -> str | None:
-    """None — длительность музыкальная; иначе текст отказа для пользователя."""
-    if seconds < settings.track_min_seconds:
+    """None — длительность в допустимых границах; иначе текст отказа для пользователя.
+    Границы 0 в конфиге означают «лимит снят» — соответствующая проверка пропускается."""
+    if settings.track_min_seconds and seconds < settings.track_min_seconds:
         return (
             f"Слишком короткое ({seconds} сек). "
             f"Принимаем треки от {settings.track_min_seconds} секунд."
         )
-    if seconds > settings.track_max_seconds:
+    if settings.track_max_seconds and seconds > settings.track_max_seconds:
         return (
             f"Слишком длинное ({seconds // 60} мин). Похоже на видео или подкаст — "
             f"принимаем музыку до {settings.track_max_seconds // 60} минут."

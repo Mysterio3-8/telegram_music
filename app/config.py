@@ -11,12 +11,13 @@ class Settings(BaseSettings):
     library_search_limit: int = 10
     max_file_size_mb: int = 50
 
-    # Границы «похоже на музыку»: короче — джингл/обрезок, длиннее — подкаст/видео.
-    # Используются в пользовательском импорте по ссылке и в очистке базы.
-    track_min_seconds: int = 40
-    track_max_seconds: int = 540  # 9 минут
-    # Импорт целого плейлиста/канала (только Premium): максимум видео за один раз
-    playlist_import_limit: int = 50
+    # Границы «похоже на музыку» (0 = лимит снят). Короче — джингл/обрезок,
+    # длиннее — подкаст/видео. Используются в импорте по ссылке и в очистке базы.
+    # Владелец снял ограничения по длительности — фильтр по времени выключен.
+    track_min_seconds: int = 0
+    track_max_seconds: int = 0
+    # Импорт целого плейлиста/канала: максимум видео за раз (0 = без лимита)
+    playlist_import_limit: int = 0
 
     # Premium (SPEC §14)
     premium_price_stars: int = 15
@@ -39,9 +40,9 @@ class Settings(BaseSettings):
     vk_token: str = ""  # токен сообщества ВК с правом wall
     vk_group_id: int = 0  # положительный id группы (без минуса)
 
-    # Лимиты бесплатного тарифа (Premium снимает)
+    # Лимиты бесплатного тарифа (Premium снимает; 0 = без лимита)
     free_playlist_limit: int = 5
-    free_upload_limit: int = 10
+    free_upload_limit: int = 0  # владелец снял лимит на количество загрузок
 
     # Реклама (SPEC §24): показ после каждого N-го действия бесплатного пользователя
     ad_frequency: int = 10

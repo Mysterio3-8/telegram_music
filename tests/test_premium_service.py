@@ -83,9 +83,23 @@ async def test_premium_user_bypasses_playlist_limit(session):
     assert await can_create_playlist(session, user) is True
 
 
-async def test_can_upload_respects_free_limit(session):
+async def test_can_upload_unlimited_by_default(session):
+    # free_upload_limit = 0 → лимит на количество загрузок снят
     user = await make_user(session)
-    for i in range(settings.free_upload_limit):
+    for i in range(15):
+        track = Track(title=f"T{i}", artist="A", duration=100)
+        session.add(track)
+        await session.flush()
+        session.add(Upload(user_id=user.id, track_id=track.id))
+    await session.commit()
+
+    assert await can_upload(session, user) is True
+
+
+async def test_can_upload_respects_free_limit_when_configured(session, monkeypatch):
+    monkeypatch.setattr(settings, "free_upload_limit", 3)
+    user = await make_user(session)
+    for i in range(3):
         track = Track(title=f"T{i}", artist="A", duration=100)
         session.add(track)
         await session.flush()

@@ -1,5 +1,15 @@
+import pytest
+
+from app.config import settings
 from app.db.models import Lyrics, Playlist, PlaylistTrack, Track, TrackEvent, Upload, User, UserLibrary
 from app.services.catalog_cleanup import count_junk_tracks, delete_junk_tracks, list_junk_tracks
+
+
+@pytest.fixture
+def with_duration_bounds(monkeypatch):
+    """Очистка не-музыки определена только когда границы длительности заданы."""
+    monkeypatch.setattr(settings, "track_min_seconds", 40)
+    monkeypatch.setattr(settings, "track_max_seconds", 540)
 
 
 class FakeStorage:
@@ -23,7 +33,16 @@ async def _track(session, title, duration, storage_path=None, file_size=None) ->
     return track
 
 
-async def test_count_and_list_junk(session):
+async def test_no_junk_when_limits_disabled(session):
+    # Границы 0 (лимиты сняты) — не-музыки по длительности не существует
+    await _track(session, "Джингл", 10, file_size=1000)
+    await _track(session, "Подкаст", 3600, file_size=90_000_000)
+
+    assert (await count_junk_tracks(session)).count == 0
+    assert await list_junk_tracks(session) == []
+
+
+async def test_count_and_list_junk(session, with_duration_bounds):
     await _track(session, "Джингл", 10, file_size=1000)
     await _track(session, "Подкаст", 3600, file_size=90_000_000)
     await _track(session, "Нормальный", 200)
@@ -37,7 +56,7 @@ async def test_count_and_list_junk(session):
     assert set(titles) == {"Джингл", "Подкаст"}
 
 
-async def test_delete_junk_removes_track_links_and_files(session):
+async def test_delete_junk_removes_track_links_and_files(session, with_duration_bounds):
     user = User(telegram_id=1)
     session.add(user)
     await session.flush()

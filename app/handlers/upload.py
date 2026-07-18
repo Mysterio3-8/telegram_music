@@ -61,8 +61,7 @@ async def cb_upload(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(UploadTrack.waiting_file)
     await callback.message.answer(
         "Отправьте аудиофайл или ссылку на YouTube / YouTube Music.\n\n"
-        f"По ссылке принимаем только музыку: от {settings.track_min_seconds} секунд "
-        f"до {settings.track_max_seconds // 60} минут, без стримов.",
+        "По ссылке принимаем музыку без стримов.",
         reply_markup=_cancel_keyboard(),
     )
     await callback.answer()
@@ -102,7 +101,7 @@ async def process_document(message: Message) -> None:
 
 
 async def _process_playlist_link(message: Message, state: FSMContext) -> None:
-    """Импорт плейлиста/канала целиком — только Premium, до playlist_import_limit видео.
+    """Импорт плейлиста/канала целиком — только Premium.
     Треки тихо падают в библиотеку (без пачки сообщений в чат)."""
     async with session_factory() as session:
         user = await ensure_user(session, message.from_user)
@@ -128,7 +127,8 @@ async def _process_playlist_link(message: Message, state: FSMContext) -> None:
         )
         return
 
-    batch = videos[: settings.playlist_import_limit]
+    # playlist_import_limit == 0 → без ограничения на количество
+    batch = videos[: settings.playlist_import_limit] if settings.playlist_import_limit else videos
     queued = 0
     for video in batch:
         if enqueue_user_import(video.video_id, message.from_user.id, message.chat.id, quiet=True):
@@ -146,9 +146,7 @@ async def _process_playlist_link(message: Message, state: FSMContext) -> None:
     )
     await scanning.edit_text(
         f"⏳ Принято {queued} видео.{skipped_note}\n\n"
-        f"Музыка (от {settings.track_min_seconds} сек до {settings.track_max_seconds // 60} мин) "
-        "появится в вашей библиотеке по мере обработки — без сообщений на каждый трек. "
-        "Видео и подкасты отсеются автоматически.",
+        "Музыка появится в вашей библиотеке по мере обработки — без сообщений на каждый трек.",
         reply_markup=_menu_keyboard(),
     )
 
