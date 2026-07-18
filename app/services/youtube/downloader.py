@@ -53,7 +53,13 @@ def _impersonate_target():
 
 
 def _base_opts() -> dict:
-    opts: dict = {"quiet": True, "no_warnings": True, "ignoreerrors": True}
+    opts: dict = {
+        "quiet": True,
+        "no_warnings": True,
+        "ignoreerrors": True,
+        # Анти-бан: пауза между HTTP-запросами при обходе профиля/плейлиста
+        "sleep_interval_requests": 1,
+    }
     target = _impersonate_target()
     if target is not None:
         opts["impersonate"] = target

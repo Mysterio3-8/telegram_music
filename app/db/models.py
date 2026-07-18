@@ -210,6 +210,18 @@ class SoundcloudSource(Base):
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
 
+class SoundcloudImported(Base):
+    """Уже обработанные SoundCloud-ссылки (импортированные ИЛИ отклонённые).
+    Rescan источника пропускает их без скачивания — не бьём по SoundCloud лишний раз
+    (защита от бана IP) и не качаем одно и то же каждый день."""
+
+    __tablename__ = "soundcloud_imported"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    url: Mapped[str] = mapped_column(String(512), unique=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
 class RequiredChannel(Base):
     """Обязательный канал подписки (TZ §14-17). Управляется из админки; таблица пустая →
     гейт подписки выключен. Бот должен быть админом канала (иначе getChatMember не работает)."""

@@ -8,7 +8,7 @@ Requires=redis-server.service
 WorkingDirectory=/opt/tg-music-bot
 # Ограниченная параллельность загрузок (доп. ТЗ §14); N = YOUTUBE_CONCURRENCY
 ExecStartPre=/opt/tg-music-bot/.venv/bin/python -m app.cli.youtube recover
-ExecStart=/opt/tg-music-bot/.venv/bin/celery -A app.tasks.celery_app worker -Q youtube --concurrency=2 --loglevel=info
+ExecStart=/opt/tg-music-bot/.venv/bin/celery -A app.tasks.celery_app worker -Q youtube --pool=threads --concurrency=1 --loglevel=info
 Restart=always
 RestartSec=5
 

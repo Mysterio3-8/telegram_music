@@ -107,3 +107,46 @@ async def test_sources_due_for_check(session):
     await session.refresh(fresh)
     assert fresh.found_count == 5
     assert fresh.imported_count == 2
+
+
+async def test_import_skips_known_urls(session, monkeypatch):
+    """Инкрементальный скан: уже обработанные ссылки не качаются повторно (анти-бан)."""
+    from app.db.models import SoundcloudImported
+    from app.services import soundcloud_import as si
+    from app.services.soundcloud import SoundcloudEntry
+    from app.services.youtube.downloader import DownloadedAudio
+
+    session.add(SoundcloudImported(url="https://soundcloud.com/u/old"))
+    await session.commit()
+
+    monkeypatch.setattr(
+        si,
+        "list_soundcloud_entries",
+        lambda url: [
+            SoundcloudEntry("https://soundcloud.com/u/old", "Old"),
+            SoundcloudEntry("https://soundcloud.com/u/new", "New"),
+        ],
+    )
+    downloaded = []
+
+    def fake_dl(url):
+        downloaded.append(url)
+        return DownloadedAudio(data=b"x" * 1000, file_format="mp3", duration=120, video_title="New"), "Uploader"
+
+    monkeypatch.setattr(si, "download_soundcloud_audio", fake_dl)
+    monkeypatch.setattr(si, "compute_fingerprint_from_bytes", lambda *a, **k: "fp-new")
+
+    class FakeBot:
+        async def send_audio(self, *a, **k):
+            class M:
+                class audio:
+                    file_id = "f1"
+            return M()
+
+    report = await si.import_soundcloud_tracks(session, FakeBot(), "https://soundcloud.com/u")
+
+    assert downloaded == ["https://soundcloud.com/u/new"]  # старую не качали
+    assert report.skipped_known == 1
+    assert report.imported == 1
+    # новая теперь помечена — второй скан её пропустит
+    assert await si._already_seen(session, "https://soundcloud.com/u/new") is True
