@@ -73,7 +73,7 @@ def extract_soundcloud_url(text: str) -> str | None:
 def list_soundcloud_entries(url: str) -> list[SoundcloudEntry]:
     """Трек → один элемент; профиль/сет → список треков (без скачивания).
     Нормализуем URL и здесь — чинит уже сохранённые источники с вкладкой-суффиксом."""
-    opts = {**_base_opts(), "extract_flat": "in_playlist", "skip_download": True}
+    opts = {**_base_opts(impersonate=True), "extract_flat": "in_playlist", "skip_download": True}
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(normalize_soundcloud_url(url), download=False)
     if info is None:
@@ -106,7 +106,7 @@ def download_soundcloud_audio(url: str) -> tuple[DownloadedAudio, str] | None:
     """Скачивает один трек. Возвращает (аудио, uploader) или None."""
     with tempfile.TemporaryDirectory() as tmp:
         opts = {
-            **_base_opts(),
+            **_base_opts(impersonate=True),
             "format": "bestaudio/best",
             "outtmpl": str(Path(tmp) / "sc.%(ext)s"),
             "noplaylist": True,

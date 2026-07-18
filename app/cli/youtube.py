@@ -12,12 +12,8 @@ import logging
 
 from app.db.base import session_factory
 from app.services.youtube.sources import add_source, list_sources
-from app.tasks.youtube import (
-    soundcloud_scan_due,
-    youtube_recover,
-    youtube_scan_due,
-    youtube_scan_source,
-)
+from app.tasks.soundcloud import soundcloud_scan_due
+from app.tasks.youtube import youtube_recover, youtube_scan_due, youtube_scan_source
 
 logger = logging.getLogger("youtube-cli")
 

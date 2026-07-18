@@ -1,0 +1,17 @@
+[Unit]
+Description=Telegram Music Bot — SoundCloud import worker (Celery, queue=soundcloud)
+After=network-online.target redis-server.service
+Wants=network-online.target
+Requires=redis-server.service
+
+[Service]
+WorkingDirectory=/opt/tg-music-bot
+# Своя очередь и свой воркер — не делит concurrency с youtube (там бэклог из
+# сотен поштучных импортов). concurrency=1: анти-бан, никаких параллельных
+# запросов к SoundCloud.
+ExecStart=/opt/tg-music-bot/.venv/bin/celery -A app.tasks.celery_app worker -Q soundcloud --pool=threads --concurrency=1 --loglevel=info
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

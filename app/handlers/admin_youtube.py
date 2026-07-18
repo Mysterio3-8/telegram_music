@@ -27,7 +27,8 @@ from app.services.youtube.sources import (
     list_sources,
     set_source_status,
 )
-from app.tasks.youtube import soundcloud_scan_source, youtube_scan_source
+from app.tasks.soundcloud import soundcloud_scan_source
+from app.tasks.youtube import youtube_scan_source
 
 router = Router()
 

@@ -52,7 +52,11 @@ def _impersonate_target():
         return None
 
 
-def _base_opts() -> dict:
+def _base_opts(impersonate: bool = False) -> dict:
+    """impersonate=True — Chrome-маскировка (curl_cffi), нужна SoundCloud (иначе 404
+    на частых запросах). YouTube её не просит и на импersonation иногда отвечает
+    403 (собственная система защиты реагирует на чужой TLS-отпечаток) — там она
+    по умолчанию выключена."""
     opts: dict = {
         "quiet": True,
         "no_warnings": True,
@@ -60,9 +64,10 @@ def _base_opts() -> dict:
         # Анти-бан: пауза между HTTP-запросами при обходе профиля/плейлиста
         "sleep_interval_requests": 1,
     }
-    target = _impersonate_target()
-    if target is not None:
-        opts["impersonate"] = target
+    if impersonate:
+        target = _impersonate_target()
+        if target is not None:
+            opts["impersonate"] = target
     if settings.youtube_cookies_path and Path(settings.youtube_cookies_path).exists():
         opts["cookiefile"] = settings.youtube_cookies_path
     return opts

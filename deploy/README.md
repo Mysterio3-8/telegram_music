@@ -8,8 +8,10 @@
 |---|---|
 | `tg-music-bot` | Telegram polling |
 | `tg-music-worker` | Celery, обогащение загрузок (очередь по умолчанию) |
-| `tg-music-youtube` | Celery, YouTube-импорт (очередь `youtube`, лимит параллельности) |
-| `tg-music-youtube-scan.timer` | ежедневная проверка источников на новые видео (§11) |
+| `tg-music-youtube` | Celery, массовые сканы каналов/плейлистов (очередь `youtube`, concurrency=1) |
+| `tg-music-youtube-user` | Celery, ссылки от пользователей бота (очередь `youtube_user`, concurrency=2) — отдельно от `tg-music-youtube`, чтобы не ждать за бэклогом массовых сканов |
+| `tg-music-youtube-scan.timer` | ежедневная проверка источников на новые видео (§11), заодно дёргает SoundCloud scan-due |
+| `tg-music-soundcloud` | Celery, SoundCloud-импорт (очередь `soundcloud`, concurrency=1 — анти-бан, никаких параллельных запросов) |
 | `tg-music-telegram-channel` | Celery, импорт из личного Telegram-канала (очередь `telegram_channel`, БЕЗ файлов на диске) |
 | `tg-music-telegram-channel-scan.timer` | ежедневная проверка канала на новые посты |
 
@@ -22,7 +24,7 @@ cp deploy/<unit> /etc/systemd/system/ && systemctl daemon-reload && systemctl en
 
 `/deploy` или вручную:
 ```bash
-ssh news-rewriter-vps "cd /opt/tg-music-bot && git pull && .venv/bin/pip install -q -r requirements.txt && .venv/bin/alembic upgrade head && systemctl restart tg-music-bot tg-music-worker tg-music-youtube tg-music-telegram-channel"
+ssh news-rewriter-vps "cd /opt/tg-music-bot && git pull && .venv/bin/pip install -q -r requirements.txt && .venv/bin/alembic upgrade head && systemctl restart tg-music-bot tg-music-worker tg-music-youtube tg-music-youtube-user tg-music-soundcloud tg-music-telegram-channel"
 ```
 
 ## Управление YouTube-источниками

@@ -1,0 +1,16 @@
+[Unit]
+Description=Telegram Music Bot — user-requested link import worker (Celery, queue=youtube_user)
+After=network-online.target redis-server.service
+Wants=network-online.target
+Requires=redis-server.service
+
+[Service]
+WorkingDirectory=/opt/tg-music-bot
+# Ссылки, которые пользователь сам кинул боту (upload.py) — своя очередь, чтобы
+# не ждать за бэклогом массовых сканов каналов/плейлистов в очереди youtube.
+ExecStart=/opt/tg-music-bot/.venv/bin/celery -A app.tasks.celery_app worker -Q youtube_user --pool=threads --concurrency=2 --loglevel=info
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
