@@ -128,6 +128,16 @@ $env:DATABASE_URL="sqlite+aiosqlite:///_tmp.db"; .\.venv\Scripts\python.exe -m a
 - Обогащение (отпечаток+архив) — асинхронно в воркере: сразу после загрузки трека `storage_path` ещё пуст, появляется через секунды. Если воркер лежит — трек работает по `tg_file_id`, отпечаток не считается
 - Windows-консоль: путь проекта с кириллицей, в PowerShell возможны артефакты кодировки в выводе — на работу не влияет
 
+## Checkpoint (2026-07-18, анти-бан SoundCloud) — 3 причины «0 треков» устранены
+
+Владелец добавил SoundCloud-источник `.../popular-tracks` → «Найдено 0». Три бага, все исправлены:
+1. **`/popular-tracks` и др. вкладки профиля → 404** у yt-dlp. `normalize_soundcloud_url` ([soundcloud.py](app/services/soundcloud.py)) сворачивает вкладки (`/popular-tracks`, `/tracks`, `/likes`, `/sets`, …) к корню профиля; трек и `/sets/<name>` не трогает. Нормализация и при добавлении, и при скане — чинит уже сохранённые источники
+2. **celery `--pool=prefork` ломал нативную сеть yt-dlp после fork()** → воркер стабильно отдавал 0, хотя CLI в свежем процессе — сотни треков. Юнит [tg-music-youtube.service](deploy/tg-music-youtube.service) переведён на `--pool=threads --concurrency=1` (без fork, без параллельных всплесков). ⚠️ При деплое юнита — `cp deploy/*.service /etc/systemd/system/ && systemctl daemon-reload`
+3. **curl_cffi impersonation** ([downloader.py](app/services/youtube/downloader.py) `_base_opts`) — SoundCloud отдаёт 404 на частых запросах без Chrome-impersonation. Добавлен в requirements
+- **Анти-бан (запрос владельца «чтобы не банили IP»)**: таблица `soundcloud_imported` (миграция `d1e2f3a4b5c7`) — обработанные ссылки не качаются повторно, rescan бьёт по сети только по новым. Троттлинг: пауза 2-5с между скачиваниями + `sleep_interval_requests=1`. Отчёт скана показывает «пропущено ранее обработанных»
+- На проде: источник #1 (`/search?q=kizaru` — не профиль) отключён. Активны tapeboss/kizaru_hf/aarne0 — импортируются инкрементально по ежедневному таймеру
+- Тесты: **193 passed** (+7: нормализация, инкрементальный пропуск)
+
 ## Checkpoint (2026-07-18, уточнение владельца) — SoundCloud/YT Music = ТРЕКИ, минусы только из ТГ-канала
 
 - **SoundCloud → треки** (не минусы): [soundcloud_import.py](app/services/soundcloud_import.py) → `import_soundcloud_tracks` через `import_via_telegram_mint` (общая база). Приём ссылки перенесён из мастера «Загрузить минус» (там снова только файл) в админ-раздел «🎬 Источники треков» (`adm:yt:add` принимает YouTube/YT Music/SoundCloud; SoundCloud-источники видны списком в тексте раздела, управление — пока CLI/БД)
