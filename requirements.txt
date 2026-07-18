@@ -8,6 +8,7 @@ redis>=5.0
 celery[redis]>=5.3
 boto3>=1.34
 yt-dlp>=2024.8
+curl_cffi>=0.5  # impersonation для yt-dlp — SoundCloud иначе отдаёт 404 на частых запросах
 telethon>=1.36
 fastapi>=0.115
 uvicorn>=0.30

@@ -41,8 +41,22 @@ class VideoInfo:
     is_live: bool
 
 
+def _impersonate_target():
+    """Chrome-impersonation (curl_cffi) — без него SoundCloud отдаёт 404 на частых/
+    параллельных запросах. Если curl_cffi не установлен, тихо работаем без него."""
+    try:
+        from yt_dlp.networking.impersonate import ImpersonateTarget
+
+        return ImpersonateTarget("chrome")
+    except Exception:  # noqa: BLE001 — старый yt-dlp / нет curl_cffi
+        return None
+
+
 def _base_opts() -> dict:
     opts: dict = {"quiet": True, "no_warnings": True, "ignoreerrors": True}
+    target = _impersonate_target()
+    if target is not None:
+        opts["impersonate"] = target
     if settings.youtube_cookies_path and Path(settings.youtube_cookies_path).exists():
         opts["cookiefile"] = settings.youtube_cookies_path
     return opts
