@@ -17,7 +17,10 @@ def sources_keyboard(
         ]
         for s in sources
     ]
-    rows.append([InlineKeyboardButton(text="➕ Добавить канал", callback_data="adm:yt:add")])
+    rows.append(
+        [InlineKeyboardButton(text="➕ YouTube / YT Music", callback_data="adm:yt:add")]
+    )
+    rows.append([InlineKeyboardButton(text="➕ SoundCloud", callback_data="adm:yt:addsc")])
     rows.append([InlineKeyboardButton(text="◀️ В админку", callback_data="adm:stats")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 

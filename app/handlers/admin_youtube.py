@@ -127,9 +127,20 @@ async def cb_add_prompt(callback: CallbackQuery, state: FSMContext) -> None:
         return
     await state.set_state(YoutubeAdd.waiting_url)
     await callback.message.answer(
-        "Пришлите ссылку на YouTube / YouTube Music (канал или плейлист) "
-        "или SoundCloud (профиль, сет или трек).\n"
-        "Источник сохранится, новые треки будут подтягиваться автоматически."
+        "Пришлите ссылку на канал или плейлист YouTube / YouTube Music.\n"
+        "Источник сохранится, новые треки будут подтягиваться автоматически каждый день."
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "adm:yt:addsc")
+async def cb_add_soundcloud_prompt(callback: CallbackQuery, state: FSMContext) -> None:
+    if not await _guard(callback):
+        return
+    await state.set_state(YoutubeAdd.waiting_url)
+    await callback.message.answer(
+        "Пришлите ссылку на SoundCloud: профиль, сет или отдельный трек.\n"
+        "Источник сохранится, новые треки будут подтягиваться автоматически каждый день."
     )
     await callback.answer()
 

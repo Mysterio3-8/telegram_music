@@ -41,23 +41,26 @@ def _sources_text(count: int, importer_enabled: bool) -> str:
     warning = "" if is_configured() else "\n\n⚠️ Не настроен вход (см. деплой) — источники не будут импортироваться."
     if count == 0:
         return (
-            f"📡 Мой Telegram-канал · {state}\n\n"
+            f"🎼 Минусы: мой ТГ-канал · {state}\n\n"
             "Пока не добавлено ни одного канала.\n"
-            "«➕ Добавить канал» — пришлёте @username/ссылку, импорт запустится сам. "
+            "«➕ Добавить канал» — пришлёте @username/ссылку, аудиопосты уйдут "
+            "в базу минусов, новые будут подтягиваться автоматически каждый день. "
             "Файлы не хранятся на сервере — только tg_file_id."
             f"{warning}"
         )
-    return f"📡 Мой Telegram-канал · {state}\n\nВсего: {count}\nФормат: импортировано / найдено{warning}"
+    return f"🎼 Минусы: мой ТГ-канал · {state}\n\nВсего: {count}\nФормат: импортировано / найдено{warning}"
 
 
 def _source_text(source: TelegramChannelSource) -> str:
     checked = source.last_checked_at.strftime("%d.%m.%Y %H:%M") if source.last_checked_at else "—"
+    to_minus = source.target == "instrumentals"
     return (
         f"📡 Источник #{source.id}\n\n"
         f"Канал: {source.channel}\n"
+        f"Куда: {'база минусов' if to_minus else 'общая база треков'}\n"
         f"Статус: {'активен' if source.status == 'active' else 'отключён'}\n"
         f"Найдено постов с аудио: {source.found_count}\n"
-        f"Импортировано треков: {source.imported_count}\n"
+        f"Импортировано: {source.imported_count}\n"
         f"Последняя проверка: {checked}"
     )
 
@@ -120,8 +123,8 @@ async def cb_add_prompt(callback: CallbackQuery, state: FSMContext) -> None:
         return
     await state.set_state(TelegramChannelAdd.waiting_channel)
     await callback.message.answer(
-        "Пришлите @username канала, ссылку на него или id.\n"
-        "Импорт запустится автоматически, файлы не сохраняются на сервере."
+        "Пришлите @username канала с минусами, ссылку на него или id.\n"
+        "Аудиопосты уйдут в базу минусов, импорт запустится автоматически."
     )
     await callback.answer()
 
@@ -136,11 +139,13 @@ async def process_add_channel(message: Message, state: FSMContext) -> None:
         return
     await state.set_state(None)
     async with session_factory() as session:
-        source = await add_source(session, channel)
+        # Из админки канал добавляется как источник МИНУСОВ (решение владельца);
+        # канал-источник треков — через CLI telegram_channel add без --instrumental
+        source = await add_source(session, channel, target="instrumentals")
     telegram_channel_scan_source.delay(source_id=source.id)
     await message.answer(
-        f"✅ Источник #{source.id} добавлен. Сканирую канал и ставлю треки в очередь — "
-        "импорт идёт в фоне, можно продолжать пользоваться ботом."
+        f"✅ Источник #{source.id} добавлен. Сканирую канал и ставлю минусы в очередь — "
+        "импорт идёт в фоне, новые посты будут подтягиваться каждый день."
     )
 
 
