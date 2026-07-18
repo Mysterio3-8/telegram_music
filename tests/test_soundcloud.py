@@ -150,3 +150,34 @@ async def test_import_skips_known_urls(session, monkeypatch):
     assert report.imported == 1
     # новая теперь помечена — второй скан её пропустит
     assert await si._already_seen(session, "https://soundcloud.com/u/new") is True
+
+
+async def test_permanent_failures_marked_seen_transient_are_not(session, monkeypatch):
+    """DRM/приватные треки не ретраятся вечно; сетевые ошибки — ретраятся."""
+    from app.services import soundcloud_import as si
+    from app.services.soundcloud import SoundcloudEntry
+
+    monkeypatch.setattr(
+        si,
+        "list_soundcloud_entries",
+        lambda url: [
+            SoundcloudEntry("https://soundcloud.com/u/drm-track", "DRM"),
+            SoundcloudEntry("https://soundcloud.com/u/flaky-track", "Flaky"),
+        ],
+    )
+
+    def fake_dl(url):
+        if "drm" in url:
+            raise RuntimeError("ERROR: [soundcloud] xxx: This video is DRM protected")
+        raise RuntimeError("HTTP Error 502: Bad Gateway")
+
+    monkeypatch.setattr(si, "download_soundcloud_audio", fake_dl)
+
+    class FakeBot:
+        pass
+
+    report = await si.import_soundcloud_tracks(session, FakeBot(), "https://soundcloud.com/u")
+
+    assert report.failed == 2
+    assert await si._already_seen(session, "https://soundcloud.com/u/drm-track") is True
+    assert await si._already_seen(session, "https://soundcloud.com/u/flaky-track") is False

@@ -28,6 +28,16 @@ logger = logging.getLogger(__name__)
 _MIN_DELAY = 2.0
 _MAX_DELAY = 5.0
 
+# Сообщения yt-dlp, означающие «трек никогда не скачается» (не сеть легла, а
+# сам трек недоступен — Go+/приватный/удалённый). Такие метим как обработанные,
+# иначе каждый день будем заново долбить SoundCloud по заведомо мёртвой ссылке.
+_PERMANENT_FAILURE_MARKERS = ("drm protected", "track unavailable", "this track is private")
+
+
+def _is_permanent_failure(error: Exception) -> bool:
+    text = str(error).lower()
+    return any(marker in text for marker in _PERMANENT_FAILURE_MARKERS)
+
 
 async def _already_seen(session: AsyncSession, url: str) -> bool:
     return await session.scalar(
@@ -80,9 +90,14 @@ async def import_soundcloud_tracks(
             await asyncio.sleep(random.uniform(_MIN_DELAY, _MAX_DELAY))
         try:
             result = download_soundcloud_audio(entry.url)
-        except Exception:  # noqa: BLE001 — один битый трек не роняет пачку (ошибку не помечаем — повторим)
-            logger.exception("SoundCloud: не скачался %s", entry.url)
+        except Exception as exc:  # noqa: BLE001 — один битый трек не роняет пачку
             report.failed += 1
+            if _is_permanent_failure(exc):
+                # Go+/приватный/удалённый — не сеть, а сам трек. Больше не пытаемся.
+                logger.info("SoundCloud: %s недоступен навсегда (%s)", entry.url, exc)
+                await _mark_seen(session, entry.url)
+            else:
+                logger.exception("SoundCloud: не скачался %s", entry.url)
             continue
         if result is None:
             report.failed += 1
