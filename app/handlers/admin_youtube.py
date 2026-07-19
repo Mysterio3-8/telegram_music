@@ -140,7 +140,8 @@ async def cb_add_soundcloud_prompt(callback: CallbackQuery, state: FSMContext) -
         return
     await state.set_state(YoutubeAdd.waiting_url)
     await callback.message.answer(
-        "Пришлите ссылку на SoundCloud: профиль, сет или отдельный трек.\n"
+        "Пришлите любую ссылку SoundCloud — профиль, трек, сет, лайки, репосты, "
+        "страницу поиска или тега.\n"
         "Источник сохранится, новые треки будут подтягиваться автоматически каждый день."
     )
     await callback.answer()

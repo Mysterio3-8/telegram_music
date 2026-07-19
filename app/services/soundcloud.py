@@ -9,6 +9,7 @@ import re
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 
 import yt_dlp
 
@@ -19,20 +20,11 @@ logger = logging.getLogger(__name__)
 
 _SOUNDCLOUD_RE = re.compile(r"(?:https?://)?(?:www\.|m\.|on\.)?soundcloud\.com/\S+")
 
-# Вкладки профиля, которые yt-dlp не открывает напрямую (дают 404): их
-# сворачиваем к корню профиля — оттуда yt-dlp достаёт все треки автора.
-# /sets/<name> (конкретный плейлист) и /user/<track> (трек) НЕ трогаем.
-_PROFILE_TABS = {
-    "popular-tracks",
-    "tracks",
-    "reposts",
-    "likes",
-    "albums",
-    "sets",
-    "comments",
-    "following",
-    "followers",
-}
+# Псевдо-вкладки веб-интерфейса SoundCloud без API-эндпоинта: yt-dlp отдаёт 404.
+# Их сворачиваем к корню профиля — оттуда достаются все треки автора.
+# А /tracks, /likes, /reposts, /sets, /albums yt-dlp открывает напрямую — НЕ трогаем,
+# чтобы «скачать лайки» качало именно лайки, а не треки профиля.
+_BROKEN_TABS = {"popular-tracks", "top-tracks"}
 
 
 @dataclass(frozen=True)
@@ -45,19 +37,38 @@ def is_soundcloud_link(text: str) -> bool:
     return bool(_SOUNDCLOUD_RE.search(text or ""))
 
 
+def _search_query(path: str, query: str) -> str | None:
+    """Возвращает поисковый запрос, если это страница поиска или тега SoundCloud.
+    Такие страницы не имеют API-URL — переводим их в scsearch."""
+    first = path.split("/", 1)[0]
+    if first == "search":
+        q = parse_qs(query).get("q", [""])[0].strip()
+        return q or None
+    if first == "tags":
+        tag = path.split("/", 1)[1] if "/" in path else ""
+        return tag.replace("-", " ").strip() or None
+    return None
+
+
 def normalize_soundcloud_url(url: str) -> str:
-    """Сворачивает вкладки профиля (/popular-tracks, /tracks, /likes…) к корню
-    профиля — yt-dlp не открывает эти страницы напрямую, но с корня берёт все треки."""
-    url = url.split("?", 1)[0].split("#", 1)[0].rstrip("/")
-    marker = "soundcloud.com/"
-    idx = url.find(marker)
-    if idx == -1:
+    """Приводит любую страницу SoundCloud к тому, что понимает yt-dlp:
+    - страница поиска/тега → `scsearch<N>:запрос` (у них нет API-URL);
+    - псевдо-вкладка /popular-tracks → корень профиля (иначе 404);
+    - трек/профиль/лайки/сеты/плейлист — как есть."""
+    if url.startswith("scsearch"):  # уже нормализованный поисковый запрос — идемпотентно
         return url
-    head, path = url[: idx + len(marker)], url[idx + len(marker) :]
+    split = urlsplit(url if url.startswith("http") else f"https://{url}")
+    path = split.path.strip("/")
+
+    search = _search_query(path, split.query)
+    if search:
+        return f"scsearch{settings.soundcloud_search_limit}:{search}"
+
+    clean = f"https://soundcloud.com/{path}"
     parts = path.split("/")
-    if len(parts) == 2 and parts[1] in _PROFILE_TABS:
-        return head + parts[0]
-    return url
+    if len(parts) == 2 and parts[1] in _BROKEN_TABS:
+        return f"https://soundcloud.com/{parts[0]}"
+    return clean
 
 
 def extract_soundcloud_url(text: str) -> str | None:

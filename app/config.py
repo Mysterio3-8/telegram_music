@@ -98,6 +98,8 @@ class Settings(BaseSettings):
     youtube_check_interval_days: int = 30  # период автопроверки новых видео (§11)
     # SoundCloud-источники минусов: автопроверка новых битов (владелец публикует часто)
     soundcloud_check_interval_days: int = 1
+    # Сколько треков забирать со страницы поиска/тега SoundCloud (scsearch<N>)
+    soundcloud_search_limit: int = 200
 
     # Личный Telegram-канал: импорт своих аудиопостов через MTProto (Telethon).
     # api_id/api_hash — на my.telegram.org. session_path — файл входа, вне git,
