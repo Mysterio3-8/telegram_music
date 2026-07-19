@@ -128,6 +128,13 @@ $env:DATABASE_URL="sqlite+aiosqlite:///_tmp.db"; .\.venv\Scripts\python.exe -m a
 - Обогащение (отпечаток+архив) — асинхронно в воркере: сразу после загрузки трека `storage_path` ещё пуст, появляется через секунды. Если воркер лежит — трек работает по `tg_file_id`, отпечаток не считается
 - Windows-консоль: путь проекта с кириллицей, в PowerShell возможны артефакты кодировки в выводе — на работу не влияет
 
+## Checkpoint (2026-07-18, SoundCloud с любой страницы + разделение очередей)
+
+- **Скачивание с любой страницы SoundCloud** (запрос владельца «хоть весь soundcloud»): `normalize_soundcloud_url` ([soundcloud.py](app/services/soundcloud.py)) теперь сворачивает к профилю только реально сломанный `/popular-tracks`/`top-tracks`; `/tracks`, `/likes`, `/reposts`, `/sets`, `/albums` yt-dlp открывает напрямую — качаем именно их. Страница поиска `/search?q=` и тега `/tags/` → `scsearch<N>:запрос` (`soundcloud_search_limit`, дефолт 200). normalize идемпотентен. Проверено на проде: лайки→1990, поиск→200, тег→200
+- **Разделены очереди Celery** (было: «треки не качаются» — новые источники стояли в хвосте бэклога): `soundcloud.*` → очередь `soundcloud` (юнит [tg-music-soundcloud.service](deploy/tg-music-soundcloud.service)), `youtube.user_import` (ссылки от юзеров бота) → очередь `youtube_user` (юнит [tg-music-youtube-user.service](deploy/tg-music-youtube-user.service), concurrency=2), массовые сканы каналов остались в `youtube`. Задачи SoundCloud вынесены в [app/tasks/soundcloud.py](app/tasks/soundcloud.py). ⚠️ Новые юниты: `cp deploy/*.service /etc/systemd/system/ && systemctl daemon-reload && systemctl enable --now tg-music-soundcloud tg-music-youtube-user`
+- **impersonation теперь opt-in**: `_base_opts(impersonate=True)` только для SoundCloud (YouTube на чужой TLS-отпечаток отвечал 403). DRM/приватные треки SoundCloud метятся обработанными сразу — не ретраятся вечно
+- Тесты: **195 passed**
+
 ## Checkpoint (2026-07-18, анти-бан SoundCloud) — 3 причины «0 треков» устранены
 
 Владелец добавил SoundCloud-источник `.../popular-tracks` → «Найдено 0». Три бага, все исправлены:
