@@ -31,9 +31,15 @@ def test_validate_audio_rejects_unsupported_format():
     assert "формат" in validate_audio(meta).lower()
 
 
-def test_validate_audio_rejects_oversized_file():
-    meta = AudioMeta("id", "big.mp3", "audio/mpeg", 51 * 1024 * 1024, 100)
-    assert "50" in validate_audio(meta)
+def test_validate_audio_accepts_large_file():
+    # Аудиофайлы без ограничения по размеру (решение владельца)
+    meta = AudioMeta("id", "big.mp3", "audio/mpeg", 500 * 1024 * 1024, 100)
+    assert validate_audio(meta) is None
+
+
+def test_validate_audio_rejects_zero_duration():
+    meta = AudioMeta("id", "song.mp3", "audio/mpeg", 1000, 0)
+    assert validate_audio(meta) is not None
 
 
 async def test_find_duplicate_case_insensitive_with_duration_tolerance(session):

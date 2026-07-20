@@ -46,12 +46,11 @@ def detect_format(file_name: str | None, mime_type: str | None) -> str | None:
 
 
 def validate_audio(meta: AudioMeta) -> str | None:
-    """Возвращает текст ошибки или None, если файл подходит."""
+    """Возвращает текст ошибки или None, если файл подходит.
+    Аудиофайлы принимаются без ограничения по размеру (решение владельца) — только
+    формат и длительность, без которых трек нельзя завести и проиграть."""
     if detect_format(meta.file_name, meta.mime_type) is None:
         return "Неподдерживаемый формат. Принимаются: MP3, FLAC, WAV, M4A, OGG."
-    max_bytes = settings.max_file_size_mb * 1024 * 1024
-    if meta.file_size is not None and meta.file_size > max_bytes:
-        return f"Файл больше {settings.max_file_size_mb} МБ."
     if meta.duration <= 0:
         return "Не удалось определить длительность файла."
     return None

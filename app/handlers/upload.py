@@ -8,10 +8,9 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 from app.db.base import session_factory
 from app.handlers.common import ensure_user, format_duration
 from app.config import settings
-from app.services.library import add_to_library
 from app.services.premium import is_premium_active
 from app.services.soundcloud import is_soundcloud_link, normalize_soundcloud_url, soundcloud_link_kind
-from app.services.uploads import AudioMeta, create_uploaded_track, find_duplicate, validate_audio
+from app.services.uploads import AudioMeta, create_uploaded_track, validate_audio
 from app.services.youtube.user_import import duration_error, extract_video_id, is_playlist_link
 from app.tasks import enqueue_enrich, enqueue_soundcloud_user_import, enqueue_user_import
 
@@ -38,15 +37,6 @@ def _confirm_keyboard() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [InlineKeyboardButton(text="✅ Загрузить", callback_data="up:confirm")],
             [InlineKeyboardButton(text="❌ Отмена", callback_data="up:cancel")],
-        ]
-    )
-
-
-def _duplicate_keyboard(track_id: int) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="➕ Да, добавить", callback_data=f"up:dup:{track_id}")],
-            [InlineKeyboardButton(text="❌ Нет", callback_data="up:cancel")],
         ]
     )
 
@@ -314,35 +304,13 @@ async def cb_upload_confirm(callback: CallbackQuery, state: FSMContext) -> None:
     )
     async with session_factory() as session:
         user = await ensure_user(session, callback.from_user)
-        duplicate = await find_duplicate(session, data["title"], data["artist"], meta.duration)
-        if duplicate is not None:
-            await state.clear()
-            await callback.message.edit_text(
-                f"Такой трек уже есть:\n{duplicate.artist} — {duplicate.title}\n\n"
-                "Добавить его в вашу библиотеку?",
-                reply_markup=_duplicate_keyboard(duplicate.id),
-            )
-            await callback.answer()
-            return
-        # Загрузка аудиофайлом — всегда бесплатно и без счётчика (по одному треку)
+        # Загрузка аудиофайлом — без ограничений: без счётчика и без блокировки
+        # дубликатов (решение владельца), принимаем всё, что прислали
         track = await create_uploaded_track(session, user.id, meta, data["title"], data["artist"])
     enqueue_enrich(track.id, meta.file_id)
     await state.clear()
     await callback.message.edit_text(
         f"✅ Трек «{track.artist} — {track.title}» добавлен в общую базу и вашу библиотеку.",
-        reply_markup=_menu_keyboard(),
-    )
-    await callback.answer()
-
-
-@router.callback_query(F.data.startswith("up:dup:"))
-async def cb_duplicate_add(callback: CallbackQuery) -> None:
-    track_id = int(callback.data.split(":")[2])
-    async with session_factory() as session:
-        user = await ensure_user(session, callback.from_user)
-        added = await add_to_library(session, user.id, track_id)
-    await callback.message.edit_text(
-        "✅ Трек добавлен в вашу библиотеку." if added else "Трек уже был в вашей библиотеке.",
         reply_markup=_menu_keyboard(),
     )
     await callback.answer()
