@@ -71,6 +71,35 @@ def normalize_soundcloud_url(url: str) -> str:
     return clean
 
 
+# Вкладки/разделы профиля — это всегда «много треков» (пачка).
+_LISTING_SEGMENTS = {
+    "popular-tracks",
+    "top-tracks",
+    "tracks",
+    "reposts",
+    "likes",
+    "albums",
+    "sets",
+    "comments",
+    "following",
+    "followers",
+}
+
+
+def soundcloud_link_kind(url: str) -> str | None:
+    """'track' — одиночный трек (бесплатно), 'bulk' — профиль/лайки/сет/поиск/тег
+    (пачка, только Premium), None — не ссылка SoundCloud."""
+    if not is_soundcloud_link(url):
+        return None
+    split = urlsplit(url if url.startswith("http") else f"https://{url}")
+    parts = [p for p in split.path.split("/") if p]
+    if not parts or parts[0] in ("search", "tags", "discover"):
+        return "bulk"  # профиль целиком / поиск / тег
+    if len(parts) == 2 and parts[1] not in _LISTING_SEGMENTS:
+        return "track"  # soundcloud.com/user/track-name
+    return "bulk"  # /user/likes, /user/sets/name и т.п.
+
+
 def extract_soundcloud_url(text: str) -> str | None:
     match = _SOUNDCLOUD_RE.search(text or "")
     if not match:

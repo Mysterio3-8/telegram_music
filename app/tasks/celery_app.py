@@ -14,7 +14,11 @@ celery_app.conf.update(
     # youtube.user_import (точное совпадение проверяется ДО wildcard youtube.*) — ссылка,
     # которую сам пользователь кинул боту, должна обработаться быстро, а не ждать
     # своей очереди за массовым сканом чьего-то канала на сотни видео.
+    # Порядок важен: точные имена задач до wildcard. Ссылки от пользователей
+    # (youtube.user_import, soundcloud.user_import) — в отзывчивую очередь youtube_user,
+    # чтобы не стоять за бэклогом массовых сканов каналов/профилей.
     task_routes={
+        "soundcloud.user_import": {"queue": "youtube_user"},
         "soundcloud.*": {"queue": "soundcloud"},
         "youtube.user_import": {"queue": "youtube_user"},
         "youtube.*": {"queue": "youtube"},

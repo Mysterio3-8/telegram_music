@@ -130,3 +130,50 @@ async def import_soundcloud_tracks(
 
     logger.info("SoundCloud-импорт %s: %s", url, report.summary().replace("\n", "; "))
     return report
+
+
+async def process_user_soundcloud_import(
+    session: AsyncSession, bot: Bot, url: str, telegram_id: int
+) -> tuple:
+    """Одиночный трек SoundCloud от пользователя: скачать, завести в общую базу,
+    добавить в библиотеку пользователя. Возвращает (трек, создан_ли).
+    Зеркало youtube.user_import.process_user_import для SoundCloud."""
+    from app.db.models import Upload
+    from app.services.library import add_to_library
+    from app.services.users import get_user_by_telegram_id
+    from app.services.youtube.user_import import UserImportRejected
+
+    user = await get_user_by_telegram_id(session, telegram_id)
+    if user is None:
+        raise UserImportRejected("Пользователь не найден — отправьте /start")
+
+    result = download_soundcloud_audio(url)
+    if result is None:
+        raise RuntimeError(f"yt-dlp не вернул аудио для {url}")
+    audio, uploader = result
+
+    error = duration_error(audio.duration)
+    if error:
+        raise UserImportRejected(error)
+    if len(audio.data) > settings.max_file_size_mb * 1024 * 1024:
+        raise UserImportRejected(f"Файл больше {settings.max_file_size_mb} МБ.")
+
+    artist, title = parse_title(audio.video_title, uploader or "Unknown")
+    fingerprint = compute_fingerprint_from_bytes(audio.data, suffix=f".{audio.file_format}")
+    track, created = await import_via_telegram_mint(
+        session,
+        bot,
+        title=title,
+        artist=artist,
+        duration=audio.duration,
+        file_format=audio.file_format,
+        data=audio.data,
+        fingerprint=fingerprint,
+        archive_chat_id=settings.effective_archive_chat_id,
+    )
+    if created:
+        session.add(Upload(user_id=user.id, track_id=track.id))
+        await session.commit()
+    await add_to_library(session, user.id, track.id)
+    logger.info("SoundCloud user-импорт %s user=%s → track=%s", url, telegram_id, track.id)
+    return track, created

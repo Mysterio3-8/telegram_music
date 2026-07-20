@@ -10,9 +10,10 @@ from app.handlers.common import ensure_user, format_duration
 from app.config import settings
 from app.services.library import add_to_library
 from app.services.premium import can_upload, is_premium_active
+from app.services.soundcloud import is_soundcloud_link, normalize_soundcloud_url, soundcloud_link_kind
 from app.services.uploads import AudioMeta, create_uploaded_track, find_duplicate, validate_audio
 from app.services.youtube.user_import import duration_error, extract_video_id, is_playlist_link
-from app.tasks import enqueue_enrich, enqueue_user_import
+from app.tasks import enqueue_enrich, enqueue_soundcloud_user_import, enqueue_user_import
 
 router = Router()
 
@@ -60,8 +61,8 @@ def _menu_keyboard() -> InlineKeyboardMarkup:
 async def cb_upload(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(UploadTrack.waiting_file)
     await callback.message.answer(
-        "Отправьте аудиофайл или ссылку на YouTube / YouTube Music.\n\n"
-        "По ссылке принимаем музыку без стримов.",
+        "Отправьте аудиофайл или ссылку на трек — YouTube Music или SoundCloud.\n\n"
+        "Один трек — бесплатно. Профиль, плейлист или лайки целиком — только 💎 Premium.",
         reply_markup=_cancel_keyboard(),
     )
     await callback.answer()
@@ -100,18 +101,24 @@ async def process_document(message: Message) -> None:
     )
 
 
-async def _process_playlist_link(message: Message, state: FSMContext) -> None:
-    """Импорт плейлиста/канала целиком — только Premium.
-    Треки тихо падают в библиотеку (без пачки сообщений в чат)."""
+async def _require_premium_for_bulk(message: Message) -> bool:
+    """True — пользователь Premium (пачка разрешена). Иначе сообщает и возвращает False."""
     async with session_factory() as session:
         user = await ensure_user(session, message.from_user)
-        if not is_premium_active(user):
-            await message.answer(
-                "Импорт плейлистов и каналов целиком — только для 💎 Premium.\n"
-                "Бесплатно можно импортировать по одному видео — пришлите ссылку на него.",
-                reply_markup=_cancel_keyboard(),
-            )
-            return
+        if is_premium_active(user):
+            return True
+    await message.answer(
+        "Загрузка профиля, плейлиста или лайков целиком — только для 💎 Premium.\n"
+        "Бесплатно можно загрузить трек по одному — пришлите ссылку на конкретный трек.",
+        reply_markup=_cancel_keyboard(),
+    )
+    return False
+
+
+async def _process_playlist_link(message: Message, state: FSMContext) -> None:
+    """Импорт YouTube-плейлиста/канала целиком — только Premium (тихо в библиотеку)."""
+    if not await _require_premium_for_bulk(message):
+        return
 
     scanning = await message.answer("🔍 Читаю плейлист…")
     from app.services.youtube.downloader import list_videos
@@ -127,53 +134,100 @@ async def _process_playlist_link(message: Message, state: FSMContext) -> None:
         )
         return
 
-    # playlist_import_limit == 0 → без ограничения на количество
     batch = videos[: settings.playlist_import_limit] if settings.playlist_import_limit else videos
-    queued = 0
-    for video in batch:
-        if enqueue_user_import(video.video_id, message.from_user.id, message.chat.id, quiet=True):
-            queued += 1
+    queued = sum(
+        enqueue_user_import(v.video_id, message.from_user.id, message.chat.id, quiet=True)
+        for v in batch
+    )
     if queued == 0:
         await scanning.edit_text(
             "Импорт сейчас недоступен — попробуйте позже.", reply_markup=_menu_keyboard()
         )
         return
     await state.clear()
-    skipped_note = (
-        f"\nВ плейлисте {len(videos)} видео — взяли первые {len(batch)}."
-        if len(videos) > len(batch)
-        else ""
-    )
     await scanning.edit_text(
-        f"⏳ Принято {queued} видео.{skipped_note}\n\n"
+        f"⏳ Принято {queued} видео.\n\n"
         "Музыка появится в вашей библиотеке по мере обработки — без сообщений на каждый трек.",
+        reply_markup=_menu_keyboard(),
+    )
+
+
+async def _process_soundcloud_bulk(message: Message, state: FSMContext, url: str) -> None:
+    """Импорт профиля/лайков/плейлиста/поиска SoundCloud целиком — только Premium."""
+    if not await _require_premium_for_bulk(message):
+        return
+
+    scanning = await message.answer("🔍 Читаю страницу SoundCloud…")
+    from app.services.soundcloud import list_soundcloud_entries
+
+    try:
+        entries = await asyncio.to_thread(list_soundcloud_entries, url)
+    except Exception:  # noqa: BLE001
+        entries = []
+    if not entries:
+        await scanning.edit_text(
+            "Не удалось прочитать страницу SoundCloud. Проверьте ссылку и попробуйте ещё раз.",
+            reply_markup=_cancel_keyboard(),
+        )
+        return
+
+    batch = entries[: settings.playlist_import_limit] if settings.playlist_import_limit else entries
+    queued = sum(
+        enqueue_soundcloud_user_import(e.url, message.from_user.id, message.chat.id, quiet=True)
+        for e in batch
+    )
+    if queued == 0:
+        await scanning.edit_text(
+            "Импорт сейчас недоступен — попробуйте позже.", reply_markup=_menu_keyboard()
+        )
+        return
+    await state.clear()
+    await scanning.edit_text(
+        f"⏳ Принято {queued} треков с SoundCloud.\n\n"
+        "Они появятся в вашей библиотеке по мере обработки — без сообщений на каждый трек.",
+        reply_markup=_menu_keyboard(),
+    )
+
+
+async def _process_soundcloud_track(message: Message, state: FSMContext, url: str) -> None:
+    """Один трек SoundCloud — бесплатно."""
+    if not enqueue_soundcloud_user_import(normalize_soundcloud_url(url), message.from_user.id, message.chat.id):
+        await message.answer(
+            "Импорт сейчас недоступен — попробуйте позже.", reply_markup=_menu_keyboard()
+        )
+        return
+    await state.clear()
+    await message.answer(
+        "⏳ Принято! Скачаем трек с SoundCloud и пришлём сюда — обычно меньше минуты.",
         reply_markup=_menu_keyboard(),
     )
 
 
 @router.message(UploadTrack.waiting_file, F.text)
 async def process_link(message: Message, state: FSMContext) -> None:
-    """Импорт по YouTube-ссылке (парсер в общем доступе, с фильтрами против мусора)."""
-    video_id = extract_video_id(message.text)
+    """Импорт по ссылке: YouTube Music / SoundCloud. Один трек — бесплатно,
+    профиль/плейлист/лайки целиком — Premium."""
+    text = message.text.strip()
+
+    # SoundCloud: определяем одиночный трек (бесплатно) vs пачку (Premium)
+    if is_soundcloud_link(text):
+        kind = soundcloud_link_kind(text)
+        if kind == "track":
+            await _process_soundcloud_track(message, state, text)
+        else:
+            await _process_soundcloud_bulk(message, state, text)
+        return
+
+    video_id = extract_video_id(text)
     if video_id is None:
-        if is_playlist_link(message.text):
+        if is_playlist_link(text):
             await _process_playlist_link(message, state)
             return
         await message.answer(
-            "Жду аудиофайл или ссылку на YouTube / YouTube Music 🎵", reply_markup=_cancel_keyboard()
+            "Жду аудиофайл или ссылку на трек — YouTube Music или SoundCloud 🎵",
+            reply_markup=_cancel_keyboard(),
         )
         return
-
-    async with session_factory() as session:
-        user = await ensure_user(session, message.from_user)
-        if not await can_upload(session, user):
-            await state.clear()
-            await message.answer(
-                f"На бесплатном тарифе можно загрузить {settings.free_upload_limit} треков.\n"
-                "💎 Premium увеличивает лимит — раздел «Купить Premium» в меню.",
-                reply_markup=_menu_keyboard(),
-            )
-            return
 
     checking = await message.answer("🔍 Проверяю ссылку…")
     from app.services.youtube.downloader import fetch_video_info
@@ -213,7 +267,10 @@ async def process_link(message: Message, state: FSMContext) -> None:
 
 @router.message(UploadTrack.waiting_file)
 async def process_not_audio(message: Message) -> None:
-    await message.answer("Жду аудиофайл или ссылку на YouTube / YouTube Music 🎵", reply_markup=_cancel_keyboard())
+    await message.answer(
+        "Жду аудиофайл или ссылку на трек — YouTube Music или SoundCloud 🎵",
+        reply_markup=_cancel_keyboard(),
+    )
 
 
 @router.message(UploadTrack.waiting_title, F.text)

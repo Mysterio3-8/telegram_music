@@ -192,3 +192,19 @@ async def test_permanent_failures_marked_seen_transient_are_not(session, monkeyp
     assert report.failed == 2
     assert await si._already_seen(session, "https://soundcloud.com/u/drm-track") is True
     assert await si._already_seen(session, "https://soundcloud.com/u/flaky-track") is False
+
+
+def test_soundcloud_link_kind():
+    from app.services.soundcloud import soundcloud_link_kind
+
+    # одиночный трек — бесплатно
+    assert soundcloud_link_kind("https://soundcloud.com/user/my-beat") == "track"
+    # профиль / разделы / поиск — пачка (Premium)
+    assert soundcloud_link_kind("https://soundcloud.com/user") == "bulk"
+    assert soundcloud_link_kind("https://soundcloud.com/user/likes") == "bulk"
+    assert soundcloud_link_kind("https://soundcloud.com/user/tracks") == "bulk"
+    assert soundcloud_link_kind("https://soundcloud.com/user/sets/my-pack") == "bulk"
+    assert soundcloud_link_kind("https://soundcloud.com/search?q=phonk") == "bulk"
+    assert soundcloud_link_kind("https://soundcloud.com/tags/lofi") == "bulk"
+    # не SoundCloud
+    assert soundcloud_link_kind("https://youtube.com/watch?v=abc") is None

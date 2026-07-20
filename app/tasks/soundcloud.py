@@ -93,3 +93,51 @@ def soundcloud_scan_due() -> None:
     for source_id in ids:
         soundcloud_scan_source.delay(source_id=source_id)
     logger.info("SoundCloud scan_due: запущена проверка %s источников", len(ids))
+
+
+@celery_app.task(name="soundcloud.user_import", bind=True, max_retries=2)
+def soundcloud_user_import(
+    self, url: str, telegram_id: int, chat_id: int, quiet: bool = False
+) -> None:
+    """Импорт одного трека SoundCloud по ссылке от пользователя: скачивает, заводит
+    трек, присылает его в чат. quiet — пачечный режим (профиль/лайки): треки тихо
+    падают в библиотеку без сообщений на каждый."""
+    from app.services.soundcloud_import import process_user_soundcloud_import
+    from app.services.youtube.user_import import UserImportRejected
+
+    async def _run(session):
+        bot = Bot(token=settings.bot_token)
+        try:
+            try:
+                track, created = await process_user_soundcloud_import(
+                    session, bot, url, telegram_id
+                )
+            except UserImportRejected as exc:
+                if not quiet:
+                    await bot.send_message(chat_id, f"❌ Не добавили: {exc}")
+                return
+            if quiet:
+                return
+            note = (
+                "добавлен в общую базу и вашу библиотеку"
+                if created
+                else "уже был в базе — добавили в вашу библиотеку"
+            )
+            if track.tg_file_id:
+                await bot.send_audio(
+                    chat_id, track.tg_file_id, caption=f"✅ {track.artist} — {track.title}\nТрек {note}."
+                )
+            else:
+                await bot.send_message(chat_id, f"✅ {track.artist} — {track.title} — {note}.")
+        finally:
+            await bot.session.close()
+
+    try:
+        asyncio.run(_with_session(_run))
+    except Exception as exc:  # noqa: BLE001 — повтор с паузой; после ретраев сообщаем
+        if self.request.retries >= self.max_retries:
+            if not quiet:
+                asyncio.run(_notify(chat_id, "❌ Не удалось скачать трек по ссылке. Попробуйте позже."))
+            logger.warning("SoundCloud user-импорт %s не удался: %s", url, exc)
+            return
+        raise self.retry(exc=exc, countdown=60)
