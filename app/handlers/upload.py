@@ -9,7 +9,7 @@ from app.db.base import session_factory
 from app.handlers.common import ensure_user, format_duration
 from app.config import settings
 from app.services.library import add_to_library
-from app.services.premium import can_upload, is_premium_active
+from app.services.premium import is_premium_active
 from app.services.soundcloud import is_soundcloud_link, normalize_soundcloud_url, soundcloud_link_kind
 from app.services.uploads import AudioMeta, create_uploaded_track, find_duplicate, validate_audio
 from app.services.youtube.user_import import duration_error, extract_video_id, is_playlist_link
@@ -324,15 +324,7 @@ async def cb_upload_confirm(callback: CallbackQuery, state: FSMContext) -> None:
             )
             await callback.answer()
             return
-        if not await can_upload(session, user):
-            await state.clear()
-            await callback.message.edit_text(
-                f"На бесплатном тарифе можно загрузить {settings.free_upload_limit} треков.\n"
-                "💎 Premium увеличивает лимит — раздел «Купить Premium» в меню.",
-                reply_markup=_menu_keyboard(),
-            )
-            await callback.answer()
-            return
+        # Загрузка аудиофайлом — всегда бесплатно и без счётчика (по одному треку)
         track = await create_uploaded_track(session, user.id, meta, data["title"], data["artist"])
     enqueue_enrich(track.id, meta.file_id)
     await state.clear()
