@@ -1,4 +1,11 @@
-import { resolveAudioUrl, shuffle, recordListen, getMix, getTrackById } from "./api.js";
+import {
+  resolveAudioUrl,
+  shuffle,
+  recordListen,
+  getMix,
+  getTrackById,
+  getTracks,
+} from "./api.js";
 import { pushRecentTrack, getRecSettings } from "./prefs.js";
 import { isOffline, offlineBlobUrl } from "./offline.js";
 
@@ -28,7 +35,11 @@ const state = {
   currentTrack: null,
   isPlaying: false,
   shuffleMode: true,
+  repeatMode: false, // повтор текущего трека (audio.loop)
   playerOpen: false,
+  queueOpen: false, // панель «Очередь» в плеере (скрины VK доп копи/)
+  playerSettingsOpen: false, // шит ⚙️: таймер сна + эквалайзер
+  sleepMinutes: 0, // активный таймер сна (0 — выключен)
   sheetTrack: null,
   toast: "",
   recDraft: getRecSettings(), // редактируемый черновик настроек рекомендаций
@@ -392,6 +403,61 @@ export function toggleShuffle() {
   notify();
 }
 
+export function toggleRepeat() {
+  state.repeatMode = !state.repeatMode;
+  audio.loop = state.repeatMode; // loop=true — ended не стреляет, трек крутится сам
+  notify();
+}
+
+// Прыжок на трек прямо из панели «Очередь» (скрины VK)
+export function playQueueIndex(index) {
+  if (index < 0 || index >= state.queue.length) return;
+  startTrack(index);
+}
+
+// «Микс по треку»: очередь = сам трек + его исполнитель + общий микс
+export async function playTrackMix(track) {
+  showToast("Собираю микс по треку…");
+  try {
+    const [byArtist, mix] = await Promise.all([
+      getTracks(track.artist || "", 1, 50),
+      getMix({}),
+    ]);
+    const seen = new Set([track.id]);
+    const pool = [...(byArtist.items || []), ...mix].filter(
+      (t) => !seen.has(t.id) && seen.add(t.id)
+    );
+    state.queue = [track, ...shuffle(pool)];
+    startTrack(0);
+    state.playerOpen = true;
+    state.sheetTrack = null;
+    notify();
+  } catch {
+    showToast("Не удалось собрать микс");
+  }
+}
+
+// Таймер сна: пауза через N минут (0 — выключить)
+let sleepTimerId = null;
+
+export function setSleepTimer(minutes) {
+  clearTimeout(sleepTimerId);
+  sleepTimerId = null;
+  state.sleepMinutes = minutes;
+  if (minutes > 0) {
+    sleepTimerId = setTimeout(() => {
+      audio.pause();
+      state.sleepMinutes = 0;
+      showToast("Таймер сна: воспроизведение остановлено");
+      notify();
+    }, minutes * 60 * 1000);
+    showToast(`Таймер сна: ${minutes} мин`);
+  } else {
+    showToast("Таймер сна выключен");
+  }
+  notify();
+}
+
 export function openPlayer() {
   state.playerOpen = true;
   notify();
@@ -399,6 +465,8 @@ export function openPlayer() {
 
 export function closePlayer() {
   state.playerOpen = false;
+  state.queueOpen = false;
+  state.playerSettingsOpen = false;
   notify();
 }
 

@@ -35,17 +35,21 @@ import {
   openPlayer,
   openSheet,
   playMix,
+  playQueueIndex,
   playRecommended,
   playVibe,
   playNext,
   playPrev,
   playTrack,
+  playTrackMix,
   resetToTab,
   seekToFraction,
+  setSleepTimer,
   showToast,
   subscribe,
   subscribeProgress,
   togglePlay,
+  toggleRepeat,
   toggleShuffle,
 } from "./state.js";
 import { renderHeader } from "./components/header.js";
@@ -745,6 +749,38 @@ root.addEventListener("click", (event) => {
     case "open-equalizer":
       navigateTo("equalizer");
       break;
+    case "open-queue":
+      mutate({ queueOpen: true });
+      break;
+    case "close-queue":
+      mutate({ queueOpen: false });
+      break;
+    case "queue-jump":
+      playQueueIndex(Number(el.dataset.index));
+      mutate({ queueOpen: false });
+      break;
+    case "toggle-repeat":
+      toggleRepeat();
+      break;
+    case "open-player-settings":
+      mutate({ playerSettingsOpen: true });
+      break;
+    case "close-player-settings":
+      mutate({ playerSettingsOpen: false });
+      break;
+    case "sleep-set":
+      setSleepTimer(Number(el.dataset.min));
+      mutate({ playerSettingsOpen: false });
+      break;
+    case "open-equalizer-from-player":
+      closePlayer();
+      navigateTo("equalizer");
+      break;
+    case "play-track-mix": {
+      const track = findTrack(id);
+      if (track) playTrackMix(track);
+      break;
+    }
     case "open-interface":
       navigateTo("interface");
       break;

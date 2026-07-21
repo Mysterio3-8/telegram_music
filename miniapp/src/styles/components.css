@@ -2773,3 +2773,82 @@
   opacity: 0.45;
   pointer-events: none;
 }
+
+/* ============ Плеер: нижние табы, очередь, чип-иконка (скрины VK доп копи/) ============ */
+
+.player-bottombar {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--divider);
+}
+
+.player-bottombar__tab {
+  flex: 1;
+  height: 44px;
+  border-radius: var(--radius-md);
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.player-bottombar__tab:active {
+  background: var(--surface-elevated);
+}
+
+.player-bottombar__count {
+  padding: 2px 9px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.12);
+  font-size: 12px;
+}
+
+.player-chip--icon {
+  padding: 0 12px;
+}
+
+.sheet--tall {
+  max-height: 78dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.queue-list {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  margin: 0 -4px;
+}
+
+.queue-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 14px;
+  text-align: left;
+}
+
+.queue-row.is-current {
+  background: var(--accent-soft);
+}
+
+.queue-row.is-current .track-title {
+  color: var(--text-accent);
+}
+
+.queue-row svg {
+  width: 18px;
+  height: 18px;
+  color: var(--icon-active);
+  flex-shrink: 0;
+}
+
+.queue-row:active {
+  background: var(--surface-elevated);
+}
