@@ -22,6 +22,7 @@ def admin_panel_keyboard(reclaimable_count: int = 0, junk_count: int = 0) -> Inl
             ]
         )
     rows += [
+        [InlineKeyboardButton(text="📣 Рассылка", callback_data="adm:bcast")],
         [InlineKeyboardButton(text="📢 Каналы подписки", callback_data="adm:subch")],
         [InlineKeyboardButton(text="🎧 Треки: YouTube · YT Music · SoundCloud", callback_data="adm:yt")],
         [InlineKeyboardButton(text="🎼 Минусы: мой ТГ-канал", callback_data="adm:tgc")],

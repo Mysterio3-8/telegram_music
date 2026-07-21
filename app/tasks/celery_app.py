@@ -27,4 +27,4 @@ celery_app.conf.update(
 )
 
 # Регистрируем задачи в воркере (celery -A app.tasks.celery_app worker)
-from app.tasks import enrich, soundcloud, telegram_channel, youtube  # noqa: E402,F401
+from app.tasks import broadcast, enrich, soundcloud, telegram_channel, youtube  # noqa: E402,F401

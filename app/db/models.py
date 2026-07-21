@@ -22,6 +22,8 @@ class User(Base):
     referred_by: Mapped[int | None] = mapped_column(BigInteger, index=True)  # telegram_id пригласившего
     referral_milestones_claimed: Mapped[int] = mapped_column(default=0, server_default="0")
     premium_discount_pct: Mapped[int] = mapped_column(default=0, server_default="0")
+    # Рассылка: True — пользователь заблокировал бота (TelegramForbiddenError), больше не шлём
+    bot_blocked: Mapped[bool] = mapped_column(default=False, server_default="0")
 
 
 class Track(Base):
