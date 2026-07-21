@@ -32,7 +32,7 @@ async def make_source_and_import(session, video_id: str = "vid00000001") -> tupl
     return source, imp
 
 
-async def test_process_import_mints_via_bot_without_touching_storage(session, monkeypatch):
+async def test_process_import_mints_via_bot_and_archives(session, monkeypatch):
     source, imp = await make_source_and_import(session)
     audio = DownloadedAudio(
         data=b"fake-audio-bytes", file_format="mp3", duration=200, video_title="DJ KL - Track One"
@@ -50,7 +50,7 @@ async def test_process_import_mints_via_bot_without_touching_storage(session, mo
     track = await session.get(Track, imp.track_id)
     assert track.tg_file_id == "tg_file_1"
     assert track.meta_synced is True
-    assert track.storage_path is None  # ничего не легло на диск
+    assert track.storage_path == f"local://tracks/{track.id}"  # архив для стрима Mini App
     assert len(bot.calls) == 1
 
 

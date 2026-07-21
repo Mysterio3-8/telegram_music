@@ -89,6 +89,11 @@ class Settings(BaseSettings):
     # chromaprint: имя/путь бинарника fpcalc (пусто → отпечаток не считается)
     fpcalc_path: str = "fpcalc"
 
+    # LRU-кэш байтов аудио для стриминга Mini App: горячие треки не скачиваются
+    # из Telegram/S3 на каждый плей. 0 МБ → кэш выключен.
+    audio_cache_dir: str = "audio_cache"
+    audio_cache_max_mb: int = 2048
+
     # YouTube-импортёр (доп. ТЗ). Cookies — путь к файлу в формате Netscape (yt-dlp),
     # НЕ в БД и НЕ в логах; для публичных каналов не требуются.
     youtube_cookies_path: str = ""
@@ -100,6 +105,17 @@ class Settings(BaseSettings):
     soundcloud_check_interval_days: int = 1
     # Сколько треков забирать со страницы поиска/тега SoundCloud (scsearch<N>)
     soundcloud_search_limit: int = 200
+    # Анти-бан при массовой закачке 24/7: рандомная пауза между скачиваниями (сек)
+    soundcloud_min_delay: float = 5.0
+    soundcloud_max_delay: float = 60.0
+    # Прокси для SoundCloud-запросов yt-dlp: http/socks5-адреса через запятую
+    # (http://user:pass@host:port). Пусто → без прокси. Ротация по кругу на каждый
+    # запрос; при ошибке скачивания — повтор через следующий прокси.
+    proxy_list: str = ""
+
+    @property
+    def proxy_list_items(self) -> list[str]:
+        return [p.strip() for p in self.proxy_list.split(",") if p.strip()]
 
     # Личный Telegram-канал: импорт своих аудиопостов через MTProto (Telethon).
     # api_id/api_hash — на my.telegram.org. session_path — файл входа, вне git,

@@ -1,3 +1,5 @@
+import logging
+
 from aiogram import Bot
 from aiogram.types import BufferedInputFile
 from sqlalchemy import func, select
@@ -9,6 +11,20 @@ from app.services.fingerprint import compute_fingerprint_from_bytes
 from app.services.track_meta import build_filename, retag_audio
 from app.services.uploads import DUPLICATE_DURATION_TOLERANCE, find_by_fingerprint, find_duplicate
 from app.storage.base import StorageBackend
+
+logger = logging.getLogger(__name__)
+
+
+async def _archive_bytes(session: AsyncSession, entity, storage_key: str, data: bytes) -> None:
+    """Архивная копия заминченного файла: стрим Mini App не зависит от лимита
+    Bot API 20 МБ. Ошибка хранилища не ломает импорт — трек живёт по tg_file_id."""
+    try:
+        from app.storage import get_storage
+
+        entity.storage_path = get_storage().save(storage_key, data)
+        await session.commit()
+    except Exception:  # noqa: BLE001
+        logger.warning("Не удалось сохранить архив %s", storage_key, exc_info=True)
 
 
 async def import_track_detailed(
@@ -134,7 +150,7 @@ async def import_instrumental_via_telegram_mint(
     source: str,
 ) -> tuple[Instrumental, bool]:
     """Зеркало import_via_telegram_mint для минусов: дедуп только среди
-    instrumentals (TZ §9), файл минтится через бота — байты на диск не пишутся.
+    instrumentals (TZ §9), файл минтится через бота + архивная копия в хранилище.
     Возвращает (минус, создан_ли_новый)."""
     existing = await find_existing_instrumental(session, fingerprint, title, artist, duration)
     if existing is not None:
@@ -158,6 +174,7 @@ async def import_instrumental_via_telegram_mint(
     )
     session.add(instrumental)
     await session.commit()
+    await _archive_bytes(session, instrumental, f"instrumentals/{instrumental.id}", tagged)
     return instrumental, True
 
 
@@ -249,11 +266,11 @@ async def import_via_telegram_mint(
     fingerprint: str | None,
     archive_chat_id: int,
 ) -> tuple[Track, bool]:
-    """Дедуп; если трек новый — перетегирует и отправляет через бота, чтобы
-    получить tg_file_id БЕЗ сохранения байтов на диск (единственный способ
-    заминтить file_id — реально отправить файл через Bot API; это инфраструктурная
-    операция уровня storage.save(), а не бизнес-логика в чужом слое). Общая точка
-    для YouTube- и Telegram-канал-импортёров. Возвращает (трек, создан_ли_новый)."""
+    """Дедуп; если трек новый — перетегирует, отправляет через бота (единственный
+    способ заминтить file_id — реально отправить файл через Bot API) и кладёт
+    архивную копию в хранилище: стрим Mini App не упирается в лимит Bot API 20 МБ.
+    Общая точка для YouTube- и Telegram-канал-импортёров.
+    Возвращает (трек, создан_ли_новый)."""
     track = await find_existing_track(session, fingerprint, title, artist, duration)
     if track is not None:
         return track, False
@@ -276,4 +293,5 @@ async def import_via_telegram_mint(
         fingerprint=fingerprint,
         tg_file_id=sent.audio.file_id,
     )
+    await _archive_bytes(session, track, f"tracks/{track.id}", tagged)
     return track, True

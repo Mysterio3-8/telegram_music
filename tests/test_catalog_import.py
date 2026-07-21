@@ -55,6 +55,40 @@ async def test_import_skips_fingerprint_duplicate(session, storage, monkeypatch)
     assert created is False
 
 
+class _FakeSentAudio:
+    def __init__(self, file_id: str):
+        self.file_id = file_id
+
+
+class _FakeSentMessage:
+    def __init__(self, file_id: str):
+        self.audio = _FakeSentAudio(file_id)
+
+
+class _FakeBot:
+    async def send_audio(self, chat_id, audio, **kwargs):
+        return _FakeSentMessage("track_file_1")
+
+
+async def test_mint_saves_archive_copy(session):
+    """Минт через бота кладёт архивную копию: стрим не зависит от лимита Bot API 20 МБ."""
+    track, created = await catalog_import.import_via_telegram_mint(
+        session,
+        _FakeBot(),
+        title="Believer",
+        artist="Imagine Dragons",
+        duration=200,
+        file_format="mp3",
+        data=b"audio",
+        fingerprint=None,
+        archive_chat_id=777,
+    )
+
+    assert created is True
+    assert track.tg_file_id == "track_file_1"
+    assert track.storage_path == f"local://tracks/{track.id}"
+
+
 async def test_import_instrumental(session, storage):
     created = await catalog_import.import_instrumental(session, storage, make_item(title="Believer Minus"))
 

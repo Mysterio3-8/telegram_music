@@ -14,6 +14,7 @@ from starlette.concurrency import run_in_threadpool
 
 from app.api.security import verify_audio_signature
 from app.config import settings
+from app.services.audio_cache import cache_get, cache_put
 from app.db.base import session_factory
 from app.db.models import Instrumental, Track
 from app.services.library import get_track
@@ -38,7 +39,12 @@ def _media_type(track: Track) -> str:
 async def _load_audio_bytes(
     storage_key: str, storage_path: str | None, tg_file_id: str | None
 ) -> bytes | None:
-    """Байты аудио: архивное хранилище, иначе скачивание из Telegram (getFile ≤ 20 МБ)."""
+    """Байты аудио: архивное хранилище, иначе скачивание из Telegram (getFile ≤ 20 МБ).
+
+    Telegram-путь медленный (скачивание на каждый плей), поэтому его результат
+    оседает в LRU-кэше на диске; архивный путь не кэшируем — локальное хранилище
+    и так на диске.
+    """
     if storage_path:
         try:
             from app.storage import get_storage
@@ -48,16 +54,22 @@ async def _load_audio_bytes(
         except Exception:  # noqa: BLE001
             logger.warning("Архив недоступен %s", storage_key, exc_info=True)
     if tg_file_id:
+        cached = await run_in_threadpool(cache_get, storage_key)
+        if cached is not None:
+            return cached
         try:
             bot = Bot(token=settings.bot_token)
             try:
                 buffer = io.BytesIO()
                 await bot.download(tg_file_id, destination=buffer)
-                return buffer.getvalue()
+                data = buffer.getvalue()
             finally:
                 await bot.session.close()
         except Exception:  # noqa: BLE001
             logger.warning("Не удалось скачать %s из Telegram", storage_key, exc_info=True)
+            return None
+        await run_in_threadpool(cache_put, storage_key, data)
+        return data
     return None
 
 

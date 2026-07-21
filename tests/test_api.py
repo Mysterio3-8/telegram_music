@@ -8,7 +8,7 @@ from app.api.deps import get_db
 from app.api.security import create_access_token
 from app.db import models  # noqa: F401
 from app.db.base import Base
-from app.db.models import Track, User
+from app.db.models import Instrumental, Track, User
 
 
 @pytest_asyncio.fixture
@@ -24,6 +24,7 @@ async def api():
             [
                 Track(title="Believer", artist="Imagine Dragons", duration=204),
                 Track(title="Thunder", artist="Imagine Dragons", duration=187),
+                Instrumental(title="Night Minus", artist="Zvyaga", duration=120),
             ]
         )
         await seed.commit()
@@ -70,6 +71,26 @@ def test_list_tracks(api):
     assert body["total"] == 2
     assert {t["title"] for t in body["items"]} == {"Believer", "Thunder"}
     assert "storage_path" not in body["items"][0]  # внутренние поля не утекают
+
+
+def test_track_by_id_returns_fresh_audio_url(api):
+    client, token = api
+    response = client.get("/track/1", headers=auth_header(token))
+    assert response.status_code == 200
+    body = response.json()
+    assert body["id"] == 1
+    assert "/tracks/1/audio?exp=" in body["audio_url"]
+
+
+def test_track_by_negative_id_returns_instrumental(api):
+    """Отрицательный id — минус: фронт освежает протухшие ссылки единым эндпоинтом."""
+    client, token = api
+    response = client.get("/track/-1", headers=auth_header(token))
+    assert response.status_code == 200
+    body = response.json()
+    assert body["id"] == -1
+    assert body["title"] == "Night Minus"
+    assert "/instrumentals/1/audio?exp=" in body["audio_url"]
 
 
 def test_search_filters(api):

@@ -1,4 +1,4 @@
-import { resolveAudioUrl, shuffle, recordListen, getMix } from "./api.js";
+import { resolveAudioUrl, shuffle, recordListen, getMix, getTrackById } from "./api.js";
 import { pushRecentTrack, getRecSettings } from "./prefs.js";
 import { isOffline, offlineBlobUrl } from "./offline.js";
 
@@ -109,7 +109,8 @@ audio.addEventListener("pause", () => {
 let consecutiveErrors = 0;
 
 audio.addEventListener("error", () => {
-  if (!state.currentTrack) return;
+  const track = state.currentTrack;
+  if (!track) return;
   consecutiveErrors += 1;
   if (consecutiveErrors >= Math.max(3, state.queue.length)) {
     // вся очередь битая — не зацикливаемся на переборе
@@ -118,12 +119,20 @@ audio.addEventListener("error", () => {
     notify();
     return;
   }
+  // Ошибка чаще всего = протухшая подписанная ссылка (TTL 6 часов):
+  // один раз перезапрашиваем свежую по id, скипаем только если и она не играет
+  if (!track.audioRefreshed) {
+    track.audioRefreshed = true;
+    refreshAndPlay(track);
+    return;
+  }
   showToast("Не удалось загрузить трек — пропускаю");
   playNext();
 });
 
 audio.addEventListener("playing", () => {
   consecutiveErrors = 0;
+  if (state.currentTrack) state.currentTrack.audioRefreshed = false; // заиграл — право на повторный рефреш вернулось
 });
 
 export function getState() {
@@ -227,11 +236,31 @@ function revokeObjectUrl() {
   }
 }
 
+// Свежая подписанная ссылка по id: для треков из «Недавних» (audio_url не хранится)
+// и при ошибке воспроизведения (кэшированная ссылка старше 6 часов → 403).
+async function refreshAndPlay(track) {
+  try {
+    const fresh = await getTrackById(track.id);
+    if (state.currentTrack !== track) return; // трек сменился, пока ходили за ссылкой
+    if (!fresh.audio_url) {
+      showToast("У трека нет аудио");
+      playNext();
+      return;
+    }
+    track.audio_url = fresh.audio_url;
+    playFrom(resolveAudioUrl(track), track);
+  } catch {
+    if (state.currentTrack !== track) return;
+    showToast("Не удалось загрузить трек — пропускаю");
+    playNext();
+  }
+}
+
 function setAudioSource(track) {
   const playNetwork = () => {
     const url = resolveAudioUrl(track);
     if (!url) {
-      showToast("У трека нет аудио");
+      refreshAndPlay(track); // трек из localStorage без ссылки — резолвим по id
       return;
     }
     playFrom(url, track);

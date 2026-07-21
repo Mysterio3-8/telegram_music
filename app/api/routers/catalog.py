@@ -62,6 +62,13 @@ async def search(
 async def get_track_by_id(
     track_id: int, session: AsyncSession = Depends(get_db)
 ) -> TrackOut:
+    """Свежий трек со свежей подписанной аудио-ссылкой. Отрицательный id — минус
+    (конвенция Mini App): фронт освежает протухшие ссылки единым эндпоинтом."""
+    if track_id < 0:
+        instrumental = await get_instrumental(session, -track_id)
+        if instrumental is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Минус не найден")
+        return instrumental_track_out(instrumental)
     track = await get_track(session, track_id)
     if track is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Трек не найден")

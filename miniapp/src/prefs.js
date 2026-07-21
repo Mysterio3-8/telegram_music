@@ -36,12 +36,13 @@ export function getRecentTracks() {
 
 export function pushRecentTrack(track) {
   if (!track) return;
+  // audio_url НЕ сохраняем: подписанная ссылка живёт 6 часов, протухшая копия
+  // в localStorage давала «трек недоступен». Плеер резолвит свежую по id.
   const slim = {
     id: track.id,
     title: track.title,
     artist: track.artist,
     duration: track.duration,
-    audio_url: track.audio_url,
   };
   const rest = getRecentTracks().filter((t) => t.id !== track.id);
   writeJson(RECENT_TRACKS_KEY, [slim, ...rest].slice(0, RECENT_TRACKS_LIMIT));

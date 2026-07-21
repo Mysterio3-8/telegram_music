@@ -77,6 +77,12 @@ export function getTracks(query = "", page = 1, pageSize = 100) {
   return request(`/tracks?${params}`);
 }
 
+// Свежий трек по id (минус — отрицательный id): даёт новую подписанную audio_url,
+// когда кэшированная протухла (TTL 6 часов) или её нет вовсе (треки из «Недавних»).
+export function getTrackById(trackId) {
+  return request(`/track/${trackId}`);
+}
+
 // Минусы: приходят в формате треков с отрицательными id (вкладка «Минусы» в поиске)
 export function getInstrumentals(query = "", page = 1, pageSize = 50) {
   const params = new URLSearchParams({ q: query, page: String(page), page_size: String(pageSize) });
