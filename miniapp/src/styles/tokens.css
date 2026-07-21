@@ -123,3 +123,50 @@
   --duration-fast: 150ms;
   --duration-normal: 280ms;
 }
+
+/* --- Акцентный цвет интерфейса (настройки → Интерфейс, скрин VK photo_19).
+   Переопределяем только интерактивный акцент; градиенты hero/premium не трогаем. --- */
+
+:root[data-accent="gold"] {
+  --accent: #f5a623;
+  --accent-hover: #ffb84d;
+  --accent-pressed: #d48c14;
+  --accent-soft: rgba(245, 166, 35, 0.14);
+  --accent-glow: 0 0 24px rgba(245, 166, 35, 0.22);
+  --text-accent: #ffca6b;
+  --icon-active: #f5a623;
+  --progress-active: linear-gradient(90deg, #f5a623, #ee3fc8);
+}
+
+:root[data-accent="pink"] {
+  --accent: #ef3f7f;
+  --accent-hover: #ff6299;
+  --accent-pressed: #cc2f68;
+  --accent-soft: rgba(239, 63, 127, 0.14);
+  --accent-glow: 0 0 24px rgba(239, 63, 127, 0.22);
+  --text-accent: #ff8ab4;
+  --icon-active: #ef3f7f;
+  --progress-active: linear-gradient(90deg, #ef3f7f, #7b46e8);
+}
+
+:root[data-accent="green"] {
+  --accent: #32d74b;
+  --accent-hover: #55e56a;
+  --accent-pressed: #26b13c;
+  --accent-soft: rgba(50, 215, 75, 0.14);
+  --accent-glow: 0 0 24px rgba(50, 215, 75, 0.22);
+  --text-accent: #74e987;
+  --icon-active: #32d74b;
+  --progress-active: linear-gradient(90deg, #32d74b, #3b7bfe);
+}
+
+:root[data-accent="azure"] {
+  --accent: #32ade6;
+  --accent-hover: #56c1f2;
+  --accent-pressed: #2790c2;
+  --accent-soft: rgba(50, 173, 230, 0.14);
+  --accent-glow: 0 0 24px rgba(50, 173, 230, 0.22);
+  --text-accent: #7fd0f5;
+  --icon-active: #32ade6;
+  --progress-active: linear-gradient(90deg, #32ade6, #ee3fc8);
+}

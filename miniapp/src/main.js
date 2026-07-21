@@ -72,7 +72,16 @@ import { renderAlbums } from "./screens/albums.js";
 import { renderCollection } from "./screens/collection.js";
 import { renderReferral } from "./screens/referral.js";
 import { renderPremium } from "./screens/premium.js";
-import { isOffline, saveOffline, removeOffline, offlineTracks } from "./offline.js";
+import { renderEqualizer } from "./screens/equalizer.js";
+import { renderInterface } from "./screens/interface.js";
+import { renderStorage } from "./screens/storage.js";
+import {
+  isOffline,
+  offlineSupported,
+  saveOffline,
+  removeOffline,
+  offlineTracks,
+} from "./offline.js";
 import {
   getRecentTracks,
   saveRecSettings,
@@ -80,7 +89,12 @@ import {
   pushRecentSearch,
   clearRecentSearches,
   toggleFavoriteArtist,
+  applyAccent,
+  getUiSettings,
+  saveUiSettings,
 } from "./prefs.js";
+import { applyEqualizer, currentGains, getEqSettings, saveEqSettings } from "./equalizer.js";
+import { getTrackById } from "./api.js";
 
 const root = document.getElementById("app");
 const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
@@ -88,6 +102,15 @@ const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : 
 if (tg) {
   tg.ready();
   tg.expand();
+}
+
+applyAccent(); // сохранённый акцентный цвет — до первого рендера
+
+function hapticTap() {
+  if (!getUiSettings().haptic) return;
+  if (tg && tg.HapticFeedback && tg.HapticFeedback.impactOccurred) {
+    tg.HapticFeedback.impactOccurred("light");
+  }
 }
 
 const SCREENS = {
@@ -98,6 +121,9 @@ const SCREENS = {
   profile: renderProfile,
   settings: renderSettings,
   recommendations: renderRecommendations,
+  equalizer: renderEqualizer,
+  interface: renderInterface,
+  storage: renderStorage,
   recent: renderRecent,
   artists: renderArtists,
   docs: renderDocs,
@@ -360,6 +386,58 @@ function refreshMyTracksBody() {
   if (container) container.innerHTML = renderMyTracksBody(getState());
 }
 
+// «Скачать всё» (шит Моих треков, скрин VK): офлайн-кэш всей библиотеки — Premium.
+async function downloadAllTracks() {
+  mutate({ myTracksMenuOpen: false });
+  const state = getState();
+  if (!state.premium || !state.premium.active) {
+    showToast("Скачивание треков — с Premium");
+    navigateTo("premium");
+    return;
+  }
+  if (!offlineSupported()) {
+    showToast("Офлайн-кэш недоступен на этом устройстве");
+    return;
+  }
+  const list = myTracksList(state).filter((t) => t.id > 0 && !isOffline(t.id));
+  if (!list.length) {
+    showToast("Всё уже скачано");
+    return;
+  }
+  showToast(`Скачиваю ${list.length} треков…`);
+  let done = 0;
+  let failed = 0;
+  for (const track of list) {
+    try {
+      if (!track.audio_url) {
+        const fresh = await getTrackById(track.id);
+        track.audio_url = fresh.audio_url;
+      }
+      await saveOffline(track, resolveAudioUrl(track));
+      done += 1;
+      if (done % 10 === 0) showToast(`Скачано ${done} из ${list.length}…`);
+    } catch {
+      failed += 1;
+    }
+  }
+  showToast(failed ? `Скачано ${done}, не удалось ${failed}` : `Скачано ${done} треков`);
+  mutate({});
+}
+
+async function clearAllOffline() {
+  const tracks = offlineTracks();
+  mutate({ myTracksMenuOpen: false });
+  if (!tracks.length) {
+    showToast("Скачанных треков нет");
+    return;
+  }
+  for (const track of tracks) {
+    await removeOffline(track.id);
+  }
+  showToast("Скачанные треки удалены");
+  mutate({});
+}
+
 function contextTracks(context) {
   const state = getState();
   if (context === "search") return state.searchResults;
@@ -545,6 +623,7 @@ root.addEventListener("click", (event) => {
     return;
   }
   const id = el.dataset.id ? Number(el.dataset.id) : null;
+  hapticTap();
 
   switch (action) {
     case "retry-boot":
@@ -662,6 +741,55 @@ root.addEventListener("click", (event) => {
     case "play-vibe":
       // mood-микс с карточки «Какой сейчас вайб?» — тот же движок, что «Настроить»
       playVibe(el.dataset.mood);
+      break;
+    case "open-equalizer":
+      navigateTo("equalizer");
+      break;
+    case "open-interface":
+      navigateTo("interface");
+      break;
+    case "open-storage":
+      navigateTo("storage");
+      break;
+    case "eq-toggle": {
+      const eq = getEqSettings();
+      saveEqSettings({ ...eq, enabled: !eq.enabled });
+      applyEqualizer();
+      mutate({});
+      break;
+    }
+    case "eq-preset": {
+      saveEqSettings({ ...getEqSettings(), preset: el.dataset.value });
+      applyEqualizer();
+      mutate({});
+      break;
+    }
+    case "set-accent": {
+      saveUiSettings({ ...getUiSettings(), accent: el.dataset.value });
+      applyAccent(el.dataset.value);
+      mutate({});
+      break;
+    }
+    case "toggle-haptic": {
+      const ui = getUiSettings();
+      saveUiSettings({ ...ui, haptic: !ui.haptic });
+      mutate({});
+      break;
+    }
+    case "open-mytracks-menu":
+      mutate({ myTracksMenuOpen: true });
+      break;
+    case "close-mytracks-menu":
+      mutate({ myTracksMenuOpen: false });
+      break;
+    case "mytracks-edit-from-menu":
+      mutate({ myTracksMenuOpen: false, myTracksEdit: true });
+      break;
+    case "mytracks-download-all":
+      downloadAllTracks();
+      break;
+    case "clear-offline":
+      clearAllOffline();
       break;
     case "hero-prev":
     case "hero-next": {
@@ -837,6 +965,21 @@ root.addEventListener("input", (event) => {
   if (role === "mytracks-search") {
     getState().myTracksQuery = event.target.value;
     refreshMyTracksBody();
+  }
+  if (role === "eq-band") {
+    // Движение ползунка меняет звук сразу, без полного ре-рендера (фокус/драг живут)
+    const eq = getEqSettings();
+    const gains = [...currentGains(eq)];
+    gains[Number(event.target.dataset.band)] = Number(event.target.value);
+    saveEqSettings({ ...eq, preset: "custom", custom: gains });
+    applyEqualizer();
+  }
+});
+
+// Отпустили ползунок эквалайзера — обновить галочку «Пользовательская» в списке
+root.addEventListener("change", (event) => {
+  if (event.target.dataset && event.target.dataset.role === "eq-band") {
+    mutate({});
   }
 });
 

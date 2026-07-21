@@ -23,6 +23,13 @@ export function renderSettings(state) {
     <div class="card card--rows">
       ${navRow("Настройки TG MIX", "tune", "open-recommendations")}
       ${navRow("Любимые исполнители", "mic", "open-artists")}
+      ${navRow("Эквалайзер", "sliders", "open-equalizer")}
+    </div>
+
+    <div class="rec-section-label">Приложение</div>
+    <div class="card card--rows">
+      ${navRow("Интерфейс", "palette", "open-interface")}
+      ${navRow("Память устройства", "database", "open-storage")}
     </div>
 
     <div class="rec-section-label">Подписка</div>

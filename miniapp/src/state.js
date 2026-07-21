@@ -60,6 +60,7 @@ const state = {
   myTracksSort: "default", // default | newest | oldest | title | artist
   myTracksEdit: false,
   sortSheetOpen: false,
+  myTracksMenuOpen: false, // шит «…» в шапке Моих треков (скачать всё / удалить скачанные)
   premiumMonths: 12, // выбранный тариф на экране Premium (ТЗ §24)
 };
 
@@ -68,6 +69,9 @@ const progressListeners = new Set();
 
 export const audio = new Audio();
 audio.preload = "auto";
+// Для эквалайзера (Web Audio createMediaElementSource) источник должен быть
+// CORS-чистым; на same-origin прода атрибут безвреден
+audio.crossOrigin = "anonymous";
 
 function notify() {
   structureListeners.forEach((fn) => fn(state));

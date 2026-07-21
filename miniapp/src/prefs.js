@@ -86,6 +86,29 @@ export function hasRecSettings() {
   return Boolean(s.mood || s.recognizability || s.language);
 }
 
+// ---------- Настройки интерфейса (акцентный цвет, тактильный отклик) ----------
+
+const UI_SETTINGS_KEY = "tgmusic-ui-settings";
+const DEFAULT_UI_SETTINGS = { accent: "blue", haptic: true };
+
+export function getUiSettings() {
+  return { ...DEFAULT_UI_SETTINGS, ...readJson(UI_SETTINGS_KEY, {}) };
+}
+
+export function saveUiSettings(settings) {
+  writeJson(UI_SETTINGS_KEY, { ...DEFAULT_UI_SETTINGS, ...settings });
+}
+
+// Применить акцент к документу: [data-accent] переопределяет токены (tokens.css)
+export function applyAccent(accent = getUiSettings().accent) {
+  if (typeof document === "undefined") return;
+  if (accent && accent !== "blue") {
+    document.documentElement.dataset.accent = accent;
+  } else {
+    delete document.documentElement.dataset.accent;
+  }
+}
+
 // ---------- Любимые исполнители (предпочтения) ----------
 
 export function getFavoriteArtists() {

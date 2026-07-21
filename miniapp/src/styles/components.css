@@ -2686,3 +2686,90 @@
     filter: brightness(1.12);
   }
 }
+
+/* ============ Эквалайзер (скрины VK) ============ */
+
+.hint-text {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  margin-top: 3px;
+  font-weight: 400;
+}
+
+.eq-bands {
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+  margin: 18px 2px 16px;
+}
+
+.eq-bands.is-disabled {
+  opacity: 0.45;
+}
+
+.eq-band {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+/* Вертикальный слайдер: горизонтальный input повёрнут на -90° внутри колонки */
+.eq-band__slider {
+  position: relative;
+  width: 30px;
+  height: 150px;
+}
+
+.eq-band__slider input {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 150px;
+  height: 30px;
+  transform: translate(-50%, -50%) rotate(-90deg);
+  appearance: none;
+  background: transparent;
+}
+
+.eq-band__slider input::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--progress-track);
+}
+
+.eq-band__slider input::-webkit-slider-thumb {
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  margin-top: -7.5px;
+  border-radius: 50%;
+  background: #b9b9c0;
+  border: none;
+}
+
+.eq-band__slider input::-moz-range-track {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--progress-track);
+}
+
+.eq-band__slider input::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #b9b9c0;
+  border: none;
+}
+
+.eq-band__label {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.sheet-item.is-disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}

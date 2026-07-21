@@ -86,6 +86,31 @@ function renderSortSheet(state) {
   `;
 }
 
+// Шит «…» в шапке — как в VK (копи/ photo_1): скачать всё / редактировать / удалить скачанные
+function renderMenuSheet(state) {
+  if (!state.myTracksMenuOpen) return "";
+  const downloaded = offlineTracks().length;
+  return `
+    <div class="sheet-overlay" data-action="close-mytracks-menu">
+      <div class="sheet" data-action="noop">
+        <div class="sheet__handle"></div>
+        <button class="sheet-item" data-action="mytracks-download-all">
+          ${icon("download")}<span style="flex:1;text-align:left">Скачать всё</span>
+        </button>
+        <button class="sheet-item" data-action="mytracks-edit-from-menu">
+          ${icon("pencil")}<span style="flex:1;text-align:left">Редактировать мои треки</span>
+        </button>
+        <button class="sheet-item${downloaded ? "" : " is-disabled"}" data-action="clear-offline" style="color:#e35d6a">
+          ${icon("trash")}<span style="flex:1;text-align:left">Удалить скачанные треки</span>
+        </button>
+        <button class="sheet-item" data-action="close-mytracks-menu">
+          <span style="flex:1;text-align:center;font-weight:700">Закрыть</span>
+        </button>
+      </div>
+    </div>
+  `;
+}
+
 export function renderMyTracks(state) {
   const list = myTracksList(state);
   const isDownloads = state.myTracksTab === "downloaded";
@@ -95,7 +120,10 @@ export function renderMyTracks(state) {
     <div class="page-head" data-role="page-head">
       <button class="icon-btn" data-action="back" aria-label="Назад">${icon("back")}</button>
       <span>Мои треки</span>
-      <button class="icon-btn page-head__action${state.myTracksEdit ? " is-active" : ""}" data-action="mytracks-edit" aria-label="Редактировать">${icon("pencil")}</button>
+      <span style="display:flex;gap:6px">
+        <button class="icon-btn page-head__action${state.myTracksEdit ? " is-active" : ""}" data-action="mytracks-edit" aria-label="Редактировать">${icon("pencil")}</button>
+        <button class="icon-btn page-head__action" data-action="open-mytracks-menu" aria-label="Ещё">${icon("more")}</button>
+      </span>
     </div>
   `;
 
@@ -124,7 +152,7 @@ export function renderMyTracks(state) {
     </div>
   `;
 
-  return `${head}${tabs}${searchBox}${toolbar}<div id="mytracks-body">${renderMyTracksBody(state)}</div>${renderSortSheet(state)}`;
+  return `${head}${tabs}${searchBox}${toolbar}<div id="mytracks-body">${renderMyTracksBody(state)}</div>${renderSortSheet(state)}${renderMenuSheet(state)}`;
 }
 
 // Тело списка — отдельно: ввод в поиске перерисовывает только его (фокус не теряется)
