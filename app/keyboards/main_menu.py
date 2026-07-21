@@ -6,6 +6,7 @@ from app.config import settings
 def main_menu_keyboard() -> InlineKeyboardMarkup:
     rows = [
         [InlineKeyboardButton(text="⬆️ Загрузить трек", callback_data="menu:upload")],
+        [InlineKeyboardButton(text="📥 Перенести музыку из сервисов", callback_data="menu:transfer")],
         [InlineKeyboardButton(text="💎 Купить Premium", callback_data="menu:premium")],
     ]
     if settings.public_base_url:

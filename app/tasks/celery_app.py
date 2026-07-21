@@ -18,6 +18,7 @@ celery_app.conf.update(
     # (youtube.user_import, soundcloud.user_import) — в отзывчивую очередь youtube_user,
     # чтобы не стоять за бэклогом массовых сканов каналов/профилей.
     task_routes={
+        "transfer.playlist": {"queue": "youtube_user"},
         "soundcloud.user_import": {"queue": "youtube_user"},
         "soundcloud.*": {"queue": "soundcloud"},
         "youtube.user_import": {"queue": "youtube_user"},
@@ -27,4 +28,11 @@ celery_app.conf.update(
 )
 
 # Регистрируем задачи в воркере (celery -A app.tasks.celery_app worker)
-from app.tasks import broadcast, enrich, soundcloud, telegram_channel, youtube  # noqa: E402,F401
+from app.tasks import (  # noqa: E402,F401
+    broadcast,
+    enrich,
+    soundcloud,
+    telegram_channel,
+    transfer,
+    youtube,
+)

@@ -23,6 +23,7 @@ from app.handlers import (
     stubs,
     subscription,
     track_actions,
+    transfer,
     upload,
 )
 from app.middlewares.ads import AdMiddleware
@@ -56,6 +57,7 @@ async def main() -> None:
         playlists.router,
         search.router,
         upload.router,
+        transfer.router,
         premium.router,
         player.router,
         admin.router,  # до track_actions: перехватывает ta:edit

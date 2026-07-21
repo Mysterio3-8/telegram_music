@@ -79,6 +79,7 @@ import { renderPremium } from "./screens/premium.js";
 import { renderEqualizer } from "./screens/equalizer.js";
 import { renderInterface } from "./screens/interface.js";
 import { renderStorage } from "./screens/storage.js";
+import { renderTransfer } from "./screens/transfer.js";
 import {
   isOffline,
   offlineSupported,
@@ -98,7 +99,7 @@ import {
   saveUiSettings,
 } from "./prefs.js";
 import { applyEqualizer, currentGains, getEqSettings, saveEqSettings } from "./equalizer.js";
-import { getTrackById } from "./api.js";
+import { getTrackById, startTransfer } from "./api.js";
 
 const root = document.getElementById("app");
 const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
@@ -128,6 +129,7 @@ const SCREENS = {
   equalizer: renderEqualizer,
   interface: renderInterface,
   storage: renderStorage,
+  transfer: renderTransfer,
   recent: renderRecent,
   artists: renderArtists,
   docs: renderDocs,
@@ -157,11 +159,28 @@ function renderBootScreen(state) {
   `;
 }
 
+// Рендер батчится в один кадр: серия mutate() подряд (загрузка данных, тосты,
+// смена трека) не перерисовывает DOM несколько раз за тик.
+let renderScheduled = false;
+let lastHtml = "";
+
+function scheduleRender() {
+  if (renderScheduled) return;
+  renderScheduled = true;
+  // Микрозадача, а не requestAnimationFrame: rAF не срабатывает в свёрнутом
+  // Mini App, и экран застывал бы на «Загружаю музыку…»
+  queueMicrotask(() => {
+    renderScheduled = false;
+    render();
+  });
+}
+
 function render() {
   const state = getState();
 
   if (state.bootStatus !== "ready") {
     root.innerHTML = renderBootScreen(state);
+    lastHtml = "";
     return;
   }
 
@@ -177,7 +196,7 @@ function render() {
 
   // Мини-плеер и нижняя навигация живут в одном фиксированном доке —
   // не перекрывают друг друга и контент (ТЗ §2).
-  root.innerHTML = `
+  const html = `
     ${renderHeader(state)}
     <main class="screen">${screenRenderer(state)}</main>
     <div class="bottom-dock">
@@ -189,6 +208,10 @@ function render() {
     ${state.toast ? `<div class="toast">${state.toast}</div>` : ""}
   `;
 
+  if (html === lastHtml) return; // состояние изменилось, разметка — нет: DOM не трогаем
+  lastHtml = html;
+  root.innerHTML = html;
+
   if (keepFocus) {
     const input = root.querySelector(`[data-role="${focusedRole}"]`);
     if (input) {
@@ -198,7 +221,7 @@ function render() {
   }
 }
 
-subscribe(render);
+subscribe(scheduleRender);
 
 // Прогресс — мимо полного рендера: правим только стили/текст существующих узлов.
 subscribeProgress((current, duration) => {
@@ -222,31 +245,37 @@ async function boot() {
   mutate({ bootStatus: "loading", bootError: "" });
   try {
     await login();
-    const [catalogPage, libraryIds, premium, libraryPage] = await Promise.all([
-      getTracks("", 1, CATALOG_PAGE_SIZE),
-      getLibraryIds(),
-      getPremiumStatus(),
-      getLibrary(1),
-    ]);
+    // Главная показывается сразу после двух лёгких запросов: ей нужен только
+    // статус Premium и счётчик библиотеки (= число id). Тяжёлые списки —
+    // каталог и страница библиотеки с подписанными ссылками — догружаются фоном.
+    const [libraryIds, premium] = await Promise.all([getLibraryIds(), getPremiumStatus()]);
     mutate({
       bootStatus: "ready",
       user: telegramUser(),
-      catalog: catalogPage.items,
-      catalogTotal: catalogPage.total,
       libraryIds: new Set(libraryIds),
-      libraryPageItems: libraryPage.items,
-      libraryTotal: libraryPage.total,
+      libraryTotal: libraryIds.length,
       premium,
     });
-    getPopularQueries()
-      .then((queries) => mutate({ popularQueries: queries }))
-      .catch(() => {});
+    loadHeavyData();
   } catch (error) {
     mutate({
       bootStatus: "error",
       bootError: error && error.message ? error.message : "Не удалось загрузить данные",
     });
   }
+}
+
+// Фоновая догрузка: каталог для миксов, страница библиотеки, популярные запросы
+function loadHeavyData() {
+  getTracks("", 1, CATALOG_PAGE_SIZE)
+    .then((page) => mutate({ catalog: page.items, catalogTotal: page.total }))
+    .catch(() => {});
+  getLibrary(1)
+    .then((page) => mutate({ libraryPageItems: page.items, libraryTotal: page.total }))
+    .catch(() => {});
+  getPopularQueries()
+    .then((queries) => mutate({ popularQueries: queries }))
+    .catch(() => {});
 }
 
 let libraryPagesLoaded = 1;
@@ -426,6 +455,33 @@ async function downloadAllTracks() {
   }
   showToast(failed ? `Скачано ${done}, не удалось ${failed}` : `Скачано ${done} треков`);
   mutate({});
+}
+
+async function startPlaylistTransfer() {
+  const input = root.querySelector('[data-role="transfer-input"]');
+  const source = input ? input.value.trim() : "";
+  if (!source) {
+    showToast("Вставьте ссылку или список треков");
+    return;
+  }
+  mutate({ transferSource: source, transferStatus: "loading", transferResult: "" });
+  try {
+    const result = await startTransfer(source);
+    mutate({
+      transferStatus: "idle",
+      transferResult:
+        `Принято треков: ${result.queued}. Переношу — отчёт придёт в чат бота.` +
+        (result.preview.length ? `<br><br>${result.preview.join("<br>")}` : ""),
+    });
+    showToast(`Переношу ${result.queued} треков`);
+  } catch (error) {
+    mutate({
+      transferStatus: "idle",
+      transferResult:
+        (error && error.message) ||
+        "Не удалось прочитать список. Проверьте ссылку или пришлите треки текстом.",
+    });
+  }
 }
 
 async function clearAllOffline() {
@@ -786,6 +842,15 @@ root.addEventListener("click", (event) => {
       break;
     case "open-storage":
       navigateTo("storage");
+      break;
+    case "open-transfer":
+      navigateTo("transfer", { transferResult: "", transferStatus: "idle" });
+      break;
+    case "transfer-service":
+      mutate({ transferService: el.dataset.value });
+      break;
+    case "transfer-start":
+      startPlaylistTransfer();
       break;
     case "eq-toggle": {
       const eq = getEqSettings();

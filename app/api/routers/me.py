@@ -19,6 +19,8 @@ from app.api.schemas import (
     ReferralOut,
     SearchLogIn,
     TrackOut,
+    TransferIn,
+    TransferStartOut,
     UserStatsOut,
     track_out,
 )
@@ -51,6 +53,11 @@ from app.services.playlists import (
 )
 from app.services.artists import artist_tracks, list_artists
 from app.services.recommendations import build_mix, instrumental_mix
+from app.services.playlist_transfer.parsers import (
+    TransferSourceError,
+    fetch_playlist,
+    parse_text_list,
+)
 from app.services.premium import can_create_playlist, can_upload, is_premium_active
 from app.services.search_log import log_search_query, popular_queries
 from app.services.stats import record_event
@@ -272,6 +279,43 @@ async def popular_search_queries(
     session: AsyncSession = Depends(get_db),
 ) -> list[str]:
     return await popular_queries(session)
+
+
+@router.post("/transfer", response_model=TransferStartOut)
+async def start_transfer(
+    payload: TransferIn,
+    user: User = Depends(get_current_user),
+) -> TransferStartOut:
+    """Перенос плейлиста из другого сервиса (экран «Перенос из других сервисов»).
+    Разбор источника — здесь (быстро), сам перенос — в Celery с отчётом в чат."""
+    source = payload.source.strip()
+    if not source:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Пустой источник")
+    try:
+        items = (
+            await fetch_playlist(source) if source.startswith("http") else parse_text_list(source)
+        )
+    except TransferSourceError as error:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(error))
+    except Exception:  # noqa: BLE001 — чужой сервис недоступен/поменял формат
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Сервис не отдал список треков")
+
+    if not items:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "Не нашёл треков. Формат строки: Артист — Название"
+        )
+    if not settings.effective_celery_broker:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Перенос временно недоступен")
+
+    from app.tasks.transfer import transfer_playlist_task
+
+    transfer_playlist_task.delay(
+        [{"artist": i.artist, "title": i.title} for i in items], user.telegram_id
+    )
+    return TransferStartOut(
+        queued=len(items),
+        preview=[f"{i.artist} — {i.title}" for i in items[:5]],
+    )
 
 
 @router.post("/tracks/{track_id}/send", status_code=status.HTTP_204_NO_CONTENT)

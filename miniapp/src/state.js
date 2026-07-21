@@ -73,6 +73,10 @@ const state = {
   sortSheetOpen: false,
   myTracksMenuOpen: false, // шит «…» в шапке Моих треков (скачать всё / удалить скачанные)
   premiumMonths: 12, // выбранный тариф на экране Premium (ТЗ §24)
+  transferService: "spotify", // экран «Перенос из других сервисов»
+  transferSource: "",
+  transferStatus: "idle", // idle | loading
+  transferResult: "",
 };
 
 const structureListeners = new Set();

@@ -163,10 +163,11 @@
 
 /* ============ Cards & surfaces ============ */
 
+/* Карточек на экране десятки (списки треков) — backdrop-filter на каждой
+   стоил кадров на мобильных GPU. Непрозрачный фон визуально тот же, blur
+   остался только на одиночных фиксированных панелях (док, шиты). */
 .card {
-  background: var(--glass-bg-card);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
+  background: var(--surface-card-translucent);
   border: 1px solid var(--glass-border-card);
   border-radius: 20px;
   box-shadow: var(--glass-inset), var(--glass-shadow);
@@ -175,8 +176,6 @@
 .card--flat {
   background: var(--surface-card);
   box-shadow: none;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
 }
 
 /* ============ Quick stat tiles ============ */
@@ -2851,4 +2850,120 @@
 
 .queue-row:active {
   background: var(--surface-elevated);
+}
+
+/* ============ Производительность длинных списков ============ */
+/* Строки вне вьюпорта не раскладываются и не красятся браузером: список из
+   сотен треков скроллится без рывков. Высота-заглушка = высота строки. */
+
+.track-row,
+.queue-row {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 64px;
+}
+
+/* Компоновка строки изолирована — правка одной не пересчитывает соседей */
+.track-row {
+  contain: layout style;
+}
+
+/* ============ Перенос из других сервисов (скрин копи/ photo_16) ============ */
+
+.transfer-hero {
+  margin: 12px 0 20px;
+}
+
+.transfer-hero__title {
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+.transfer-hero__sub {
+  margin-top: 8px;
+  font-size: 14.5px;
+  color: var(--text-muted);
+}
+
+.transfer-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.transfer-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 14px;
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  border: 1.5px solid transparent;
+  text-align: left;
+}
+
+.transfer-card.is-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.transfer-card__logo {
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 18px;
+  color: #fff;
+  margin-bottom: 6px;
+}
+
+.transfer-card--spotify .transfer-card__logo { background: #1db954; }
+.transfer-card--yandex .transfer-card__logo { background: #ffcc00; color: #1a1a1a; }
+.transfer-card--vk .transfer-card__logo { background: #0077ff; }
+.transfer-card--sc .transfer-card__logo { background: #ff5500; }
+
+.transfer-card__label {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.transfer-card__hint {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.transfer-input {
+  width: 100%;
+  margin-top: 8px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  color: var(--text-primary);
+  font-size: 14.5px;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.transfer-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.transfer-result {
+  margin-top: 14px;
+  padding: 14px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.transfer-steps .settings-row {
+  font-size: 13.5px;
 }

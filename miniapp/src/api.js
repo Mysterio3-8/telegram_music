@@ -62,7 +62,12 @@ async function request(path, options = {}) {
     return request(path, { ...options, _retried: true });
   }
   if (!response.ok) {
-    throw new ApiError(`Ошибка запроса (${response.status})`, response.status);
+    // Текст ошибки от сервера полезнее кода: «плейлист приватный», «нет брокера» и т.п.
+    const detail = await response
+      .json()
+      .then((body) => (typeof body.detail === "string" ? body.detail : ""))
+      .catch(() => "");
+    throw new ApiError(detail || `Ошибка запроса (${response.status})`, response.status);
   }
   if (response.status === 204) return null;
   return response.json();
@@ -179,6 +184,11 @@ export function submitLyrics(trackId, text) {
     method: "POST",
     body: JSON.stringify({ text }),
   });
+}
+
+// Перенос плейлиста из другого сервиса: ссылка или список «Артист — Название»
+export function startTransfer(source) {
+  return request("/transfer", { method: "POST", body: JSON.stringify({ source }) });
 }
 
 export function createPaymentLink(months = 1) {

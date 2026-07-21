@@ -95,6 +95,15 @@ class LyricsIn(BaseModel):
     text: str
 
 
+class TransferIn(BaseModel):
+    source: str  # ссылка на плейлист или текстовый список «Артист — Название»
+
+
+class TransferStartOut(BaseModel):
+    queued: int
+    preview: list[str]
+
+
 class PremiumStatusOut(BaseModel):
     active: bool
     until: datetime | None = None
