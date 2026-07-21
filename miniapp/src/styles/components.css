@@ -2967,3 +2967,139 @@
 .transfer-steps .settings-row {
   font-size: 13.5px;
 }
+
+/* ============ Конверсия: триал, награды, лидерборд ============ */
+
+.trial-banner {
+  margin: 14px 0;
+  padding: 18px;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(120deg, #1f8a4c, #2fc46f 55%, #16a34a);
+  color: #fff;
+}
+
+.trial-banner__title {
+  font-size: 19px;
+  font-weight: 800;
+}
+
+.trial-banner__sub {
+  margin-top: 4px;
+  font-size: 13.5px;
+  opacity: 0.9;
+}
+
+.trial-banner .btn--primary {
+  background: #fff;
+  color: #14663a;
+  box-shadow: none;
+}
+
+.ref-next {
+  margin-top: 12px;
+  padding: 16px;
+  border-radius: var(--radius-md);
+  background: var(--accent-soft);
+  border: 1px solid var(--glass-border-amethyst);
+}
+
+.ref-next__title {
+  font-size: 15.5px;
+  font-weight: 700;
+}
+
+.ref-next__sub {
+  margin-top: 3px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.ref-teaser {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin-top: 18px;
+  padding: 14px;
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  text-align: left;
+}
+
+.ref-teaser:active {
+  background: var(--surface-elevated);
+}
+
+.ref-teaser__emoji {
+  font-size: 26px;
+}
+
+.ref-teaser__text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ref-teaser__title {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.ref-teaser__sub {
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.ref-teaser svg {
+  width: 18px;
+  height: 18px;
+  color: var(--text-muted);
+}
+
+.leader-list {
+  padding: 6px 4px;
+}
+
+.leader-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 12px;
+}
+
+.leader-row__place {
+  width: 26px;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text-secondary);
+}
+
+.leader-row__name {
+  flex: 1;
+  font-size: 14.5px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.leader-row__count {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text-accent);
+}
+
+.ach-bank {
+  margin: 10px 0 6px;
+  padding: 14px 16px;
+  font-size: 14px;
+}
+
+.ach-card__reward {
+  margin-left: 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-accent);
+  white-space: nowrap;
+}

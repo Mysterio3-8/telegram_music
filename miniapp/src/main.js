@@ -99,7 +99,7 @@ import {
   saveUiSettings,
 } from "./prefs.js";
 import { applyEqualizer, currentGains, getEqSettings, saveEqSettings } from "./equalizer.js";
-import { getTrackById, startTransfer } from "./api.js";
+import { getTrackById, getReferralTop, startPremiumTrial, startTransfer } from "./api.js";
 
 const root = document.getElementById("app");
 const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
@@ -276,6 +276,8 @@ function loadHeavyData() {
   getPopularQueries()
     .then((queries) => mutate({ popularQueries: queries }))
     .catch(() => {});
+  // Профиль нужен главной: доступность триала и начисленные награды
+  loadProfile();
 }
 
 let libraryPagesLoaded = 1;
@@ -295,9 +297,25 @@ async function loadProfile() {
   if (getState().profileStatus === "loading") return;
   mutate({ profileStatus: "loading" });
   try {
-    mutate({ profile: await getProfile(), profileStatus: "ready" });
+    const profile = await getProfile();
+    mutate({ profile, profileStatus: "ready" });
+    // Сервер начисляет дни Premium за новые достижения — говорим об этом сразу
+    if (profile.rewarded_days > 0) {
+      showToast(`Достижение выполнено: +${profile.rewarded_days} дн. Premium 🎉`);
+      getPremiumStatus()
+        .then((premium) => mutate({ premium }))
+        .catch(() => {});
+    }
   } catch {
     mutate({ profileStatus: "error" });
+  }
+}
+
+async function loadReferralTop() {
+  try {
+    mutate({ referralTop: await getReferralTop() });
+  } catch {
+    // лидерборд необязателен — молча
   }
 }
 
@@ -455,6 +473,17 @@ async function downloadAllTracks() {
   }
   showToast(failed ? `Скачано ${done}, не удалось ${failed}` : `Скачано ${done} треков`);
   mutate({});
+}
+
+async function activateTrial() {
+  try {
+    const premium = await startPremiumTrial();
+    mutate({ premium });
+    loadProfile(); // trial_available и достижения пересчитываются на сервере
+    showToast("Premium на 3 дня активирован 🎁");
+  } catch (error) {
+    showToast((error && error.message) || "Не удалось активировать пробный период");
+  }
 }
 
 async function startPlaylistTransfer() {
@@ -709,6 +738,7 @@ root.addEventListener("click", (event) => {
     case "open-referral":
       navigateTo("referral");
       if (!getState().profile) loadProfile();
+      loadReferralTop();
       break;
     case "open-premium":
       navigateTo("premium");
@@ -845,6 +875,10 @@ root.addEventListener("click", (event) => {
       break;
     case "open-transfer":
       navigateTo("transfer", { transferResult: "", transferStatus: "idle" });
+      break;
+    case "start-trial":
+      event.stopPropagation();
+      activateTrial();
       break;
     case "transfer-service":
       mutate({ transferService: el.dataset.value });

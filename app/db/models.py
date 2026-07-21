@@ -24,6 +24,21 @@ class User(Base):
     premium_discount_pct: Mapped[int] = mapped_column(default=0, server_default="0")
     # Рассылка: True — пользователь заблокировал бота (TelegramForbiddenError), больше не шлём
     bot_blocked: Mapped[bool] = mapped_column(default=False, server_default="0")
+    # Пробный Premium выдаётся один раз на аккаунт
+    trial_used: Mapped[bool] = mapped_column(default=False, server_default="0")
+
+
+class UserAchievement(Base):
+    """Выданная награда за достижение — гарантия, что дни Premium начислены один раз."""
+
+    __tablename__ = "user_achievements"
+    __table_args__ = (UniqueConstraint("user_id", "code", name="uq_user_achievement"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    code: Mapped[str] = mapped_column(String(64))
+    granted_days: Mapped[int] = mapped_column(default=0)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
 
 class Track(Base):

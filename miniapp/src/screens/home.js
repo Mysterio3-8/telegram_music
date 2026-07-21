@@ -58,13 +58,31 @@ function renderHero(state) {
 
 function renderSubscription(state) {
   if (!state.premium || state.premium.active || state.subDismissed) return "";
+  // Пока триал не использован — предлагаем его: бесплатное «попробовать»
+  // конвертит кратно лучше, чем сразу ценник.
+  const trial = state.profile && state.profile.trial_available;
   return `
-    <div class="sub-card" data-action="open-premium">
+    <div class="sub-card" data-action="${trial ? "start-trial" : "open-premium"}">
       <button class="sub-card__close" data-action="dismiss-sub" aria-label="Скрыть">${icon("close")}</button>
-      <div class="sub-card__title">Целый месяц — ${state.premium.price_rub} ₽</div>
-      <div class="sub-card__subtitle">Premium: без рекламы и офлайн</div>
-      <span class="sub-card__cta">Подключить</span>
+      <div class="sub-card__title">${trial ? "3 дня Premium бесплатно" : `Целый месяц — ${state.premium.price_rub} ₽`}</div>
+      <div class="sub-card__subtitle">${trial ? "Без карты: офлайн, без рекламы, эквалайзер" : "Premium: без рекламы и офлайн"}</div>
+      <span class="sub-card__cta">${trial ? "Забрать" : "Подключить"}</span>
     </div>
+  `;
+}
+
+// Рефералка на главной: заметная точка входа для не-Premium (запрос владельца)
+function renderReferralTeaser(state) {
+  if (!state.premium || state.premium.active) return "";
+  return `
+    <button class="ref-teaser" data-action="open-referral">
+      <span class="ref-teaser__emoji">🎁</span>
+      <span class="ref-teaser__text">
+        <span class="ref-teaser__title">Пригласи друга — неделя Premium</span>
+        <span class="ref-teaser__sub">Награда приходит сразу, за первого же</span>
+      </span>
+      ${icon("chevron")}
+    </button>
   `;
 }
 
@@ -144,5 +162,6 @@ export function renderHome(state) {
     ${renderSubscription(state)}
     ${renderTiles(state)}
     ${renderVibes()}
+    ${renderReferralTeaser(state)}
   `;
 }

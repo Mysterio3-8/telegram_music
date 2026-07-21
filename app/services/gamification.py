@@ -9,18 +9,32 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Playlist, Track, TrackEvent, User, UserLibrary
+from app.db.models import (
+    Playlist,
+    Track,
+    TrackEvent,
+    Upload,
+    User,
+    UserAchievement,
+    UserLibrary,
+)
 
 LIFETIME_DAYS = 36500  # «пожизненный» Premium
 REFERRER_DISCOUNT_PCT = 50
+TRIAL_DAYS = 3  # пробный Premium, один раз на аккаунт
 
-# (порог приглашённых, дней Premium в награду) — по возрастанию
+# (порог приглашённых, дней Premium в награду) — по возрастанию.
+# Первые пороги низкие: награда должна прийти быстро, иначе никто не зовёт друзей.
 REFERRAL_MILESTONES: list[tuple[int, int]] = [
-    (1, 3),
-    (3, 10),
+    (1, 7),
+    (2, 7),
+    (3, 14),
     (5, 30),
+    (7, 30),
     (10, 60),
+    (15, 60),
     (25, 180),
+    (50, 365),
     (100, LIFETIME_DAYS),
 ]
 
@@ -133,6 +147,15 @@ async def grant_referrer_discount(session: AsyncSession, buyer: User) -> None:
     await session.commit()
 
 
+def next_referral_reward(invited: int) -> tuple[int, int]:
+    """(сколько друзей ещё нужно, сколько дней Premium дадут) для ближайшего порога.
+    (0, 0) — все пороги пройдены."""
+    for threshold, days in REFERRAL_MILESTONES:
+        if invited < threshold:
+            return threshold - invited, days
+    return 0, 0
+
+
 def referral_link(telegram_id: int, bot_username: str) -> str:
     return f"https://t.me/{bot_username}?start=ref_{telegram_id}"
 
@@ -150,6 +173,8 @@ class UserStats:
     invited: int
     has_premium_ever: bool
     premium_year: bool
+    uploads: int
+    artists: int  # сколько разных исполнителей в библиотеке
 
 
 async def _listen_streak(session: AsyncSession, user_id: int) -> int:
@@ -192,6 +217,15 @@ async def collect_user_stats(session: AsyncSession, user: User) -> UserStats:
     ) or 0
     invited = await count_referrals(session, user.telegram_id)
     streak = await _listen_streak(session, user.id)
+    uploads = await session.scalar(
+        select(func.count()).select_from(Upload).where(Upload.user_id == user.id)
+    ) or 0
+    artists = await session.scalar(
+        select(func.count(func.distinct(func.lower(Track.artist))))
+        .select_from(UserLibrary)
+        .join(Track, Track.id == UserLibrary.track_id)
+        .where(UserLibrary.user_id == user.id)
+    ) or 0
 
     has_premium_ever = user.premium_until is not None
     premium_year = (
@@ -207,6 +241,8 @@ async def collect_user_stats(session: AsyncSession, user: User) -> UserStats:
         invited=invited,
         has_premium_ever=has_premium_ever,
         premium_year=premium_year,
+        uploads=uploads,
+        artists=artists,
     )
 
 
@@ -219,28 +255,41 @@ class Achievement:
     unlocked: bool
     progress: int
     target: int
+    reward_days: int  # сколько дней Premium даёт достижение
 
 
+# Каждое достижение — реальные дни Premium. Пользователь видит цель и награду:
+# это и удержание («ещё 2 дня серии»), и мягкая продажа подписки (он её попробует).
 def build_achievements(stats: UserStats) -> list[Achievement]:
     hours = int(stats.listen_hours)
-    # (code, emoji, title, category, значение, цель)
-    defs: list[tuple[str, str, str, str, int, int]] = [
-        ("listen_100", "🎵", "Первые 100 прослушиваний", "Прослушивание", stats.listens, 100),
-        ("listen_1000", "🎧", "1 000 прослушиваний", "Прослушивание", stats.listens, 1000),
-        ("hours_100", "🔥", "100 часов музыки", "Прослушивание", hours, 100),
-        ("hours_500", "⏳", "500 часов музыки", "Прослушивание", hours, 500),
-        ("streak_7", "📅", "7 дней подряд", "Активность", stats.streak_days, 7),
-        ("streak_30", "📅", "30 дней подряд", "Активность", stats.streak_days, 30),
-        ("streak_100", "📅", "100 дней подряд", "Активность", stats.streak_days, 100),
-        ("fav_100", "❤️", "100 треков в избранном", "Коллекция", stats.favorites, 100),
-        ("playlist_1", "📂", "Первый плейлист", "Коллекция", stats.playlists, 1),
-        ("playlist_10", "📂", "10 плейлистов", "Коллекция", stats.playlists, 10),
-        ("premium_first", "💎", "Первый месяц Premium", "Premium", int(stats.has_premium_ever), 1),
-        ("premium_year", "👑", "Один год Premium", "Premium", int(stats.premium_year), 1),
-        ("invite_1", "🤝", "Первый приглашённый друг", "Сообщество", stats.invited, 1),
-        ("invite_10", "🚀", "10 приглашённых друзей", "Сообщество", stats.invited, 10),
-        ("invite_50", "🌍", "50 приглашённых друзей", "Сообщество", stats.invited, 50),
-        ("invite_100", "🏆", "100 приглашённых друзей", "Сообщество", stats.invited, 100),
+    # (code, emoji, title, category, значение, цель, дней Premium)
+    defs: list[tuple[str, str, str, str, int, int, int]] = [
+        ("listen_10", "🎵", "Первые 10 прослушиваний", "Прослушивание", stats.listens, 10, 1),
+        ("listen_100", "🎶", "100 прослушиваний", "Прослушивание", stats.listens, 100, 3),
+        ("listen_1000", "🎧", "1 000 прослушиваний", "Прослушивание", stats.listens, 1000, 14),
+        ("hours_10", "⏱", "10 часов музыки", "Прослушивание", hours, 10, 2),
+        ("hours_100", "🔥", "100 часов музыки", "Прослушивание", hours, 100, 7),
+        ("hours_500", "⏳", "500 часов музыки", "Прослушивание", hours, 500, 30),
+        ("streak_3", "📅", "3 дня подряд", "Активность", stats.streak_days, 3, 1),
+        ("streak_7", "🗓", "Неделя подряд", "Активность", stats.streak_days, 7, 3),
+        ("streak_30", "📆", "30 дней подряд", "Активность", stats.streak_days, 30, 14),
+        ("streak_100", "🏅", "100 дней подряд", "Активность", stats.streak_days, 100, 60),
+        ("fav_10", "💚", "10 треков в библиотеке", "Коллекция", stats.favorites, 10, 1),
+        ("fav_100", "❤️", "100 треков в библиотеке", "Коллекция", stats.favorites, 100, 5),
+        ("fav_500", "💖", "500 треков в библиотеке", "Коллекция", stats.favorites, 500, 20),
+        ("artists_25", "🎤", "25 разных исполнителей", "Коллекция", stats.artists, 25, 3),
+        ("artists_100", "🌟", "100 разных исполнителей", "Коллекция", stats.artists, 100, 10),
+        ("playlist_1", "📂", "Первый плейлист", "Коллекция", stats.playlists, 1, 1),
+        ("playlist_10", "🗂", "10 плейлистов", "Коллекция", stats.playlists, 10, 7),
+        ("upload_1", "⬆️", "Первый свой трек", "Вклад", stats.uploads, 1, 2),
+        ("upload_10", "📦", "10 своих треков", "Вклад", stats.uploads, 10, 7),
+        ("upload_100", "🏗", "100 своих треков", "Вклад", stats.uploads, 100, 30),
+        ("premium_first", "💎", "Первый Premium", "Premium", int(stats.has_premium_ever), 1, 0),
+        ("premium_year", "👑", "Год с Premium", "Premium", int(stats.premium_year), 1, 0),
+        ("invite_1", "🤝", "Первый друг", "Сообщество", stats.invited, 1, 0),
+        ("invite_10", "🚀", "10 друзей", "Сообщество", stats.invited, 10, 0),
+        ("invite_50", "🌍", "50 друзей", "Сообщество", stats.invited, 50, 0),
+        ("invite_100", "🏆", "100 друзей", "Сообщество", stats.invited, 100, 0),
     ]
     return [
         Achievement(
@@ -251,6 +300,87 @@ def build_achievements(stats: UserStats) -> list[Achievement]:
             unlocked=value >= target,
             progress=min(value, target),
             target=target,
+            reward_days=reward_days,
         )
-        for code, emoji, title, category, value, target in defs
+        for code, emoji, title, category, value, target, reward_days in defs
+    ]
+
+
+async def grant_achievement_rewards(session: AsyncSession, user: User) -> list[Achievement]:
+    """Начисляет дни Premium за впервые открытые достижения.
+
+    Награды за приглашения не дублируются здесь: их выдаёт grant_referral_milestones
+    (у них свои пороги и суммы), поэтому reward_days у invite_* равны нулю.
+    Идемпотентность — через уникальную пару (user_id, code) в user_achievements.
+    """
+    stats = await collect_user_stats(session, user)
+    unlocked = [a for a in build_achievements(stats) if a.unlocked and a.reward_days > 0]
+    if not unlocked:
+        return []
+
+    known = set(
+        (
+            await session.scalars(
+                select(UserAchievement.code).where(UserAchievement.user_id == user.id)
+            )
+        ).all()
+    )
+    fresh = [a for a in unlocked if a.code not in known]
+    if not fresh:
+        return []
+
+    for achievement in fresh:
+        session.add(
+            UserAchievement(
+                user_id=user.id, code=achievement.code, granted_days=achievement.reward_days
+            )
+        )
+        _extend_premium(user, achievement.reward_days)
+    await session.commit()
+    return fresh
+
+
+async def start_trial(session: AsyncSession, user: User) -> bool:
+    """Пробный Premium на TRIAL_DAYS дней — один раз на аккаунт.
+    False — уже использован или Premium активен."""
+    if user.trial_used:
+        return False
+    now = _utcnow()
+    if user.premium and user.premium_until and user.premium_until > now:
+        return False
+    user.trial_used = True
+    _extend_premium(user, TRIAL_DAYS)
+    await session.commit()
+    return True
+
+
+@dataclass(frozen=True)
+class LeaderRow:
+    telegram_id: int
+    name: str
+    invited: int
+
+
+async def referral_leaderboard(session: AsyncSession, limit: int = 10) -> list[LeaderRow]:
+    """Топ пригласивших — соревнование заметно двигает рефералку."""
+    rows = await session.execute(
+        select(User.referred_by, func.count().label("invited"))
+        .where(User.referred_by.is_not(None))
+        .group_by(User.referred_by)
+        .order_by(func.count().desc())
+        .limit(limit)
+    )
+    pairs = rows.all()
+    if not pairs:
+        return []
+    referrer_ids = [telegram_id for telegram_id, _ in pairs]
+    names = {
+        u.telegram_id: (u.first_name or u.username or "Аноним")
+        for u in (
+            await session.scalars(select(User).where(User.telegram_id.in_(referrer_ids)))
+        ).all()
+    }
+    return [
+        LeaderRow(telegram_id=telegram_id, name=names.get(telegram_id, "Аноним"), invited=invited)
+        for telegram_id, invited in pairs
     ]

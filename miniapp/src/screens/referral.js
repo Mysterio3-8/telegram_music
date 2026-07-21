@@ -1,15 +1,21 @@
 import { icon } from "../components/icons.js";
 import { escapeHtml } from "../components/trackRow.js";
+import { dayWord } from "./achievements.js";
 
 // Реферальная программа (ТЗ §23): описание, принцип работы, награды, прогресс.
 // Пороги наград зеркалят REFERRAL_MILESTONES бэкенда (services/gamification.py).
 
+// Зеркалят REFERRAL_MILESTONES бэкенда (services/gamification.py)
 const REWARDS = [
-  { friends: 1, label: "3 дня Premium" },
-  { friends: 3, label: "10 дней Premium" },
-  { friends: 5, label: "30 дней Premium" },
-  { friends: 10, label: "60 дней Premium" },
-  { friends: 25, label: "180 дней Premium" },
+  { friends: 1, label: "7 дней Premium" },
+  { friends: 2, label: "+7 дней" },
+  { friends: 3, label: "+14 дней" },
+  { friends: 5, label: "+30 дней" },
+  { friends: 7, label: "+30 дней" },
+  { friends: 10, label: "+60 дней" },
+  { friends: 15, label: "+60 дней" },
+  { friends: 25, label: "+180 дней" },
+  { friends: 50, label: "+год Premium" },
   { friends: 100, label: "Premium навсегда" },
 ];
 
@@ -61,6 +67,40 @@ function progressCard(profile) {
   `;
 }
 
+// Ближайшая награда крупно: «ещё 1 друг — и +7 дней» работает лучше списка порогов
+function nextRewardBanner(profile) {
+  if (!profile) return "";
+  const { to_next_reward: left, next_reward_days: days } = profile.referral;
+  if (!left || !days) return "";
+  return `
+    <div class="ref-next">
+      <div class="ref-next__title">Ещё ${left} ${left === 1 ? "друг" : left < 5 ? "друга" : "друзей"} — и ${days} ${dayWord(days)} Premium</div>
+      <div class="ref-next__sub">Награда придёт автоматически</div>
+    </div>
+  `;
+}
+
+function leaderboard(state) {
+  const rows = state.referralTop || [];
+  if (!rows.length) return "";
+  const medals = ["🥇", "🥈", "🥉"];
+  const items = rows
+    .map(
+      (row, i) => `
+        <div class="leader-row">
+          <span class="leader-row__place">${medals[i] || i + 1}</span>
+          <span class="leader-row__name">${escapeHtml(row.name)}</span>
+          <span class="leader-row__count">${row.invited}</span>
+        </div>
+      `
+    )
+    .join("");
+  return `
+    <div class="rec-section-label">Топ приглашающих</div>
+    <div class="card card--flat leader-list">${items}</div>
+  `;
+}
+
 export function renderReferral(state) {
   const profile = state.profile;
   const link = profile ? profile.referral.link : "";
@@ -82,11 +122,13 @@ export function renderReferral(state) {
 
     <div class="ref-intro">
       <div class="ref-intro__emoji">🎁</div>
-      <div class="ref-intro__title">Приглашайте друзей — получайте Premium</div>
-      <div class="ref-intro__text">За каждый порог приглашённых начисляются дни Premium. 100 друзей — подписка навсегда. А когда приглашённый друг оплачивает Premium, вы получаете скидку 50% на следующую покупку.</div>
+      <div class="ref-intro__title">Один друг — неделя Premium</div>
+      <div class="ref-intro__text">Первая награда приходит сразу за первого приглашённого. Дальше больше: 100 друзей — Premium навсегда. А когда друг оплачивает подписку, вам падает скидка 50% на следующую покупку.</div>
     </div>
 
+    ${nextRewardBanner(profile)}
     ${progressCard(profile)}
+    ${leaderboard(state)}
 
     <div class="rec-section-label">Как это работает</div>
     <div class="card card--rows ref-steps">${steps}</div>

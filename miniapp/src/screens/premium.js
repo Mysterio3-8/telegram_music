@@ -12,8 +12,10 @@ const PLANS = [
 
 const PERKS = [
   ["sparkles", "Без рекламы"],
-  ["download", "Офлайн-прослушивание"],
+  ["download", "Офлайн: слушайте без интернета"],
+  ["import", "Перенос плейлистов пачкой из других сервисов"],
   ["playlist", "Безлимитные плейлисты и загрузки"],
+  ["sliders", "Эквалайзер и таймер сна"],
   ["lyrics", "Добавление текстов песен"],
 ];
 
@@ -39,6 +41,20 @@ function planCard(state, plan) {
   `;
 }
 
+// Бесплатные 3 дня без карты — самый короткий путь к первой оплате
+function trialBanner(state) {
+  if (!state.profile || !state.profile.trial_available) return "";
+  return `
+    <div class="trial-banner">
+      <div class="trial-banner__title">🎁 3 дня Premium бесплатно</div>
+      <div class="trial-banner__sub">Без карты и без автосписаний — просто попробуйте</div>
+      <button class="btn btn--primary btn--block" style="margin-top:12px" data-action="start-trial">
+        Забрать 3 дня
+      </button>
+    </div>
+  `;
+}
+
 export function renderPremium(state) {
   const isActive = state.premium && state.premium.active;
   const { effective } = planPrice(state, state.premiumMonths);
@@ -60,6 +76,8 @@ export function renderPremium(state) {
       <div class="premium-hero__title">${isActive ? "Premium активен" : "Больше музыки с Premium"}</div>
       ${isActive ? '<div class="premium-hero__sub">Продлите заранее — дни суммируются</div>' : ""}
     </div>
+
+    ${trialBanner(state)}
 
     <div class="card card--rows">${perks}</div>
 

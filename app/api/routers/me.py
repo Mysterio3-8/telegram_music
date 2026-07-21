@@ -7,6 +7,7 @@ from app.api.schemas import (
     AchievementOut,
     AlbumOut,
     ArtistOut,
+    LeaderRowOut,
     LyricsIn,
     LyricsOut,
     Page,
@@ -33,8 +34,12 @@ from app.services.catalog_import import import_user_track
 from app.services.gamification import (
     build_achievements,
     collect_user_stats,
+    grant_achievement_rewards,
+    next_referral_reward,
+    referral_leaderboard,
     referral_link,
     referral_rank,
+    start_trial,
 )
 from app.services.library import (
     add_to_library,
@@ -476,9 +481,12 @@ async def profile(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> ProfileOut:
+    # Открытие профиля — момент, когда начисляем заработанные дни Premium
+    fresh = await grant_achievement_rewards(session, user)
     stats = await collect_user_stats(session, user)
     achievements = build_achievements(stats)
     progress = referral_rank(stats.invited)
+    to_next_reward, next_reward_days = next_referral_reward(stats.invited)
 
     def rank_out(rank) -> RankOut | None:
         return RankOut(key=rank.key, title=rank.title, emoji=rank.emoji) if rank else None
@@ -491,6 +499,8 @@ async def profile(
             rank=rank_out(progress.current),
             next_rank=rank_out(progress.next),
             to_next=progress.to_next,
+            to_next_reward=to_next_reward,
+            next_reward_days=next_reward_days,
         ),
         stats=UserStatsOut(
             listens=stats.listens,
@@ -510,7 +520,32 @@ async def profile(
                 unlocked=a.unlocked,
                 progress=a.progress,
                 target=a.target,
+                reward_days=a.reward_days,
             )
             for a in achievements
         ],
+        rewarded_days=sum(a.reward_days for a in fresh),
+        trial_available=not user.trial_used and not is_premium_active(user),
     )
+
+
+@router.post("/premium/trial", response_model=PremiumStatusOut)
+async def start_premium_trial(
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+) -> PremiumStatusOut:
+    """Пробный Premium в один тап — главный шаг к покупке: сначала дают попробовать."""
+    if not await start_trial(session, user):
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "Пробный период уже был использован"
+        )
+    return _premium_status_out(user)
+
+
+@router.get("/referral/top", response_model=list[LeaderRowOut])
+async def referral_top(
+    session: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> list[LeaderRowOut]:
+    rows = await referral_leaderboard(session)
+    return [LeaderRowOut(name=r.name, invited=r.invited) for r in rows]

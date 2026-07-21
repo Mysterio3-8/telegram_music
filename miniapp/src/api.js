@@ -186,6 +186,15 @@ export function submitLyrics(trackId, text) {
   });
 }
 
+// Пробный Premium на 3 дня — один раз на аккаунт
+export function startPremiumTrial() {
+  return request("/premium/trial", { method: "POST" });
+}
+
+export function getReferralTop() {
+  return request("/referral/top");
+}
+
 // Перенос плейлиста из другого сервиса: ссылка или список «Артист — Название»
 export function startTransfer(source) {
   return request("/transfer", { method: "POST", body: JSON.stringify({ source }) });

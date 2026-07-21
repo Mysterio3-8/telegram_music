@@ -125,6 +125,8 @@ class ReferralOut(BaseModel):
     rank: RankOut | None = None
     next_rank: RankOut | None = None
     to_next: int
+    next_reward_days: int = 0  # сколько дней Premium даст следующий порог
+    to_next_reward: int = 0  # сколько друзей до него
 
 
 class AchievementOut(BaseModel):
@@ -135,6 +137,12 @@ class AchievementOut(BaseModel):
     unlocked: bool
     progress: int
     target: int
+    reward_days: int = 0
+
+
+class LeaderRowOut(BaseModel):
+    name: str
+    invited: int
 
 
 class UserStatsOut(BaseModel):
@@ -152,3 +160,5 @@ class ProfileOut(BaseModel):
     achievements_unlocked: int
     achievements_total: int
     achievements: list[AchievementOut]
+    rewarded_days: int = 0  # начислено дней Premium прямо сейчас (новые достижения)
+    trial_available: bool = False

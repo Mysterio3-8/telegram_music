@@ -61,12 +61,12 @@ async def test_register_referral_binds_and_ignores_invalid(session):
 
 async def test_referral_milestones_grant_premium_idempotently(session):
     referrer = await _add_user(session, 1)
-    # приглашаем 3 пользователей — пороги 1 и 3 дают 3 и 10 дней
+    # приглашаем 3 пользователей — закрываются пороги 1, 2 и 3
     for tid in (10, 11, 12):
         invitee = await _add_user(session, tid)
         await register_referral(session, invitee, 1)
 
-    assert referrer.referral_milestones_claimed == 2  # пороги 1 и 3
+    assert referrer.referral_milestones_claimed == 3  # пороги 1, 2, 3
     assert is_premium_active(referrer)
 
     # повторный вызов ничего не выдаёт
@@ -76,15 +76,17 @@ async def test_referral_milestones_grant_premium_idempotently(session):
 
 
 async def test_referral_lifetime_milestone(session):
-    referrer = User(telegram_id=1, referral_milestones_claimed=5)  # достигнуты первые 5 порогов
+    from app.services.gamification import REFERRAL_MILESTONES
+
+    referrer = User(telegram_id=1, referral_milestones_claimed=len(REFERRAL_MILESTONES) - 1)
     session.add(referrer)
     await session.commit()
-    for tid in range(1000, 1100):  # 100 приглашённых
+    for tid in range(1000, 1100):  # 100 приглашённых — последний порог
         session.add(User(telegram_id=tid, referred_by=1))
     await session.commit()
 
     await grant_referral_milestones(session, referrer)
-    assert referrer.referral_milestones_claimed == 6
+    assert referrer.referral_milestones_claimed == len(REFERRAL_MILESTONES)
     assert referrer.premium_until > _utcnow() + timedelta(days=LIFETIME_DAYS - 1)
 
 
@@ -134,3 +136,61 @@ async def test_collect_stats_and_achievements(session):
     assert by_code["playlist_1"].unlocked is True
     assert by_code["streak_7"].unlocked is False
     assert by_code["streak_7"].progress == 3
+
+
+async def test_achievement_rewards_granted_once(session):
+    from app.services.gamification import grant_achievement_rewards
+
+    user = await _add_user(session, 1)
+    track = Track(title="T", artist="A", duration=60)
+    session.add(track)
+    await session.flush()
+    for _ in range(10):  # достижение listen_10 → 1 день Premium
+        session.add(TrackEvent(user_id=user.id, track_id=track.id, event="listen"))
+    await session.commit()
+
+    first = await grant_achievement_rewards(session, user)
+    until_after_first = user.premium_until
+
+    assert [a.code for a in first] == ["listen_10"]
+    assert is_premium_active(user)
+
+    second = await grant_achievement_rewards(session, user)
+
+    assert second == []  # повторно не начисляем
+    assert user.premium_until == until_after_first
+
+
+async def test_trial_is_one_time(session):
+    from app.services.gamification import TRIAL_DAYS, start_trial
+
+    user = await _add_user(session, 1)
+
+    assert await start_trial(session, user) is True
+    assert is_premium_active(user)
+    assert user.premium_until > _utcnow() + timedelta(days=TRIAL_DAYS - 1)
+    assert await start_trial(session, user) is False
+
+
+async def test_referral_leaderboard_sorted(session):
+    from app.services.gamification import referral_leaderboard
+
+    await _add_user(session, 1)
+    await _add_user(session, 2)
+    for tid in range(100, 105):  # 5 приглашённых у первого
+        session.add(User(telegram_id=tid, referred_by=1))
+    for tid in range(200, 202):  # 2 у второго
+        session.add(User(telegram_id=tid, referred_by=2))
+    await session.commit()
+
+    top = await referral_leaderboard(session)
+
+    assert [row.invited for row in top] == [5, 2]
+
+
+def test_next_referral_reward():
+    from app.services.gamification import next_referral_reward
+
+    assert next_referral_reward(0) == (1, 7)
+    assert next_referral_reward(1) == (1, 7)  # до порога 2
+    assert next_referral_reward(1000) == (0, 0)

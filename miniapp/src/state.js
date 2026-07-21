@@ -46,6 +46,7 @@ const state = {
   subDismissed: false, // карточка подписки скрыта на эту сессию
   docKey: "about", // активный статический документ (faq/privacy/license/about)
   profile: null, // геймификация: ранг, приглашённые, достижения (грузится при открытии профиля)
+  referralTop: [], // топ приглашающих (лидерборд рефералки)
   profileStatus: "idle", // idle | loading | ready | error
   lyricsTrack: null, // трек, для которого открыт экран текста
   lyrics: null, // {text, source, found}
