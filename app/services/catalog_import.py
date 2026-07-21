@@ -15,10 +15,29 @@ from app.storage.base import StorageBackend
 logger = logging.getLogger(__name__)
 
 
+def _archive_disk_has_room(extra_bytes: int) -> bool:
+    """Локальный диск не должен забиваться архивом под ноль: ниже запаса
+    archive_min_free_gb новые копии не пишем. Для S3 проверка не нужна."""
+    from app.config import settings
+
+    if settings.archive_min_free_gb <= 0 or (settings.s3_endpoint_url and settings.s3_bucket):
+        return True
+    import shutil
+    from pathlib import Path
+
+    root = Path(settings.storage_dir)
+    root.mkdir(parents=True, exist_ok=True)
+    free_after = shutil.disk_usage(root).free - extra_bytes
+    return free_after > settings.archive_min_free_gb * 1024**3
+
+
 async def _archive_bytes(session: AsyncSession, entity, storage_key: str, data: bytes) -> None:
     """Архивная копия заминченного файла: стрим Mini App не зависит от лимита
     Bot API 20 МБ. Ошибка хранилища не ломает импорт — трек живёт по tg_file_id."""
     try:
+        if not _archive_disk_has_room(len(data)):
+            logger.warning("Архив %s пропущен: мало места на диске", storage_key)
+            return
         from app.storage import get_storage
 
         entity.storage_path = get_storage().save(storage_key, data)
