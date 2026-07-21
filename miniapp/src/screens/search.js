@@ -1,9 +1,10 @@
 import { icon } from "../components/icons.js";
 import { renderTrackList, escapeHtml } from "../components/trackRow.js";
-import { getRecentSearches } from "../prefs.js";
+import { getRecentSearches, getRecentTracks } from "../prefs.js";
 
-// Поиск (ТЗ §11): недавние запросы пользователя, затем реальные популярные
-// запросы (статистика сервера, без выдуманных списков). Placeholder — «Search».
+// Поиск (ТЗ §11 + скрины VK в копи/): сверху «История прослушивания» (недавние
+// треки), затем недавние запросы пользователя и реальные популярные запросы
+// (статистика сервера, без выдуманных списков).
 
 function chip(query) {
   return `
@@ -18,6 +19,17 @@ function renderSuggestions(state) {
   const popular = (state.popularQueries || []).filter(
     (q) => !recent.some((r) => r.toLowerCase() === q.toLowerCase())
   );
+
+  const historyTracks = getRecentTracks().slice(0, 5);
+  const historyBlock = historyTracks.length
+    ? `
+      <div class="section-head section-head--between">
+        <span class="section-title">История прослушивания</span>
+        <button class="link-more" data-action="open-recent">Все</button>
+      </div>
+      <div class="card">${renderTrackList(historyTracks, { context: "recent", state })}</div>
+    `
+    : "";
 
   const recentBlock = recent.length
     ? `
@@ -36,10 +48,10 @@ function renderSuggestions(state) {
     `
     : "";
 
-  if (!recentBlock && !popularBlock) {
+  if (!historyBlock && !recentBlock && !popularBlock) {
     return '<div class="empty-state">Введите название трека или исполнителя</div>';
   }
-  return `${recentBlock}${popularBlock}`;
+  return `${historyBlock}${recentBlock}${popularBlock}`;
 }
 
 // Результаты живут в отдельном контейнере: ввод перерисовывает только его,

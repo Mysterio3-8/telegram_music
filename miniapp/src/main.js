@@ -36,6 +36,7 @@ import {
   openSheet,
   playMix,
   playRecommended,
+  playVibe,
   playNext,
   playPrev,
   playTrack,
@@ -658,6 +659,22 @@ root.addEventListener("click", (event) => {
     case "play-recommended":
       playRecommended();
       break;
+    case "play-vibe":
+      // mood-микс с карточки «Какой сейчас вайб?» — тот же движок, что «Настроить»
+      playVibe(el.dataset.mood);
+      break;
+    case "hero-prev":
+    case "hero-next": {
+      // стрелки в подсказке: на ПК свайпа нет, листаем миксы кликом
+      event.stopPropagation();
+      const heroTrack = document.querySelector('[data-role="hero-scroll"]');
+      if (heroTrack) {
+        // без behavior:smooth — в части встроенных браузеров он no-op на snap-лентах
+        const delta = action === "hero-next" ? heroTrack.clientWidth : -heroTrack.clientWidth;
+        heroTrack.scrollBy({ left: delta });
+      }
+      break;
+    }
     case "open-recommendations":
       event.stopPropagation();
       navigateTo("recommendations");

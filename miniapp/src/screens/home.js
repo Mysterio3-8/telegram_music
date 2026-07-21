@@ -1,29 +1,31 @@
 import { icon } from "../components/icons.js";
 import { getRecentTracks } from "../prefs.js";
 
-// Главная по референсам VK Music: большой hero «Слушать TG MIX» (рекомендации
-// и настройки объединены внутри — ТЗ §1), карточка подписки, плитки быстрого
-// доступа. Списков треков на главной НЕТ (решение владельца — навсегда).
+// Главная — копия главного экрана VK Музыки (скрины владельца в копи/):
+// полноэкранный hero «Слушать TG Микс» с сине-розовым волновым градиентом,
+// подсказка свайпа со стрелками (кликабельны — работает и мышью на ПК),
+// плитки быстрого доступа с иконкой слева, лента «Какой сейчас вайб?».
+// Списков треков на главной НЕТ (решение владельца — навсегда).
 
 function heroSlides(state) {
   return [
     {
       action: "play-recommended",
       mix: "",
-      variant: "",
-      title: "Слушать TG MIX",
+      title: "Слушать TG Микс",
       subtitle: "Музыкальные рекомендации для вас",
       button: `<button class="hero-slide__setup" data-action="open-recommendations">${icon("tune")} Настроить</button>`,
+      hint: "Проведите, чтобы включить свои треки",
     },
     {
       action: "play-mix",
       mix: "library",
-      variant: " hero-slide--library",
-      title: "Мои треки",
+      title: "Слушать мои треки",
       subtitle: state.libraryTotal
-        ? "Любимое из вашей библиотеки"
+        ? "Любимые треки из вашей коллекции"
         : "Добавьте треки в библиотеку",
       button: "",
+      hint: "Проведите, чтобы включить TG Микс",
     },
   ];
 }
@@ -32,11 +34,16 @@ function renderHero(state) {
   const slides = heroSlides(state)
     .map(
       (slide) => `
-        <div class="hero-slide${slide.variant}" data-action="${slide.action}"${slide.mix ? ` data-mix="${slide.mix}"` : ""}>
+        <div class="hero-slide" data-action="${slide.action}"${slide.mix ? ` data-mix="${slide.mix}"` : ""}>
           <div class="hero-slide__play">${icon("play")}</div>
           <div class="hero-slide__title">${slide.title}</div>
           <div class="hero-slide__subtitle">${slide.subtitle}</div>
           ${slide.button}
+          <div class="hero-slide__hint">
+            <button class="hero-arrow" data-action="hero-prev" aria-label="Предыдущий микс">${icon("chevron-left")}</button>
+            <span>${slide.hint}</span>
+            <button class="hero-arrow" data-action="hero-next" aria-label="Следующий микс">${icon("chevron")}</button>
+          </div>
         </div>
       `
     )
@@ -45,7 +52,6 @@ function renderHero(state) {
   return `
     <div class="hero">
       <div class="hero__track h-scroll" data-role="hero-scroll">${slides}</div>
-      <div class="hero__hint">${icon("chevron-left")}<span>Свайпните — свои треки</span>${icon("chevron")}</div>
     </div>
   `;
 }
@@ -68,27 +74,35 @@ function renderTiles(state) {
     {
       action: "open-mytracks",
       ic: "library",
+      tone: "magenta",
       title: "Мои треки",
-      sub: String(state.libraryTotal),
+      sub: state.libraryTotal ? `${state.libraryTotal} всего` : "Пока пусто",
     },
     {
       action: "open-recent",
       ic: "history",
-      title: "Недавно прослушанные",
-      sub: recentCount ? String(recentCount) : "",
+      tone: "teal",
+      title: "Недавнее",
+      sub: recentCount ? "Вы слушали" : "",
     },
-    { action: "open-playlists", ic: "playlist", title: "Плейлисты", sub: "" },
+    {
+      action: "open-playlists",
+      ic: "playlist",
+      tone: "violet",
+      title: "Плейлисты",
+      sub: "",
+    },
   ];
 
   const items = tiles
     .map(
       (t) => `
         <button class="vk-tile" data-action="${t.action}">
+          <span class="vk-tile__icon vk-tile__icon--${t.tone}">${icon(t.ic)}</span>
           <span class="vk-tile__text">
             <span class="vk-tile__title">${t.title}</span>
             ${t.sub ? `<span class="vk-tile__sub">${t.sub}</span>` : ""}
           </span>
-          <span class="vk-tile__icon">${icon(t.ic)}</span>
         </button>
       `
     )
@@ -97,10 +111,38 @@ function renderTiles(state) {
   return `<div class="vk-grid">${items}</div>`;
 }
 
+// Плейлисты по настроению — серверный микс /mix?mood= (тот же движок, что «Настроить»)
+const VIBES = [
+  { mood: "love", label: "Любовь", tone: "love" },
+  { mood: "happy", label: "Радостно", tone: "happy" },
+  { mood: "sad", label: "Грустно", tone: "sad" },
+  { mood: "energetic", label: "Активно", tone: "active" },
+  { mood: "calm", label: "Спокойно", tone: "calm" },
+];
+
+function renderVibes() {
+  const cards = VIBES.map(
+    (v) => `
+      <button class="vibe-card vibe-card--${v.tone}" data-action="play-vibe" data-mood="${v.mood}">
+        ${icon("play")}<span>${v.label}</span>
+      </button>
+    `
+  ).join("");
+
+  return `
+    <div class="vibe-section">
+      <div class="vibe-section__label">Выберите плейлист по настроению</div>
+      <div class="vibe-section__title">Какой сейчас вайб?</div>
+      <div class="vibe-row h-scroll">${cards}</div>
+    </div>
+  `;
+}
+
 export function renderHome(state) {
   return `
     ${renderHero(state)}
     ${renderSubscription(state)}
     ${renderTiles(state)}
+    ${renderVibes()}
   `;
 }

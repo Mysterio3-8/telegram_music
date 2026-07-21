@@ -326,6 +326,17 @@ export async function playRecommended() {
   }
 }
 
+// Mood-микс с карточки «Какой сейчас вайб?» на главной (тот же /mix, что «Настроить»).
+export async function playVibe(mood) {
+  showToast("Собираю подборку…");
+  try {
+    const tracks = await getMix({ mood });
+    playMix(tracks, "Пока нет треков под это настроение");
+  } catch {
+    showToast("Не удалось собрать микс");
+  }
+}
+
 // Запуск произвольного микса (варианты swipe-hero: вся база / любимые / рекомендации).
 export function playMix(list, emptyMessage = "Здесь пока нет треков") {
   if (!list || !list.length) {

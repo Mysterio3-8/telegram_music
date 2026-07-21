@@ -1094,11 +1094,12 @@
 .hero-slide {
   flex: 0 0 100%;
   width: 100%;
-  min-height: 320px;
-  padding: 34px 22px 58px;
+  min-height: 340px;
+  padding: 34px 22px 64px;
   border-radius: var(--radius-xl);
   text-align: center;
-  background: var(--gradient-dark);
+  /* VK Микс: синий верх → маджента низ (скрины владельца в копи/) */
+  background: linear-gradient(180deg, #0e63ee 0%, #2f86ff 30%, #ef1fd4 62%, #ff2ad9 100%);
   position: relative;
   overflow: hidden;
   display: flex;
@@ -1107,20 +1108,25 @@
   justify-content: center;
 }
 
-/* Слой глубины: два мягких световых пятна поверх градиента */
+/* Волновая граница между синим и маджентой + вертикальные штрихи-эквалайзер */
 .hero-slide::before {
   content: "";
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(58% 42% at 22% 12%, rgba(255, 255, 255, 0.16), transparent 70%),
-    radial-gradient(70% 55% at 85% 95%, rgba(0, 0, 0, 0.28), transparent 70%);
+    radial-gradient(18% 7% at 8% 44%, rgba(255, 255, 255, 0.9), transparent 70%),
+    radial-gradient(22% 9% at 26% 47%, rgba(255, 255, 255, 0.8), transparent 70%),
+    radial-gradient(16% 6% at 43% 43%, rgba(255, 255, 255, 0.9), transparent 70%),
+    radial-gradient(24% 10% at 61% 46%, rgba(255, 255, 255, 0.75), transparent 70%),
+    radial-gradient(18% 7% at 78% 42%, rgba(255, 255, 255, 0.85), transparent 70%),
+    radial-gradient(20% 8% at 94% 45%, rgba(255, 255, 255, 0.8), transparent 70%),
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.07) 0 2px,
+      transparent 2px 9px
+    );
+  filter: blur(5px);
   pointer-events: none;
-}
-
-/* Второй слайд («Мои треки») — своя, более глубокая гамма: слайды различимы боковым зрением */
-.hero-slide--library {
-  background: linear-gradient(200deg, #123a8f 0%, #2e55f2 55%, #37d1ce 130%);
 }
 
 .hero-slide:active {
@@ -1212,7 +1218,8 @@
   height: 16px;
 }
 
-.hero__hint {
+/* Подсказка свайпа — внутри слайда (текст меняется от слайда к слайду, как в VK) */
+.hero-slide__hint {
   position: absolute;
   left: 0;
   right: 0;
@@ -1220,16 +1227,30 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 14px;
-  color: rgba(255, 255, 255, 0.9);
+  gap: 12px;
+  color: rgba(255, 255, 255, 0.92);
   font-size: 13.5px;
   font-weight: 600;
-  pointer-events: none;
 }
 
-.hero__hint svg {
-  width: 16px;
-  height: 16px;
+/* Стрелки кликабельны: на ПК свайпа нет — навигация мышью */
+.hero-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.hero-arrow svg {
+  width: 17px;
+  height: 17px;
+}
+
+.hero-arrow:active {
+  background: rgba(255, 255, 255, 0.18);
 }
 
 /* ============ Плитки быстрого доступа (VK-стиль, 2×2) ============ */
@@ -1241,18 +1262,16 @@
   margin-top: 18px;
 }
 
+/* Плитка как строка главной VK: цветная иконка-квадрат слева, текст справа */
 .vk-tile {
-  position: relative;
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 8px;
-  min-height: 96px;
-  padding: 16px;
+  align-items: center;
+  gap: 12px;
+  min-height: 68px;
+  padding: 12px;
   border-radius: var(--radius-md);
   background: var(--surface-card);
   text-align: left;
-  overflow: hidden;
 }
 
 .vk-tile:active {
@@ -1278,21 +1297,31 @@
 }
 
 .vk-tile__icon {
-  position: absolute;
-  right: 12px;
-  bottom: 10px;
+  flex: 0 0 44px;
   width: 44px;
   height: 44px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-muted);
-  opacity: 0.85;
+  color: #fff;
+}
+
+.vk-tile__icon--magenta {
+  background: linear-gradient(160deg, #e935d1, #a01fee);
+}
+
+.vk-tile__icon--teal {
+  background: linear-gradient(160deg, #14b8c4, #0e8f9e);
+}
+
+.vk-tile__icon--violet {
+  background: linear-gradient(160deg, #7a5cff, #b04df0);
 }
 
 .vk-tile__icon svg {
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
 }
 
 /* ============ Карточка подписки (только не-Premium) ============ */
@@ -2552,4 +2581,108 @@
   font-size: 13px;
   font-weight: 600;
   color: var(--text-secondary);
+}
+
+/* ============ «Какой сейчас вайб?» — mood-миксы на главной (скрины VK) ============ */
+
+.vibe-section {
+  margin-top: 22px;
+}
+
+.vibe-section__label {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.vibe-section__title {
+  margin-top: 2px;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.vibe-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.vibe-card {
+  flex: 0 0 62%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 88px;
+  border-radius: var(--radius-md);
+  color: #fff;
+  font-size: 19px;
+  font-weight: 800;
+  scroll-snap-align: start;
+}
+
+.vibe-card svg {
+  width: 18px;
+  height: 18px;
+}
+
+.vibe-card:active {
+  filter: brightness(0.94);
+}
+
+.vibe-card--love {
+  background: linear-gradient(120deg, #d773b8, #e88ec9 55%, #c95ba4);
+}
+
+.vibe-card--happy {
+  background: linear-gradient(120deg, #e9a83a, #f0bd63 55%, #dd9426);
+}
+
+.vibe-card--sad {
+  background: linear-gradient(120deg, #d9575e, #e3767c 55%, #c74850);
+}
+
+.vibe-card--active {
+  background: linear-gradient(120deg, #e2571f, #ef7a43 55%, #d54a15);
+}
+
+.vibe-card--calm {
+  background: linear-gradient(120deg, #9fd2e8, #c2e4f2 55%, #8ac4de);
+  color: #0f2c3a;
+}
+
+/* ============ ПК-адаптация: hover-состояния при точном указателе ============ */
+
+@media (hover: hover) and (pointer: fine) {
+  button {
+    cursor: pointer;
+  }
+
+  .track-row:hover,
+  .vk-tile:hover,
+  .sheet-item:hover {
+    background: var(--surface-elevated);
+  }
+
+  .icon-btn:hover,
+  .hero-arrow:hover {
+    background: rgba(255, 255, 255, 0.14);
+  }
+
+  .hero-slide:hover .hero-slide__play {
+    transform: scale(1.05);
+  }
+
+  .vibe-card:hover,
+  .sub-card:hover,
+  .hero-slide__setup:hover {
+    filter: brightness(1.06);
+  }
+
+  .pill:hover,
+  .seg:hover,
+  .search-chip:hover,
+  .btn:hover {
+    filter: brightness(1.12);
+  }
 }
