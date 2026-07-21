@@ -110,15 +110,33 @@ def extract_soundcloud_url(text: str) -> str | None:
     return normalize_soundcloud_url(url)
 
 
+def _proxy_attempts() -> int:
+    """Сколько раз пробовать через разные прокси. Без прокси — одна попытка."""
+    return max(1, min(len(settings.proxy_list_items), 3))
+
+
 def list_soundcloud_entries(url: str) -> list[SoundcloudEntry]:
     """Трек → один элемент; профиль/сет → список треков (без скачивания).
-    Нормализуем URL и здесь — чинит уже сохранённые источники с вкладкой-суффиксом."""
-    opts = {**_base_opts(impersonate=True), "extract_flat": "in_playlist", "skip_download": True}
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(normalize_soundcloud_url(url), download=False)
-    if info is None:
-        return []
-    return collect_soundcloud_entries(info)
+    Нормализуем URL и здесь — чинит уже сохранённые источники с вкладкой-суффиксом.
+    При ошибке через прокси — повтор через следующий (ротация в _base_opts)."""
+    last_error: Exception | None = None
+    for attempt in range(_proxy_attempts()):
+        opts = {
+            **_base_opts(impersonate=True, use_proxy=True),
+            "extract_flat": "in_playlist",
+            "skip_download": True,
+        }
+        try:
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(normalize_soundcloud_url(url), download=False)
+        except Exception as exc:  # noqa: BLE001 — сеть/прокси, пробуем следующий
+            last_error = exc
+            logger.warning("SoundCloud: список не получен (попытка %s): %s", attempt + 1, exc)
+            continue
+        if info is None:
+            return []
+        return collect_soundcloud_entries(info)
+    raise last_error if last_error else RuntimeError(f"SoundCloud: список не получен {url}")
 
 
 def collect_soundcloud_entries(info: dict) -> list[SoundcloudEntry]:
@@ -143,10 +161,23 @@ def collect_soundcloud_entries(info: dict) -> list[SoundcloudEntry]:
 
 
 def download_soundcloud_audio(url: str) -> tuple[DownloadedAudio, str] | None:
-    """Скачивает один трек. Возвращает (аудио, uploader) или None."""
+    """Скачивает один трек. Возвращает (аудио, uploader) или None.
+    Ошибка сети/прокси → повтор через следующий прокси; последняя ошибка наружу
+    (вызывающая сторона различает постоянные отказы по тексту)."""
+    last_error: Exception | None = None
+    for attempt in range(_proxy_attempts()):
+        try:
+            return _download_soundcloud_once(url)
+        except Exception as exc:  # noqa: BLE001 — сеть/прокси, пробуем следующий
+            last_error = exc
+            logger.warning("SoundCloud: скачивание %s (попытка %s): %s", url, attempt + 1, exc)
+    raise last_error if last_error else RuntimeError(f"SoundCloud: не скачался {url}")
+
+
+def _download_soundcloud_once(url: str) -> tuple[DownloadedAudio, str] | None:
     with tempfile.TemporaryDirectory() as tmp:
         opts = {
-            **_base_opts(impersonate=True),
+            **_base_opts(impersonate=True, use_proxy=True),
             "format": "bestaudio/best",
             "outtmpl": str(Path(tmp) / "sc.%(ext)s"),
             "noplaylist": True,

@@ -52,11 +52,15 @@ def _impersonate_target():
         return None
 
 
-def _base_opts(impersonate: bool = False) -> dict:
+def _base_opts(impersonate: bool = False, use_proxy: bool = False) -> dict:
     """impersonate=True — Chrome-маскировка (curl_cffi), нужна SoundCloud (иначе 404
     на частых запросах). YouTube её не просит и на импersonation иногда отвечает
     403 (собственная система защиты реагирует на чужой TLS-отпечаток) — там она
-    по умолчанию выключена."""
+    по умолчанию выключена.
+
+    use_proxy=True — запрос уходит через следующий прокси из PROXY_LIST (ротация
+    по кругу, services/proxies). Включаем только для SoundCloud-путей: массовая
+    закачка 24/7 не должна светить IP сервера."""
     opts: dict = {
         "quiet": True,
         "no_warnings": True,
@@ -68,6 +72,12 @@ def _base_opts(impersonate: bool = False) -> dict:
         target = _impersonate_target()
         if target is not None:
             opts["impersonate"] = target
+    if use_proxy:
+        from app.services.proxies import next_proxy
+
+        proxy = next_proxy()
+        if proxy:
+            opts["proxy"] = proxy
     if settings.youtube_cookies_path and Path(settings.youtube_cookies_path).exists():
         opts["cookiefile"] = settings.youtube_cookies_path
     return opts

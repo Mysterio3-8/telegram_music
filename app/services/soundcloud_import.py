@@ -23,11 +23,6 @@ from app.services.youtube.user_import import duration_error
 
 logger = logging.getLogger(__name__)
 
-# Пауза между скачиваниями (сек): рандомизированная, чтобы не выглядеть как бот
-# и не словить бан по частоте запросов к SoundCloud.
-_MIN_DELAY = 2.0
-_MAX_DELAY = 5.0
-
 # Сообщения yt-dlp, означающие «трек никогда не скачается» (не сеть легла, а
 # сам трек недоступен — Go+/приватный/удалённый). Такие метим как обработанные,
 # иначе каждый день будем заново долбить SoundCloud по заведомо мёртвой ссылке.
@@ -87,7 +82,10 @@ async def import_soundcloud_tracks(
 
     for index, entry in enumerate(entries):
         if index:
-            await asyncio.sleep(random.uniform(_MIN_DELAY, _MAX_DELAY))
+            # Рандомная пауза — не выглядеть ботом при массовой закачке 24/7
+            await asyncio.sleep(
+                random.uniform(settings.soundcloud_min_delay, settings.soundcloud_max_delay)
+            )
         try:
             result = download_soundcloud_audio(entry.url)
         except Exception as exc:  # noqa: BLE001 — один битый трек не роняет пачку
