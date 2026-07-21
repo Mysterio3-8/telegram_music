@@ -62,12 +62,22 @@ export function renderProfile(state) {
     </div>
   `;
 
+  // Шапка по скринам VK (копи/ photo_28): цветной градиент во всю ширину,
+  // круглый аватар по центру, имя и любимые жанры-теги под ним.
+  const tags = (state.profileTop && state.profileTop.artists.length
+    ? state.profileTop.artists.slice(0, 4).map((a) => a.name)
+    : []
+  )
+    .map((t) => escapeHtml(t))
+    .join(" · ");
+
   const hero = `
-    <div class="profile-hero">
+    <div class="profile-hero profile-hero--wide">
       ${avatar(user, isPremium)}
       <div class="profile-hero__name">
         ${escapeHtml(name)}${rank ? ` <span class="rank-badge">${rank.emoji} ${rank.title}</span>` : ""}
       </div>
+      ${tags ? `<div class="profile-hero__tags">${tags}</div>` : ""}
       <div class="profile-hero__status${isPremium ? " is-premium" : ""}">
         ${
           isPremium && profile && profile.premium.until
@@ -126,6 +136,51 @@ export function renderProfile(state) {
 
     ${premiumCard}
     ${referralRow}
+    ${topArtists(state)}
+    ${topTracks(state)}
     ${achievementPreview(profile)}
+  `;
+}
+
+// «Топ артистов» и «Топ треков» — нумерованные списки как на скринах VK
+function topArtists(state) {
+  const artists = state.profileTop ? state.profileTop.artists : [];
+  if (!artists.length) return "";
+  const rows = artists
+    .map(
+      (artist, i) => `
+        <button class="top-row" data-action="open-artist" data-artist="${escapeHtml(artist.name)}">
+          <span class="top-row__num">${i + 1}</span>
+          <span class="top-row__name">${escapeHtml(artist.name)}</span>
+          <span class="top-row__count">${artist.track_count}</span>
+        </button>
+      `
+    )
+    .join("");
+  return `
+    <div class="section-head"><span class="section-title">Топ артистов</span></div>
+    <div class="card card--flat top-list">${rows}</div>
+  `;
+}
+
+function topTracks(state) {
+  const tracks = state.profileTop ? state.profileTop.tracks : [];
+  if (!tracks.length) return "";
+  const rows = tracks
+    .map(
+      (track, i) => `
+        <button class="top-row" data-action="play-track" data-id="${track.id}" data-context="profile-top">
+          <span class="top-row__num">${i + 1}</span>
+          <span class="top-row__name">
+            ${escapeHtml(track.title)}
+            <span class="top-row__artist">${escapeHtml(track.artist)}</span>
+          </span>
+        </button>
+      `
+    )
+    .join("");
+  return `
+    <div class="section-head"><span class="section-title">Топ треков</span></div>
+    <div class="card card--flat top-list">${rows}</div>
   `;
 }

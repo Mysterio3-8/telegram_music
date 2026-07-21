@@ -145,6 +145,11 @@ class LeaderRowOut(BaseModel):
     invited: int
 
 
+class ProfileTopOut(BaseModel):
+    artists: list["ArtistOut"]
+    tracks: list["TrackOut"]
+
+
 class UserStatsOut(BaseModel):
     listens: int
     listen_hours: float

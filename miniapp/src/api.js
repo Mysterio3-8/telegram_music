@@ -195,6 +195,11 @@ export function getReferralTop() {
   return request("/referral/top");
 }
 
+// Топ артистов и треков пользователя — блоки профиля
+export function getProfileTop() {
+  return request("/profile/top");
+}
+
 // Перенос плейлиста из другого сервиса: ссылка или список «Артист — Название»
 export function startTransfer(source) {
   return request("/transfer", { method: "POST", body: JSON.stringify({ source }) });

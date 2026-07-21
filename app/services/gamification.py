@@ -355,6 +355,40 @@ async def start_trial(session: AsyncSession, user: User) -> bool:
 
 
 @dataclass(frozen=True)
+class TopArtist:
+    name: str
+    listens: int
+
+
+async def top_artists(session: AsyncSession, user_id: int, limit: int = 5) -> list[TopArtist]:
+    """Любимые исполнители пользователя по числу прослушиваний (профиль, скрины VK)."""
+    rows = await session.execute(
+        select(Track.artist, func.count().label("listens"))
+        .select_from(TrackEvent)
+        .join(Track, Track.id == TrackEvent.track_id)
+        .where(TrackEvent.user_id == user_id, TrackEvent.event == "listen")
+        .group_by(func.lower(Track.artist))
+        .order_by(func.count().desc())
+        .limit(limit)
+    )
+    return [TopArtist(name=name, listens=listens) for name, listens in rows.all()]
+
+
+async def top_tracks(session: AsyncSession, user_id: int, limit: int = 5) -> list[Track]:
+    """Самые прослушиваемые треки пользователя."""
+    rows = await session.execute(
+        select(Track, func.count().label("listens"))
+        .select_from(TrackEvent)
+        .join(Track, Track.id == TrackEvent.track_id)
+        .where(TrackEvent.user_id == user_id, TrackEvent.event == "listen")
+        .group_by(Track.id)
+        .order_by(func.count().desc())
+        .limit(limit)
+    )
+    return [track for track, _ in rows.all()]
+
+
+@dataclass(frozen=True)
 class LeaderRow:
     telegram_id: int
     name: str

@@ -99,7 +99,13 @@ import {
   saveUiSettings,
 } from "./prefs.js";
 import { applyEqualizer, currentGains, getEqSettings, saveEqSettings } from "./equalizer.js";
-import { getTrackById, getReferralTop, startPremiumTrial, startTransfer } from "./api.js";
+import {
+  getTrackById,
+  getProfileTop,
+  getReferralTop,
+  startPremiumTrial,
+  startTransfer,
+} from "./api.js";
 
 const root = document.getElementById("app");
 const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
@@ -308,6 +314,14 @@ async function loadProfile() {
     }
   } catch {
     mutate({ profileStatus: "error" });
+  }
+}
+
+async function loadProfileTop() {
+  try {
+    mutate({ profileTop: await getProfileTop() });
+  } catch {
+    // блоки топа необязательны
   }
 }
 
@@ -535,6 +549,7 @@ function contextTracks(context) {
   if (context === "recent") return getRecentTracks();
   if (context === "offline") return offlineTracks();
   if (context === "collection") return state.collectionTracks;
+  if (context === "profile-top") return (state.profileTop && state.profileTop.tracks) || [];
   return state.catalog;
 }
 
@@ -628,6 +643,7 @@ function findTrack(trackId) {
     getRecentTracks().find((t) => t.id === trackId) ||
     offlineTracks().find((t) => t.id === trackId) ||
     (state.collectionTracks || []).find((t) => t.id === trackId) ||
+    ((state.profileTop && state.profileTop.tracks) || []).find((t) => t.id === trackId) ||
     (state.currentTrack && state.currentTrack.id === trackId ? state.currentTrack : null)
   );
 }
@@ -730,6 +746,7 @@ root.addEventListener("click", (event) => {
     case "open-profile":
       navigateTo("profile");
       loadProfile();
+      loadProfileTop();
       break;
     case "open-achievements":
       navigateTo("achievements");

@@ -3103,3 +3103,81 @@
   color: var(--text-accent);
   white-space: nowrap;
 }
+
+/* ============ Профиль: широкая градиентная шапка + топы (скрины VK) ============ */
+
+.profile-hero--wide {
+  position: relative;
+  margin: 0 calc(-1 * var(--space-4)) 16px;
+  padding: 28px 20px 22px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(170deg, #6b2b2b 0%, #3a1f2c 55%, var(--bg-base) 100%);
+}
+
+.profile-hero--wide .avatar--lg {
+  border-radius: 50%;
+  width: 108px;
+  height: 108px;
+}
+
+.profile-hero--wide .avatar__img {
+  border-radius: 50%;
+}
+
+.profile-hero__tags {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.72);
+  text-align: center;
+}
+
+.top-list {
+  padding: 4px;
+  margin-top: 8px;
+}
+
+.top-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 14px;
+  text-align: left;
+}
+
+.top-row:active {
+  background: var(--surface-elevated);
+}
+
+.top-row__num {
+  width: 20px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.top-row__name {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 14.5px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.top-row__artist {
+  font-size: 12.5px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.top-row__count {
+  font-size: 13px;
+  color: var(--text-muted);
+}

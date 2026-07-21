@@ -16,6 +16,7 @@ from app.api.schemas import (
     PlaylistSummaryOut,
     PremiumStatusOut,
     ProfileOut,
+    ProfileTopOut,
     RankOut,
     ReferralOut,
     SearchLogIn,
@@ -40,6 +41,8 @@ from app.services.gamification import (
     referral_link,
     referral_rank,
     start_trial,
+    top_artists,
+    top_tracks,
 )
 from app.services.library import (
     add_to_library,
@@ -540,6 +543,20 @@ async def start_premium_trial(
             status.HTTP_409_CONFLICT, "Пробный период уже был использован"
         )
     return _premium_status_out(user)
+
+
+@router.get("/profile/top", response_model=ProfileTopOut)
+async def profile_top(
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+) -> ProfileTopOut:
+    """Топ исполнителей и треков пользователя — блоки профиля по скринам VK."""
+    artists = await top_artists(session, user.id)
+    tracks = await top_tracks(session, user.id)
+    return ProfileTopOut(
+        artists=[ArtistOut(name=a.name, track_count=a.listens) for a in artists],
+        tracks=[track_out(t) for t in tracks],
+    )
 
 
 @router.get("/referral/top", response_model=list[LeaderRowOut])
