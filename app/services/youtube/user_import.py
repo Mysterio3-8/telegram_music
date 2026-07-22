@@ -95,7 +95,9 @@ async def process_user_import(
     if len(audio.data) > settings.max_file_size_mb * 1024 * 1024:
         raise UserImportRejected(f"Файл больше {settings.max_file_size_mb} МБ.")
 
-    artist, title = parse_title(audio.video_title, "Unknown")
+    # YouTube Music помечает авто-каналы «Исполнитель - Topic» — чистим суффикс
+    fallback_artist = audio.uploader.removesuffix(" - Topic").strip() or "Исполнитель"
+    artist, title = parse_title(audio.video_title, fallback_artist)
     fingerprint = compute_fingerprint_from_bytes(audio.data, suffix=f".{audio.file_format}")
 
     track, created = await import_via_telegram_mint(

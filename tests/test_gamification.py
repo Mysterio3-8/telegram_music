@@ -22,11 +22,11 @@ def test_referral_rank_thresholds():
 
     assert referral_rank(1).current.title == "Bronze"
     assert referral_rank(1).next.title == "Silver"
-    assert referral_rank(1).to_next == 4
+    assert referral_rank(1).to_next == 9
 
-    assert referral_rank(150).current.title == "Legend"
-    assert referral_rank(150).next is None
-    assert referral_rank(200).current.title == "Legend"
+    assert referral_rank(5000).current.title == "Legend"
+    assert referral_rank(5000).next is None
+    assert referral_rank(9000).current.title == "Legend"
 
 
 def test_referral_link_format():
@@ -78,11 +78,13 @@ async def test_referral_milestones_grant_premium_idempotently(session):
 async def test_referral_lifetime_milestone(session):
     from app.services.gamification import REFERRAL_MILESTONES
 
+    last_threshold = REFERRAL_MILESTONES[-1][0]  # 5000 — последний порог
     referrer = User(telegram_id=1, referral_milestones_claimed=len(REFERRAL_MILESTONES) - 1)
     session.add(referrer)
     await session.commit()
-    for tid in range(1000, 1100):  # 100 приглашённых — последний порог
-        session.add(User(telegram_id=tid, referred_by=1))
+    session.add_all(
+        [User(telegram_id=10_000 + i, referred_by=1) for i in range(last_threshold)]
+    )
     await session.commit()
 
     await grant_referral_milestones(session, referrer)
@@ -193,4 +195,4 @@ def test_next_referral_reward():
 
     assert next_referral_reward(0) == (1, 7)
     assert next_referral_reward(1) == (1, 7)  # до порога 2
-    assert next_referral_reward(1000) == (0, 0)
+    assert next_referral_reward(9000) == (0, 0)

@@ -11,12 +11,15 @@ const REWARDS = [
   { friends: 2, label: "+7 дней" },
   { friends: 3, label: "+14 дней" },
   { friends: 5, label: "+30 дней" },
-  { friends: 7, label: "+30 дней" },
   { friends: 10, label: "+60 дней" },
-  { friends: 15, label: "+60 дней" },
-  { friends: 25, label: "+180 дней" },
-  { friends: 50, label: "+год Premium" },
-  { friends: 100, label: "Premium навсегда" },
+  { friends: 25, label: "+120 дней" },
+  { friends: 50, label: "+180 дней" },
+  { friends: 100, label: "+год Premium" },
+  { friends: 250, label: "+год Premium" },
+  { friends: 500, label: "+2 года" },
+  { friends: 1000, label: "+3 года" },
+  { friends: 2500, label: "+5 лет" },
+  { friends: 5000, label: "Premium навсегда" },
 ];
 
 const STEPS = [
@@ -123,7 +126,7 @@ export function renderReferral(state) {
     <div class="ref-intro">
       <div class="ref-intro__emoji">🎁</div>
       <div class="ref-intro__title">Один друг — неделя Premium</div>
-      <div class="ref-intro__text">Первая награда приходит сразу за первого приглашённого. Дальше больше: 100 друзей — Premium навсегда. А когда друг оплачивает подписку, вам падает скидка 50% на следующую покупку.</div>
+      <div class="ref-intro__text">Первая награда приходит сразу за первого приглашённого. Дальше больше — вплоть до Premium навсегда за 5000 друзей. А когда друг оплачивает подписку, вам падает скидка 50% на следующую покупку.</div>
     </div>
 
     ${nextRewardBanner(profile)}

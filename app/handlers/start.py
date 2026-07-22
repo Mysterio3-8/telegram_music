@@ -14,7 +14,7 @@ from app.services.gamification import register_referral
 from app.services.library import get_track
 from app.services.premium import is_premium_active
 from app.services.subscription import is_fully_subscribed
-from app.services.users import count_library_tracks, count_playlists, get_user_by_telegram_id
+from app.services.users import count_library_tracks, get_user_by_telegram_id
 
 router = Router()
 
@@ -26,19 +26,20 @@ SUBSCRIPTION_GATE_TEXT = (
 
 async def build_cabinet_text(session: AsyncSession, user: User) -> str:
     library_count = await count_library_tracks(session, user.id)
-    playlist_count = await count_playlists(session, user.id)
     if is_premium_active(user) and user.premium_until is not None:
-        subscription = f"Premium до {user.premium_until.strftime('%d.%m.%Y')}"
+        subscription = f"💎 Premium до {user.premium_until.strftime('%d.%m.%Y')}"
     else:
-        subscription = "Бесплатная"
+        subscription = "Бесплатный тариф"
     return (
-        "👋 Добро пожаловать!\n\n"
-        f"Имя: {user.first_name or '—'}\n"
-        f"Telegram ID: {user.telegram_id}\n\n"
-        f"Подписка: {subscription}\n\n"
-        f"Треков в библиотеке: {library_count}\n"
-        f"Плейлистов: {playlist_count}\n\n"
-        "Выберите действие:"
+        f"🎧 <b>TG Music</b> — вся музыка в Телеграме\n\n"
+        "Вот с чего начать:\n\n"
+        "▪️ <b>🎧 Открыть плеер</b> — главное. Внутри: миксы под настроение, "
+        "поиск, плейлисты, эквалайзер, тексты песен и офлайн-режим\n"
+        "▪️ <b>⬆️ Загрузить трек</b> — свой файл или ссылка на YouTube Music / SoundCloud\n"
+        "▪️ <b>📥 Перенести музыку</b> — плейлисты из Spotify, Яндекс.Музыки и ВК\n\n"
+        f"{subscription} · треков в библиотеке: {library_count}\n\n"
+        "💡 Совет: плеер можно <b>вынести на рабочий стол</b> и слушать без Телеграма — "
+        "как обычное приложение. И он <b>играет в фоне</b>, когда свёрнут."
     )
 
 
@@ -82,7 +83,7 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
     if command.args and command.args.startswith("track_"):
         if await _show_shared_track(message, user, command.args):
             return
-    await message.answer(text, reply_markup=main_menu_keyboard())
+    await message.answer(text, reply_markup=main_menu_keyboard(), parse_mode="HTML")
 
 
 async def render_main_menu(callback: CallbackQuery) -> None:
@@ -90,7 +91,7 @@ async def render_main_menu(callback: CallbackQuery) -> None:
     async with session_factory() as session:
         user = await ensure_user(session, callback.from_user)
         text = await build_cabinet_text(session, user)
-    await callback.message.edit_text(text, reply_markup=main_menu_keyboard())
+    await callback.message.edit_text(text, reply_markup=main_menu_keyboard(), parse_mode="HTML")
 
 
 @router.callback_query(F.data == "menu:main")

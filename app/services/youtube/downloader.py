@@ -31,6 +31,7 @@ class DownloadedAudio:
     file_format: str
     duration: int
     video_title: str
+    uploader: str = ""  # канал/автор — fallback для исполнителя, чтобы не было «Unknown»
 
 
 @dataclass(frozen=True)
@@ -182,9 +183,19 @@ def download_audio(video_id: str) -> DownloadedAudio | None:
         if not files:
             return None
         data, file_format = _read_supported(files[0])
+        # yt-dlp у музыкальных загрузок кладёт исполнителя в artist/creator,
+        # иначе берём имя канала — всё лучше, чем «Unknown»
+        uploader = (
+            info.get("artist")
+            or info.get("creator")
+            or info.get("uploader")
+            or info.get("channel")
+            or ""
+        )
         return DownloadedAudio(
             data=data,
             file_format=file_format,
             duration=int(info.get("duration") or 0),
             video_title=info.get("title") or video_id,
+            uploader=str(uploader).strip(),
         )
