@@ -3181,3 +3181,57 @@
   font-size: 13px;
   color: var(--text-muted);
 }
+
+/* ============ Загрузка трека из Mini App ============ */
+
+.lib-add-row {
+  margin-top: 8px;
+}
+
+.upload-drop {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 16px;
+  margin-top: 8px;
+  border-radius: var(--radius-md);
+  background: var(--glass-bg);
+  border: 1.5px dashed var(--glass-border-amethyst);
+  cursor: pointer;
+}
+
+.upload-drop:active {
+  background: var(--surface-elevated);
+}
+
+.upload-drop__icon {
+  display: flex;
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-soft);
+  color: var(--icon-active);
+}
+
+.upload-drop__icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.upload-drop__text {
+  flex: 1;
+  font-size: 14px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.req-mark {
+  font-size: 11px;
+  font-weight: 600;
+  color: #e35d6a;
+  margin-left: 4px;
+}

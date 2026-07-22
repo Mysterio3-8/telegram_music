@@ -56,8 +56,8 @@ async function request(path, options = {}) {
       ...(options.headers || {}),
     },
   });
-  if (response.status === 401) {
-    // токен истёк — перелогин и один повтор
+  if (response.status === 401 && !options._retried) {
+    // токен истёк — перелогин и РОВНО один повтор (иначе бесконечный цикл 401)
     await login();
     return request(path, { ...options, _retried: true });
   }
@@ -184,6 +184,28 @@ export function submitLyrics(trackId, text) {
     method: "POST",
     body: JSON.stringify({ text }),
   });
+}
+
+// Загрузка своего трека файлом (multipart): исполнитель обязателен на сервере
+export async function uploadTrack(file, title, artist) {
+  const form = new FormData();
+  form.append("title", title);
+  form.append("artist", artist);
+  form.append("file", file);
+  // Без Content-Type вручную — браузер сам проставит boundary для multipart
+  const response = await fetch(`${API_BASE}/upload`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: form,
+  });
+  if (!response.ok) {
+    const detail = await response
+      .json()
+      .then((body) => (typeof body.detail === "string" ? body.detail : ""))
+      .catch(() => "");
+    throw new ApiError(detail || `Ошибка загрузки (${response.status})`, response.status);
+  }
+  return response.json();
 }
 
 // Пробный Premium на 3 дня — один раз на аккаунт

@@ -79,6 +79,7 @@ const state = {
   transferSource: "",
   transferStatus: "idle", // idle | loading
   transferResult: "",
+  upload: { file: null, fileName: "", title: "", artist: "", status: "idle", result: "" },
 };
 
 const structureListeners = new Set();

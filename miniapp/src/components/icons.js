@@ -50,6 +50,7 @@ const PATHS = {
   lyrics: '<path d="M5 5h14"/><path d="M5 9h10"/><path d="M5 13h8"/><path d="M5 17h11"/>',
   "chevron-left": '<path d="m14.5 6-5.5 6 5.5 6"/>',
   import: '<path d="M12 3v11"/><path d="m8 10 4 4 4-4"/><path d="M4 17v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2"/>',
+  transfer: '<path d="M4 8h13l-3-3"/><path d="M20 16H7l3 3"/>',
   radio: '<circle cx="12" cy="12" r="2"/><path d="M8.5 8.5a5 5 0 0 0 0 7"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M5.6 5.6a9 9 0 0 0 0 12.8"/><path d="M18.4 5.6a9 9 0 0 1 0 12.8"/>',
   gear: '<circle cx="12" cy="12" r="3"/><path d="M12 2.8 13.6 5h2.7l.8 2.5 2.4 1.2-.5 2.7 1.7 2.1-1.7 2.1.5 2.7-2.4 1.2-.8 2.5h-2.7L12 21.2 10.4 19H7.7l-.8-2.5-2.4-1.2.5-2.7L3.3 10.5 5 8.4l-.5-2.7L6.9 4.5 7.7 2h2.7L12 2.8Z" transform="scale(0.92) translate(1,1)"/>',
   sound: '<path d="M5 9v6h3l5 4V5L8 9H5Z" fill="currentColor" stroke="none"/><path d="M16 9a4 4 0 0 1 0 6"/><path d="M18.5 6.5a8 8 0 0 1 0 11"/>',

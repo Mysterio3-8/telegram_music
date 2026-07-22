@@ -80,6 +80,7 @@ import { renderEqualizer } from "./screens/equalizer.js";
 import { renderInterface } from "./screens/interface.js";
 import { renderStorage } from "./screens/storage.js";
 import { renderTransfer } from "./screens/transfer.js";
+import { renderUpload } from "./screens/upload.js";
 import {
   isOffline,
   offlineSupported,
@@ -105,6 +106,7 @@ import {
   getReferralTop,
   startPremiumTrial,
   startTransfer,
+  uploadTrack,
 } from "./api.js";
 
 const root = document.getElementById("app");
@@ -136,6 +138,7 @@ const SCREENS = {
   interface: renderInterface,
   storage: renderStorage,
   transfer: renderTransfer,
+  upload: renderUpload,
   recent: renderRecent,
   artists: renderArtists,
   docs: renderDocs,
@@ -893,6 +896,14 @@ root.addEventListener("click", (event) => {
     case "open-transfer":
       navigateTo("transfer", { transferResult: "", transferStatus: "idle" });
       break;
+    case "open-upload":
+      navigateTo("upload", {
+        upload: { file: null, fileName: "", title: "", artist: "", status: "idle", result: "" },
+      });
+      break;
+    case "upload-submit":
+      submitUpload();
+      break;
     case "start-trial":
       event.stopPropagation();
       activateTrial();
@@ -1130,10 +1141,61 @@ root.addEventListener("input", (event) => {
 
 // Отпустили ползунок эквалайзера — обновить галочку «Пользовательская» в списке
 root.addEventListener("change", (event) => {
-  if (event.target.dataset && event.target.dataset.role === "eq-band") {
+  const role = event.target.dataset ? event.target.dataset.role : null;
+  if (role === "eq-band") {
     mutate({});
   }
+  if (role === "upload-file") {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+    pendingUploadFile = file;
+    // Подставим имя файла в название, если пользователь ещё не ввёл своё
+    const title = getState().upload.title || file.name.replace(/\.[^.]+$/, "");
+    mutate({ upload: { ...getState().upload, fileName: file.name, title, result: "" } });
+  }
 });
+
+let pendingUploadFile = null;
+
+async function submitUpload() {
+  const titleEl = root.querySelector('[data-role="upload-title"]');
+  const artistEl = root.querySelector('[data-role="upload-artist"]');
+  const title = (titleEl ? titleEl.value : "").trim();
+  const artist = (artistEl ? artistEl.value : "").trim();
+  if (!pendingUploadFile) {
+    showToast("Выберите аудиофайл");
+    return;
+  }
+  if (!title || !artist) {
+    showToast("Заполните название и исполнителя");
+    return;
+  }
+  mutate({ upload: { ...getState().upload, title, artist, status: "loading", result: "" } });
+  try {
+    const track = await uploadTrack(pendingUploadFile, title, artist);
+    pendingUploadFile = null;
+    mutate({
+      upload: {
+        file: null,
+        fileName: "",
+        title: "",
+        artist: "",
+        status: "idle",
+        result: `✅ «${track.artist} — ${track.title}» добавлен в библиотеку`,
+      },
+      libraryTotal: getState().libraryTotal + 1,
+    });
+    showToast("Трек загружен 🎵");
+  } catch (error) {
+    mutate({
+      upload: {
+        ...getState().upload,
+        status: "idle",
+        result: (error && error.message) || "Не удалось загрузить трек",
+      },
+    });
+  }
+}
 
 // Enter в поиске — сохранить запрос в «Недавние», залогировать и убрать клавиатуру
 root.addEventListener("keydown", (event) => {

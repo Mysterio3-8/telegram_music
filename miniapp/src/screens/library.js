@@ -58,6 +58,11 @@ export function renderLibrary(state) {
     ${row("Альбомы", "album", "open-albums")}
     ${row("Исполнители", "mic", "open-artists")}
 
+    <div class="lib-add-row">
+      ${row("Загрузить трек", "import", "open-upload", "Свой файл — в библиотеку")}
+      ${row("Перенести из сервисов", "transfer", "open-transfer", "Spotify · Яндекс · ВК")}
+    </div>
+
     <div style="margin-top:16px">${renderPremiumCard(state)}</div>
   `;
 }
