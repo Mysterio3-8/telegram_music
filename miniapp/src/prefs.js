@@ -86,6 +86,22 @@ export function hasRecSettings() {
   return Boolean(s.mood || s.recognizability || s.language);
 }
 
+// ---------- Онбординг (показывается один раз при первом входе) ----------
+
+const ONBOARDED_KEY = "tgmusic-onboarded";
+
+export function isOnboarded() {
+  try {
+    return localStorage.getItem(ONBOARDED_KEY) === "1";
+  } catch {
+    return true; // приватный режим — не мучаем онбордингом
+  }
+}
+
+export function setOnboarded() {
+  writeJson(ONBOARDED_KEY, 1);
+}
+
 // ---------- Настройки интерфейса (акцентный цвет, тактильный отклик) ----------
 
 const UI_SETTINGS_KEY = "tgmusic-ui-settings";

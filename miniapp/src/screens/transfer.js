@@ -4,10 +4,42 @@ import { icon } from "../components/icons.js";
 // поле для ссылки/списка, объяснение как это работает.
 
 const SERVICES = [
-  { id: "spotify", label: "Spotify", hint: "Ссылка на публичный плейлист", tone: "spotify" },
-  { id: "yandex", label: "Яндекс", hint: "Ссылка на плейлист", tone: "yandex" },
-  { id: "vk", label: "ВКонтакте", hint: "Список текстом", tone: "vk" },
-  { id: "soundcloud", label: "SoundCloud", hint: "Ссылка на профиль или сет", tone: "sc" },
+  {
+    id: "spotify",
+    label: "Spotify",
+    hint: "Ссылка на плейлист",
+    tone: "spotify",
+    prompt: "Скопируйте ссылку на свой плейлист в Spotify",
+    help: "Откройте плейлист в Spotify → «…» → «Поделиться» → «Копировать ссылку».",
+    warn: "Плейлист должен быть публичным — проверьте настройки приватности.",
+  },
+  {
+    id: "yandex",
+    label: "Яндекс",
+    hint: "Ссылка на плейлист",
+    tone: "yandex",
+    prompt: "Скопируйте ссылку на свой плейлист в Яндекс Музыке",
+    help: "Откройте плейлист в Яндекс Музыке → «Поделиться» → «Скопировать ссылку».",
+    warn: "Плейлист должен быть публичным — проверьте настройки приватности.",
+  },
+  {
+    id: "vk",
+    label: "ВКонтакте",
+    hint: "Список текстом",
+    tone: "vk",
+    prompt: "Вставьте список треков — по строке на трек",
+    help: "ВКонтакте не отдаёт плейлисты без входа. Скопируйте названия треков и вставьте строками «Артист — Название».",
+    warn: "",
+  },
+  {
+    id: "soundcloud",
+    label: "SoundCloud",
+    hint: "Профиль, трек или сет",
+    tone: "sc",
+    prompt: "Скопируйте ссылку на трек, профиль или сет SoundCloud",
+    help: "SoundCloud скачивается напрямую — принимаем ссылку на трек, профиль, лайки или сет.",
+    warn: "",
+  },
 ];
 
 export function renderTransfer(state) {
@@ -22,10 +54,11 @@ export function renderTransfer(state) {
     `
   ).join("");
 
-  const placeholder =
-    state.transferService === "vk"
-      ? "Kizaru — Fendi&#10;Big Baby Tape — Gimme the Loot"
-      : "https://…";
+  const active = SERVICES.find((s) => s.id === state.transferService) || SERVICES[0];
+  const isVk = active.id === "vk";
+  const placeholder = isVk
+    ? "Kizaru — Fendi&#10;Big Baby Tape — Gimme the Loot"
+    : "https://…";
 
   return `
     <div class="page-head" data-role="page-head">
@@ -41,13 +74,11 @@ export function renderTransfer(state) {
     <div class="rec-section-label">Откуда перенести?</div>
     <div class="transfer-grid">${cards}</div>
 
-    <div class="rec-section-label">Ссылка или список треков</div>
-    <textarea class="transfer-input" data-role="transfer-input" rows="4"
+    <div class="transfer-prompt">${active.prompt}</div>
+    <textarea class="transfer-input" data-role="transfer-input" rows="${isVk ? 4 : 2}"
       placeholder="${placeholder}">${state.transferSource || ""}</textarea>
-    <div class="hint-text">
-      Из ВКонтакте и любого другого сервиса музыку переносим списком:
-      скопируйте треки и вставьте строками «Артист — Название».
-    </div>
+    <div class="hint-text">${active.help}</div>
+    ${active.warn ? `<div class="transfer-warn">${active.warn}</div>` : ""}
 
     <button class="btn btn--primary btn--block" style="margin-top:14px" data-action="transfer-start">
       ${state.transferStatus === "loading" ? "Переношу…" : "Перенести"}

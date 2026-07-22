@@ -80,6 +80,9 @@ const state = {
   transferStatus: "idle", // idle | loading
   transferResult: "",
   upload: { file: null, fileName: "", title: "", artist: "", status: "idle", result: "" },
+  onbActive: false, // онбординг при первом входе
+  onbStep: 0,
+  onbArtists: [], // исполнители для шага выбора
 };
 
 const structureListeners = new Set();

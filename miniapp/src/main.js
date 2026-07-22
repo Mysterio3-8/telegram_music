@@ -81,6 +81,7 @@ import { renderInterface } from "./screens/interface.js";
 import { renderStorage } from "./screens/storage.js";
 import { renderTransfer } from "./screens/transfer.js";
 import { renderUpload } from "./screens/upload.js";
+import { renderOnboarding } from "./screens/onboarding.js";
 import {
   isOffline,
   offlineSupported,
@@ -98,6 +99,8 @@ import {
   applyAccent,
   getUiSettings,
   saveUiSettings,
+  isOnboarded,
+  setOnboarded,
 } from "./prefs.js";
 import { applyEqualizer, currentGains, getEqSettings, saveEqSettings } from "./equalizer.js";
 import {
@@ -193,6 +196,16 @@ function render() {
     return;
   }
 
+  // Онбординг первого входа — поверх всего, без навигации и хедера
+  if (state.onbActive) {
+    const onbHtml = renderOnboarding(state);
+    if (onbHtml !== lastHtml) {
+      lastHtml = onbHtml;
+      root.innerHTML = onbHtml;
+    }
+    return;
+  }
+
   const showNav = TAB_SCREENS.has(state.screen);
   const screenRenderer = SCREENS[state.screen] || renderHome;
   root.classList.toggle("is-playing", Boolean(state.currentTrack) && !state.playerOpen);
@@ -266,6 +279,7 @@ async function boot() {
       premium,
     });
     loadHeavyData();
+    maybeStartOnboarding();
   } catch (error) {
     mutate({
       bootStatus: "error",
@@ -287,6 +301,29 @@ function loadHeavyData() {
     .catch(() => {});
   // Профиль нужен главной: доступность триала и начисленные награды
   loadProfile();
+}
+
+// Онбординг только для новых: показываем один раз, исполнителей грузим фоном
+function maybeStartOnboarding() {
+  if (isOnboarded()) return;
+  mutate({ onbActive: true, onbStep: 0 });
+  getArtists()
+    .then((artists) => mutate({ onbArtists: artists.slice(0, 24) }))
+    .catch(() => {});
+}
+
+function advanceOnboarding() {
+  const next = getState().onbStep + 1;
+  if (next >= 3) {
+    finishOnboarding();
+    return;
+  }
+  mutate({ onbStep: next });
+}
+
+function finishOnboarding() {
+  setOnboarded();
+  mutate({ onbActive: false });
 }
 
 let libraryPagesLoaded = 1;
@@ -895,6 +932,20 @@ root.addEventListener("click", (event) => {
       break;
     case "open-transfer":
       navigateTo("transfer", { transferResult: "", transferStatus: "idle" });
+      break;
+    case "onb-next":
+      advanceOnboarding();
+      break;
+    case "onb-artist":
+      toggleFavoriteArtist(el.dataset.name);
+      mutate({});
+      break;
+    case "onb-import":
+      finishOnboarding();
+      navigateTo("transfer", { transferResult: "", transferStatus: "idle" });
+      break;
+    case "onb-finish":
+      finishOnboarding();
       break;
     case "open-upload":
       navigateTo("upload", {

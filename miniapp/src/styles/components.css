@@ -3235,3 +3235,142 @@
   color: #e35d6a;
   margin-left: 4px;
 }
+
+/* ============ Онбординг первого входа ============ */
+
+.onboarding {
+  display: flex;
+  flex-direction: column;
+  min-height: 82dvh;
+  padding: 20px 4px 24px;
+}
+
+.onb-dots {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.onb-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--surface-elevated);
+  transition: width var(--duration-normal) var(--ease-out-expo);
+}
+
+.onb-dot.is-active {
+  width: 22px;
+  border-radius: 4px;
+  background: var(--accent);
+}
+
+.onb-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.onb-hero {
+  text-align: center;
+  margin-bottom: 28px;
+}
+
+.onb-hero__logo {
+  font-size: 64px;
+  margin-bottom: 14px;
+}
+
+.onb-hero__title {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.onb-hero__sub {
+  margin-top: 10px;
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.onb-points {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 28px;
+}
+
+.onb-point {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14.5px;
+}
+
+.onb-point svg {
+  flex: 0 0 40px;
+  width: 40px;
+  height: 40px;
+  padding: 9px;
+  border-radius: 12px;
+  background: var(--accent-soft);
+  color: var(--icon-active);
+}
+
+.onb-step-head {
+  font-size: 22px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.onb-step-sub {
+  margin: 8px 0 20px;
+  font-size: 14px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.onb-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  margin-bottom: 28px;
+}
+
+.onb-chip {
+  padding: 10px 16px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-card);
+  border: 1.5px solid transparent;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.onb-chip.is-active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--text-accent);
+}
+
+/* ============ Перенос: подсказки на выбранный сервис (photo_13) ============ */
+
+.transfer-prompt {
+  margin-top: 18px;
+  margin-bottom: 8px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.transfer-warn {
+  margin-top: 10px;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  font-size: 12.5px;
+  color: var(--text-muted);
+  text-align: center;
+}
