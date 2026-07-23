@@ -137,7 +137,7 @@ $env:DATABASE_URL="sqlite+aiosqlite:///_tmp.db"; .\.venv\Scripts\python.exe -m a
 - **Автопривязка источников (срез 4)**: `attach-sources` — SoundCloud приоритетнее YouTube, дедуп по url, `artists.source_status` = soundcloud|youtube|no_source
 - **Mini App**: чипы топ-жанров в поиске (грузятся фоном в loadHeavyData), экран жанра (переиспользован collection, тип «Жанр»), новый экран карточки артиста [artistcard.js](miniapp/src/screens/artistcard.js) (баннер-hero, аватар, жанры-чипы, «Слушать всё», «Все теки», топ, альбомы горизонтально) — `open-artist` теперь ведёт на карточку, старый список треков — «Все треки». Проверено в dev-браузере DOM-ами (скриншоты таймаутят)
 - Тесты: **252 passed** (+11). Дев-БД music_bot.db была без миграций — stamp d01cfc648f91 → upgrade
-- **Следующий шаг**: на VPS после деплоя: `alembic upgrade head` → `python -m app.cli.genres seed` → `nohup python -m app.cli.research country RU --limit 1000 &` (потом US, GB, KR…) → `research attach-sources` → закачка новой пачки. Прокси от владельца всё ещё ждём
+- **Следующий шаг**: на VPS после деплоя: `alembic upgrade head` → `python -m app.cli.genres seed` → `nohup python -m app.cli.research country RU --limit 1000 &` (потом US, GB, KR…) → `research attach-sources` → закачка новой пачки. **Прокси включены (2026-07-23)**: 7 штук в PROXY_LIST на VPS, все проверены (SoundCloud 200 через каждый), ротация по кругу работает; закачка идёт через них — 2306 треков в базе, темп набирается. Для темпа 3000/сутки по SPEC-КАТАЛОГ §4 — поднять concurrency/добавить 2-3 воркера очереди `soundcloud`
 
 ## Checkpoint (2026-07-23) — МАССОВАЯ ЗАКАЧКА ЗАПУЩЕНА: 460 артистов, обложки, альбомы
 
@@ -146,7 +146,7 @@ $env:DATABASE_URL="sqlite+aiosqlite:///_tmp.db"; .\.venv\Scripts\python.exe -m a
 - **Аватары артистов**: `python -m app.cli.artists fetch-photos` (og:image профиля SoundCloud), 300+ уже собрано; CLI: seed / add-sources / fetch-photos / stats
 - **DRM-скип быстрый**: полная анти-бан-пауза (5-60с) только после реальных скачиваний, отказ Go+/DRM скипается за 1-3с (профиль мейджора из сотен DRM-треков не жрёт сутки)
 - Также в этой сессии: тариф «навсегда» 10000₽ + подробные плюшки (бот+Mini App), 97 достижений, антинакрутка listen (30с дедуп), честный premium_active, составные индексы событий, «ОП на ботов» (`required_channels.kind`), онбординг-фикс (CloudStorage + флаг при показе), подтверждение закрытия + отключены vertical swipes, 10 постов с картинками ([посты/](посты/)), фикс бесконечного 401
-- Тесты: **241 passed**. ⏳ Ждём от владельца: PROXY_LIST (срочно — качаем без прокси), TON-кошелёк (если нужна TON-оплата), картинки по [ICONS.md](ICONS.md)
+- Тесты: **241 passed**. ⏳ Ждём от владельца: ~~PROXY_LIST~~ ✅ (7 прокси включены 23.07), TON-кошелёк (если нужна TON-оплата), картинки по [ICONS.md](ICONS.md)
 
 ## Checkpoint (2026-07-21, вторая волна) — перенос из сервисов, скорость, конверсия
 
