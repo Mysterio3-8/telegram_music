@@ -63,6 +63,10 @@ class Track(Base):
     # Обложка: URL миниатюры источника (SoundCloud/YouTube) — показывается в Mini App;
     # сама картинка дополнительно вшивается в аудиофайл при импорте (видна в Telegram)
     cover_url: Mapped[str | None] = mapped_column(String(512))
+    # Жёсткая привязка к артисту (SPEC-КАТАЛОГ §6). Новые импорты пишут сразу,
+    # старые треки добиваются backfill-ом (python -m app.cli.artists bind-tracks);
+    # NULL — артиста-сущности нет, строка tracks.artist остаётся источником правды
+    artist_id: Mapped[int | None] = mapped_column(ForeignKey("artists.id"), index=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
 

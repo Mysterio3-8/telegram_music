@@ -5,6 +5,8 @@ CSV: `name;soundcloud_url` (артисты/ARTISTS.csv).
   python -m app.cli.artists seed артисты/ARTISTS.csv         # завести артистов
   python -m app.cli.artists add-sources артисты/ARTISTS.csv  # источники закачки
   python -m app.cli.artists fetch-photos --limit 50          # аватары со страниц
+  python -m app.cli.artists bind-tracks                      # бэкфилл tracks.artist_id
+  python -m app.cli.artists unbound --limit 30               # несвязанные — на чистку
   python -m app.cli.artists stats
 """
 import argparse
@@ -15,6 +17,7 @@ import time
 import urllib.request
 
 from app.db.base import session_factory
+from app.services.artist_binding import bind_tracks, unbound_report
 from app.services.artist_entities import (
     artists_without_photo,
     count_artists,
@@ -84,6 +87,22 @@ async def _fetch_photos(limit: int) -> None:
     print(f"Аватары получены: {done}, не удалось: {failed}, кандидатов было: {len(candidates)}")
 
 
+async def _bind_tracks() -> None:
+    async with session_factory() as session:
+        bound = await bind_tracks(session)
+    print(f"Треков привязано к артистам: {bound}")
+
+
+async def _unbound(limit: int) -> None:
+    async with session_factory() as session:
+        report = await unbound_report(session, limit)
+    if not report:
+        print("Все треки привязаны к артистам")
+        return
+    for row in report:
+        print(f"{row.track_count:5d}  {row.name}")
+
+
 async def _stats() -> None:
     async with session_factory() as session:
         total = await count_artists(session)
@@ -100,6 +119,9 @@ def main() -> None:
     sources.add_argument("csv")
     photos = sub.add_parser("fetch-photos")
     photos.add_argument("--limit", type=int, default=50)
+    sub.add_parser("bind-tracks")
+    unbound = sub.add_parser("unbound")
+    unbound.add_argument("--limit", type=int, default=30)
     sub.add_parser("stats")
 
     args = parser.parse_args()
@@ -109,6 +131,10 @@ def main() -> None:
         asyncio.run(_add_sources(args.csv))
     elif args.command == "fetch-photos":
         asyncio.run(_fetch_photos(args.limit))
+    elif args.command == "bind-tracks":
+        asyncio.run(_bind_tracks())
+    elif args.command == "unbound":
+        asyncio.run(_unbound(args.limit))
     else:
         asyncio.run(_stats())
 

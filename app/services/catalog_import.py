@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Instrumental, Track, Upload, UserLibrary
 from app.importers.base import ImportItem
+from app.services.artist_binding import resolve_artist_id
 from app.services.fingerprint import compute_fingerprint_from_bytes
 from app.services.track_meta import build_filename, embed_cover, retag_audio
 from app.services.uploads import DUPLICATE_DURATION_TOLERANCE, find_by_fingerprint, find_duplicate
@@ -61,6 +62,7 @@ async def import_track_detailed(
         file_size=len(item.data),
         format=item.file_format,
         fingerprint=fingerprint,
+        artist_id=await resolve_artist_id(session, item.artist),
     )
     session.add(track)
     await session.flush()
@@ -208,6 +210,7 @@ async def import_user_track(
             file_size=len(item.data),
             format=item.file_format,
             fingerprint=fingerprint,
+            artist_id=await resolve_artist_id(session, item.artist),
         )
         session.add(track)
         await session.flush()
@@ -251,6 +254,7 @@ async def create_track_from_telegram(
     track = Track(
         title=title,
         artist=artist,
+        artist_id=await resolve_artist_id(session, artist),
         album=album or None,
         duration=duration,
         bitrate=bitrate,
