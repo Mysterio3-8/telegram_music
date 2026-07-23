@@ -3,7 +3,11 @@
   python -m app.cli.research country RU --limit 200          # артисты страны из MusicBrainz
   python -m app.cli.research search "phonk" --limit 100      # по произвольному Lucene-запросу
   python -m app.cli.research attach-sources --limit 500      # привязать источники закачки
+  python -m app.cli.research enrich --limit 500              # дообогатить артистов без mbid (жанры/страна/фото)
   python -m app.cli.research stats
+
+⚠️ enrich и country/search бьют в MusicBrainz с общим лимитом 1 req/sec НА IP —
+не запускать два прогона параллельно (троттлинг у каждого процесса свой).
 
 Темп ограничен MusicBrainz (1 req/sec): ~2 запроса на артиста → ~25 артистов/мин.
 Запускать фоном на VPS: nohup python -m app.cli.research country RU --limit 1000 &
@@ -70,6 +74,54 @@ async def _research(query: str, limit: int, offset: int, with_photos: bool) -> N
     print(f"Готово: создано {created}, обновлено {updated}, ошибок {failed}, просмотрено {processed}")
 
 
+ENRICH_MIN_SCORE = 90  # точное совпадение имени — чужой артист хуже, чем никакой
+
+
+async def _enrich(limit: int, with_photos: bool) -> None:
+    """Дообогащение уже заведённых артистов (сид владельца): поиск в MusicBrainz
+    по точному имени → жанры, страна, ссылки, алиасы; фото — Deezer."""
+    enriched = skipped = failed = 0
+    async with session_factory() as session:
+        rows = await session.scalars(
+            select(Artist).where(Artist.mbid.is_(None)).order_by(Artist.id).limit(limit)
+        )
+        for artist in list(rows.all()):
+            try:
+                found = musicbrainz.search_artists(f'artist:"{artist.name}"', limit=3)
+                best = next(
+                    (
+                        item
+                        for item in found
+                        if item.get("score", 0) >= ENRICH_MIN_SCORE
+                        and item.get("name", "").strip().lower() == artist.name.strip().lower()
+                    ),
+                    None,
+                )
+                if best is None:
+                    skipped += 1
+                    continue
+                details = musicbrainz.artist_details(best["id"])
+                researched = musicbrainz.parse_artist(details)
+                photo = None
+                deezer_id = None
+                if with_photos and not artist.photo_url:
+                    try:
+                        deezer_found = deezer.find_artist(artist.name)
+                    except Exception:  # noqa: BLE001 — сеть Deezer: фото добьём позже
+                        deezer_found = None
+                    if deezer_found:
+                        photo = deezer_found.picture_xl
+                        deezer_id = deezer_found.id
+                await save_researched(
+                    session, researched, photo_url=photo, banner_url=photo, deezer_id=deezer_id
+                )
+                enriched += 1
+            except Exception as error:  # noqa: BLE001 — один артист не роняет прогон
+                failed += 1
+                print(f"  ! {artist.name}: {error}")
+    print(f"Обогащено: {enriched}, не найдено в MusicBrainz: {skipped}, ошибок: {failed}")
+
+
 async def _attach_sources(limit: int) -> None:
     counts = {"soundcloud": 0, "youtube": 0, "no_source": 0}
     async with session_factory() as session:
@@ -116,6 +168,10 @@ def main() -> None:
     attach = sub.add_parser("attach-sources")
     attach.add_argument("--limit", type=int, default=500)
 
+    enrich = sub.add_parser("enrich")
+    enrich.add_argument("--limit", type=int, default=500)
+    enrich.add_argument("--no-photos", action="store_true")
+
     sub.add_parser("stats")
 
     args = parser.parse_args()
@@ -126,6 +182,8 @@ def main() -> None:
         asyncio.run(_research(args.query, args.limit, args.offset, not args.no_photos))
     elif args.command == "attach-sources":
         asyncio.run(_attach_sources(args.limit))
+    elif args.command == "enrich":
+        asyncio.run(_enrich(args.limit, not args.no_photos))
     else:
         asyncio.run(_stats())
 

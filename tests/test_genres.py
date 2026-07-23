@@ -61,6 +61,22 @@ async def test_genre_tracks_include_subgenres(session):
 
 
 @pytest.mark.asyncio
+async def test_genre_tracks_match_cyrillic_via_artist_id(session):
+    """SQLite lower() не понижает кириллицу — точный artist_id обязан спасать."""
+    await seed_genres(session)
+    artist = Artist(name="Кизару", normalized_name="кизару")
+    session.add(artist)
+    await session.commit()
+    rap = await get_genre_by_slug(session, "russkiy-rep")
+    await set_artist_genres(session, artist.id, [rap.name])
+    session.add(Track(title="Дежавю", artist="Кизару", duration=180, artist_id=artist.id))
+    await session.commit()
+
+    tracks, total = await genre_tracks(session, rap, 1, 10)
+    assert total == 1 and tracks[0].title == "Дежавю"
+
+
+@pytest.mark.asyncio
 async def test_set_artist_genres_creates_unknown_as_top_level(session):
     await seed_genres(session)
     artist = Artist(name="X", normalized_name="x")

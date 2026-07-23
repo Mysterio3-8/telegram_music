@@ -33,16 +33,21 @@ class ArtistCard:
     albums: list[AlbumSummary] = field(default_factory=list)
 
 
-def _artist_match(name: str):
-    return func.lower(func.trim(Track.artist)) == normalize_name(name)
+def _artist_match(name: str, artist_id: int | None = None):
+    """Точный artist_id (кириллица в SQLite lower() не понижается) + имя-фолбэк
+    для треков, ещё не привязанных бэкфиллом."""
+    by_name = func.lower(func.trim(Track.artist)) == normalize_name(name)
+    if artist_id is None:
+        return by_name
+    return (Track.artist_id == artist_id) | (Track.artist_id.is_(None) & by_name)
 
 
-async def _top_tracks(session: AsyncSession, name: str) -> list[Track]:
+async def _top_tracks(session: AsyncSession, name: str, artist_id: int | None) -> list[Track]:
     """По прослушиваниям; хвост без событий добивается свежими треками."""
     listened = await session.execute(
         select(Track, func.count(TrackEvent.id).label("listens"))
         .join(TrackEvent, (TrackEvent.track_id == Track.id) & (TrackEvent.event == "listen"))
-        .where(_artist_match(name))
+        .where(_artist_match(name, artist_id))
         .group_by(Track.id)
         .order_by(func.count(TrackEvent.id).desc())
         .limit(TOP_TRACKS_LIMIT)
@@ -52,7 +57,7 @@ async def _top_tracks(session: AsyncSession, name: str) -> list[Track]:
         seen = {t.id for t in tracks}
         fresh = await session.scalars(
             select(Track)
-            .where(_artist_match(name))
+            .where(_artist_match(name, artist_id))
             .order_by(Track.id.desc())
             .limit(TOP_TRACKS_LIMIT + len(seen))
         )
@@ -62,10 +67,10 @@ async def _top_tracks(session: AsyncSession, name: str) -> list[Track]:
     return tracks
 
 
-async def _albums(session: AsyncSession, name: str) -> list[AlbumSummary]:
+async def _albums(session: AsyncSession, name: str, artist_id: int | None) -> list[AlbumSummary]:
     rows = await session.execute(
         select(Track.album, func.count(), func.max(Track.cover_url))
-        .where(_artist_match(name), Track.album.is_not(None), func.trim(Track.album) != "")
+        .where(_artist_match(name, artist_id), Track.album.is_not(None), func.trim(Track.album) != "")
         .group_by(Track.album)
         .order_by(func.count().desc())
     )
@@ -78,8 +83,11 @@ async def _albums(session: AsyncSession, name: str) -> list[AlbumSummary]:
 async def get_artist_card(session: AsyncSession, name: str) -> ArtistCard:
     """Карточка живёт даже без записи в artists — по одним трекам."""
     entity: Artist | None = await get_artist_by_name(session, name)
+    entity_id = entity.id if entity else None
     track_count = (
-        await session.scalar(select(func.count()).select_from(Track).where(_artist_match(name)))
+        await session.scalar(
+            select(func.count()).select_from(Track).where(_artist_match(name, entity_id))
+        )
     ) or 0
     card = ArtistCard(name=entity.name if entity else name.strip(), track_count=track_count)
     if entity is not None:
@@ -88,6 +96,6 @@ async def get_artist_card(session: AsyncSession, name: str) -> ArtistCard:
         card.description = entity.description
         card.country = entity.country
         card.genres = await artist_genre_names(session, entity.id)
-    card.top_tracks = await _top_tracks(session, name)
-    card.albums = await _albums(session, name)
+    card.top_tracks = await _top_tracks(session, name, entity_id)
+    card.albums = await _albums(session, name, entity_id)
     return card

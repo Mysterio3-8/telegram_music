@@ -101,14 +101,19 @@ async def _descendant_ids(session: AsyncSession, genre_id: int) -> list[int]:
 async def genre_tracks(
     session: AsyncSession, genre: Genre, page: int, page_size: int
 ) -> tuple[list[Track], int]:
-    """Треки жанра (включая поджанры) через артистов. Свежие сверху."""
+    """Треки жанра (включая поджанры) через артистов. Свежие сверху.
+    Основной матч — точный tracks.artist_id (индекс, кириллица не ломается);
+    имя — фолбэк для ещё не привязанных треков (SQLite lower() ASCII-only)."""
     genre_ids = await _descendant_ids(session, genre.id)
+    genre_artist_ids = select(ArtistGenre.artist_id).where(ArtistGenre.genre_id.in_(genre_ids))
     artist_names = (
         select(Artist.normalized_name)
         .join(ArtistGenre, ArtistGenre.artist_id == Artist.id)
         .where(ArtistGenre.genre_id.in_(genre_ids))
     )
-    condition = func.lower(func.trim(Track.artist)).in_(artist_names)
+    condition = Track.artist_id.in_(genre_artist_ids) | (
+        Track.artist_id.is_(None) & func.lower(func.trim(Track.artist)).in_(artist_names)
+    )
     total = (
         await session.scalar(select(func.count()).select_from(Track).where(condition))
     ) or 0
