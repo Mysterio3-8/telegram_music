@@ -7,9 +7,10 @@ Requires=redis-server.service
 [Service]
 WorkingDirectory=/opt/tg-music-bot
 # Своя очередь и свой воркер — не делит concurrency с youtube (там бэклог из
-# сотен поштучных импортов). concurrency=1: анти-бан, никаких параллельных
-# запросов к SoundCloud.
-ExecStart=/opt/tg-music-bot/.venv/bin/celery -A app.tasks.celery_app worker -Q soundcloud --pool=threads --concurrency=1 --loglevel=info
+# сотен поштучных импортов). concurrency=3 — темп 3000 треков/сутки
+# (SPEC-КАТАЛОГ §4): 7 прокси в ротации размазывают параллельные запросы по
+# разным IP, анти-бан-паузы остаются на каждой задаче. Без прокси вернуть 1.
+ExecStart=/opt/tg-music-bot/.venv/bin/celery -A app.tasks.celery_app worker -Q soundcloud --pool=threads --concurrency=3 --loglevel=info
 Restart=always
 RestartSec=5
 
