@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.models import Instrumental, Track, Upload, UserLibrary
 from app.importers.base import ImportItem
 from app.services.fingerprint import compute_fingerprint_from_bytes
-from app.services.track_meta import build_filename, retag_audio
+from app.services.track_meta import build_filename, embed_cover, retag_audio
 from app.services.uploads import DUPLICATE_DURATION_TOLERANCE, find_by_fingerprint, find_duplicate
 from app.storage.base import StorageBackend
 
@@ -252,6 +252,8 @@ async def create_track_from_telegram(
     file_size: int,
     fingerprint: str | None,
     tg_file_id: str,
+    cover_url: str | None = None,
+    album: str | None = None,
 ) -> Track:
     """Создаёт трек БЕЗ архивной копии на диске — файл уже заминчен через бота
     (tg_file_id валиден сразу), сохраняется только ссылка. Дедуп — забота вызывающей
@@ -260,12 +262,14 @@ async def create_track_from_telegram(
     track = Track(
         title=title,
         artist=artist,
+        album=album or None,
         duration=duration,
         bitrate=bitrate,
         file_size=file_size,
         format=file_format,
         fingerprint=fingerprint,
         tg_file_id=tg_file_id,
+        cover_url=cover_url or None,
         meta_synced=True,
     )
     session.add(track)
@@ -284,17 +288,22 @@ async def import_via_telegram_mint(
     data: bytes,
     fingerprint: str | None,
     archive_chat_id: int,
+    cover: bytes = b"",
+    cover_url: str | None = None,
+    album: str | None = None,
 ) -> tuple[Track, bool]:
-    """Дедуп; если трек новый — перетегирует, отправляет через бота (единственный
-    способ заминтить file_id — реально отправить файл через Bot API) и кладёт
-    архивную копию в хранилище: стрим Mini App не упирается в лимит Bot API 20 МБ.
-    Общая точка для YouTube- и Telegram-канал-импортёров.
+    """Дедуп; если трек новый — перетегирует, вшивает обложку, отправляет через
+    бота (единственный способ заминтить file_id — реально отправить файл через
+    Bot API) и кладёт архивную копию в хранилище: стрим Mini App не упирается в
+    лимит Bot API 20 МБ. Общая точка для YouTube- и Telegram-канал-импортёров.
     Возвращает (трек, создан_ли_новый)."""
     track = await find_existing_track(session, fingerprint, title, artist, duration)
     if track is not None:
         return track, False
 
     tagged = retag_audio(data, file_format, title, artist)
+    if cover:
+        tagged = embed_cover(tagged, file_format, cover)
     sent = await bot.send_audio(
         archive_chat_id,
         BufferedInputFile(tagged, filename=build_filename(artist, title, file_format)),
@@ -311,6 +320,8 @@ async def import_via_telegram_mint(
         file_size=len(tagged),
         fingerprint=fingerprint,
         tg_file_id=sent.audio.file_id,
+        cover_url=cover_url,
+        album=album,
     )
     await _archive_bytes(session, track, f"tracks/{track.id}", tagged)
     return track, True

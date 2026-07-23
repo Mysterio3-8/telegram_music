@@ -18,6 +18,7 @@ from app.db.models import SoundcloudImported
 from app.services.catalog_import import import_via_telegram_mint
 from app.services.fingerprint import compute_fingerprint_from_bytes
 from app.services.soundcloud import download_soundcloud_audio, list_soundcloud_entries
+from app.services.youtube.downloader import fetch_thumbnail
 from app.services.title_parser import parse_title
 from app.services.youtube.user_import import duration_error
 
@@ -119,6 +120,9 @@ async def import_soundcloud_tracks(
             data=audio.data,
             fingerprint=fingerprint,
             archive_chat_id=settings.effective_archive_chat_id,
+            cover=fetch_thumbnail(audio.thumbnail_url),
+            cover_url=audio.thumbnail_url or None,
+            album=audio.album or None,
         )
         if created:
             report.imported += 1
@@ -168,6 +172,9 @@ async def process_user_soundcloud_import(
         data=audio.data,
         fingerprint=fingerprint,
         archive_chat_id=settings.effective_archive_chat_id,
+        cover=fetch_thumbnail(audio.thumbnail_url),
+        cover_url=audio.thumbnail_url or None,
+        album=audio.album or None,
     )
     if created:
         session.add(Upload(user_id=user.id, track_id=track.id))

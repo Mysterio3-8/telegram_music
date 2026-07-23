@@ -196,5 +196,7 @@ def _download_soundcloud_once(url: str) -> tuple[DownloadedAudio, str] | None:
             file_format=file_format,
             duration=int(info.get("duration") or 0),
             video_title=info.get("title") or url,
+            thumbnail_url=str(info.get("thumbnail") or ""),
+            album=str(info.get("album") or "").strip(),
         )
         return audio, (info.get("uploader") or "").strip()

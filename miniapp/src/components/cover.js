@@ -1,7 +1,11 @@
-// Настоящих обложек в базе нет — генерируем спокойную абстрактную заливку в
-// палитре VK-минимализма: тёмно-серая база + мягкий сине-розовый отсвет.
-// Один трек — всегда одна и та же обложка (детерминировано по id).
+// Обложка трека: настоящая картинка из источника (track.cover_url), а без неё —
+// детерминированная абстрактная заливка в палитре VK-минимализма по id.
+// Свой escape вместо импорта из trackRow — trackRow сам импортирует cover (цикл).
 import { icon } from "./icons.js";
+
+function escapeAttr(value) {
+  return String(value).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+}
 
 const VARIANTS = [
   { pos: "20% 25%", glow: "rgba(59,123,254,0.5)", base: "#1c1c1f", deep: "#2b3f7a" },
@@ -26,6 +30,15 @@ export function coverStyle(track) {
 }
 
 export function renderCover(track, className = "track-cover") {
+  if (track.cover_url) {
+    // Настоящая обложка; при ошибке загрузки картинка скрывается — остаётся градиент
+    return `
+      <div class="${className} cover-art" style="background:${coverStyle(track)}">
+        <img class="cover-img" src="${escapeAttr(track.cover_url)}" alt="" loading="lazy"
+          onerror="this.remove()" />
+      </div>
+    `;
+  }
   return `
     <div class="${className} cover-art" style="background:${coverStyle(track)}">
       <span class="cover-facet"></span>

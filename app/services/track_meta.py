@@ -43,3 +43,41 @@ def retag_audio(data: bytes, fmt: str | None, title: str, artist: str) -> bytes:
     except Exception:  # noqa: BLE001 — любые проблемы тегов не должны блокировать выдачу
         logger.warning("Не удалось обновить теги (title=%r, artist=%r)", title, artist, exc_info=True)
         return data
+
+
+def embed_cover(data: bytes, fmt: str | None, image: bytes) -> bytes:
+    """Вшивает обложку в аудиофайл (MP3 → APIC, M4A → covr) — Telegram и плееры
+    показывают её у трека. При любой ошибке — исходные байты."""
+    if not image:
+        return data
+    mime = "image/png" if image[:8] == b"\x89PNG\r\n\x1a\n" else "image/jpeg"
+    try:
+        buffer = io.BytesIO(data)
+        kind = (fmt or "").lower()
+        if kind == "mp3":
+            from mutagen.id3 import APIC, ID3, ID3NoHeaderError
+
+            try:
+                tags = ID3(buffer)
+            except ID3NoHeaderError:
+                tags = ID3()
+            tags.delall("APIC")
+            tags.add(APIC(encoding=3, mime=mime, type=3, desc="Cover", data=image))
+            buffer.seek(0)
+            tags.save(buffer)
+            return buffer.getvalue()
+        if kind in ("m4a", "mp4", "aac"):
+            from mutagen.mp4 import MP4, MP4Cover
+
+            audio = MP4(buffer)
+            image_format = (
+                MP4Cover.FORMAT_PNG if mime == "image/png" else MP4Cover.FORMAT_JPEG
+            )
+            audio["covr"] = [MP4Cover(image, imageformat=image_format)]
+            buffer.seek(0)
+            audio.save(buffer)
+            return buffer.getvalue()
+        return data  # ogg/flac и прочее — без обложки, не ломаем файл
+    except Exception:  # noqa: BLE001 — обложка не должна блокировать импорт
+        logger.warning("Не удалось вшить обложку (fmt=%r)", fmt, exc_info=True)
+        return data

@@ -60,6 +60,25 @@ class Track(Base):
     fingerprint: Mapped[str | None] = mapped_column(String(128), index=True)
     # Настроение для рекомендаций (доп. ТЗ): happy|sad|energetic|calm|love. Ставит админ.
     mood: Mapped[str | None] = mapped_column(String(16), index=True)
+    # Обложка: URL миниатюры источника (SoundCloud/YouTube) — показывается в Mini App;
+    # сама картинка дополнительно вшивается в аудиофайл при импорте (видна в Telegram)
+    cover_url: Mapped[str | None] = mapped_column(String(512))
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
+class Artist(Base):
+    """Артист как сущность (P4): имя, фото, описание, ссылка на SoundCloud.
+    Треки пока связываются по lower(trim(tracks.artist)) — artist_id придёт
+    отдельной миграцией после биндинга."""
+
+    __tablename__ = "artists"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(256))
+    normalized_name: Mapped[str] = mapped_column(String(256), unique=True)  # lower(trim(name))
+    soundcloud_url: Mapped[str | None] = mapped_column(String(512))
+    photo_url: Mapped[str | None] = mapped_column(String(512))  # аватар артиста
+    description: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
 

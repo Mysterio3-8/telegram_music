@@ -32,6 +32,24 @@ class DownloadedAudio:
     duration: int
     video_title: str
     uploader: str = ""  # канал/автор — fallback для исполнителя, чтобы не было «Unknown»
+    thumbnail_url: str = ""  # обложка источника — вшивается в файл и показывается в Mini App
+    album: str = ""  # альбом из метаданных источника (SoundCloud отдаёт для сетов)
+
+
+def fetch_thumbnail(url: str) -> bytes:
+    """Скачивает картинку обложки. Пустые байты — не критично, трек живёт без неё."""
+    if not url:
+        return b""
+    import urllib.request
+
+    try:
+        request = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(request, timeout=15) as response:
+            data = response.read(5 * 1024 * 1024)  # обложки больше 5 МБ не бывают
+        return data
+    except Exception:  # noqa: BLE001 — сеть/404: обложка опциональна
+        logger.warning("Не удалось скачать обложку %s", url)
+        return b""
 
 
 @dataclass(frozen=True)
@@ -198,4 +216,6 @@ def download_audio(video_id: str) -> DownloadedAudio | None:
             duration=int(info.get("duration") or 0),
             video_title=info.get("title") or video_id,
             uploader=str(uploader).strip(),
+            thumbnail_url=str(info.get("thumbnail") or ""),
+            album=str(info.get("album") or "").strip(),
         )

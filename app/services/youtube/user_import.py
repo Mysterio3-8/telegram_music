@@ -19,7 +19,7 @@ from app.services.catalog_import import import_via_telegram_mint
 from app.services.fingerprint import compute_fingerprint_from_bytes
 from app.services.library import add_to_library
 from app.services.title_parser import parse_title
-from app.services.youtube.downloader import download_audio
+from app.services.youtube.downloader import download_audio, fetch_thumbnail
 
 logger = logging.getLogger(__name__)
 
@@ -110,6 +110,9 @@ async def process_user_import(
         data=audio.data,
         fingerprint=fingerprint,
         archive_chat_id=settings.effective_archive_chat_id,
+        cover=fetch_thumbnail(audio.thumbnail_url),
+        cover_url=audio.thumbnail_url or None,
+        album=audio.album or None,
     )
 
     if created:

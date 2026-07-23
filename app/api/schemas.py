@@ -17,6 +17,7 @@ class TrackOut(BaseModel):
     bitrate: int | None = None
     format: str | None = None
     audio_url: str | None = None  # подписанная ссылка на байты (track_out)
+    cover_url: str | None = None  # обложка из источника (SoundCloud/YouTube)
 
 
 def track_out(track) -> "TrackOut":
