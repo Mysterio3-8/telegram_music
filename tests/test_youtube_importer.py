@@ -50,7 +50,7 @@ async def test_process_import_mints_via_bot_and_archives(session, monkeypatch):
     track = await session.get(Track, imp.track_id)
     assert track.tg_file_id == "tg_file_1"
     assert track.meta_synced is True
-    assert track.storage_path == f"local://tracks/{track.id}"  # архив для стрима Mini App
+    assert track.storage_path is None  # вечного архива нет — байты в LRU-кэше
     assert len(bot.calls) == 1
 
 

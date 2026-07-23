@@ -70,8 +70,11 @@ class _FakeBot:
         return _FakeSentMessage("track_file_1")
 
 
-async def test_mint_saves_archive_copy(session):
-    """Минт через бота кладёт архивную копию: стрим не зависит от лимита Bot API 20 МБ."""
+async def test_mint_seeds_cache_without_archive(session):
+    """Постоянный архив не ведём (решение владельца): байты минта сеются в
+    LRU-кэш стриминга — свежий трек играет сразу, диск не копится."""
+    from app.services.audio_cache import cache_get
+
     track, created = await catalog_import.import_via_telegram_mint(
         session,
         _FakeBot(),
@@ -86,7 +89,8 @@ async def test_mint_saves_archive_copy(session):
 
     assert created is True
     assert track.tg_file_id == "track_file_1"
-    assert track.storage_path == f"local://tracks/{track.id}"
+    assert track.storage_path is None  # вечного архива нет
+    assert cache_get(f"tracks/{track.id}") is not None  # но стрим готов из кэша
 
 
 async def test_import_instrumental(session, storage):

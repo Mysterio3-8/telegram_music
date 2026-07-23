@@ -45,7 +45,7 @@ async def test_mint_creates_instrumental(session):
     assert created is True
     assert instrumental.tg_file_id == "minus_file_1"
     assert instrumental.source == "soundcloud"
-    assert instrumental.storage_path == f"local://instrumentals/{instrumental.id}"
+    assert instrumental.storage_path is None  # вечного архива нет — кэш LRU
     assert bot.calls == [777]
 
 

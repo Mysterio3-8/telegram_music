@@ -15,35 +15,24 @@ from app.storage.base import StorageBackend
 logger = logging.getLogger(__name__)
 
 
-def _archive_disk_has_room(extra_bytes: int) -> bool:
-    """Локальный диск не должен забиваться архивом под ноль: ниже запаса
-    archive_min_free_gb новые копии не пишем. Для S3 проверка не нужна."""
+def _seed_cache(storage_key: str, data: bytes) -> None:
+    """Постоянный архив на диске НЕ ведём (решение владельца: диск не копить) —
+    байты заминченного файла сеются в LRU-кэш стриминга: свежие треки играют
+    в Mini App мгновенно и без Bot API (важно для >20 МБ), кэш сам вытесняет
+    старое в пределах AUDIO_CACHE_MAX_MB. S3 задан → пишем в S3 (диск не наш)."""
     from app.config import settings
 
-    if settings.archive_min_free_gb <= 0 or (settings.s3_endpoint_url and settings.s3_bucket):
-        return True
-    import shutil
-    from pathlib import Path
-
-    root = Path(settings.storage_dir)
-    root.mkdir(parents=True, exist_ok=True)
-    free_after = shutil.disk_usage(root).free - extra_bytes
-    return free_after > settings.archive_min_free_gb * 1024**3
-
-
-async def _archive_bytes(session: AsyncSession, entity, storage_key: str, data: bytes) -> None:
-    """Архивная копия заминченного файла: стрим Mini App не зависит от лимита
-    Bot API 20 МБ. Ошибка хранилища не ломает импорт — трек живёт по tg_file_id."""
     try:
-        if not _archive_disk_has_room(len(data)):
-            logger.warning("Архив %s пропущен: мало места на диске", storage_key)
-            return
-        from app.storage import get_storage
+        if settings.s3_endpoint_url and settings.s3_bucket:
+            from app.storage import get_storage
 
-        entity.storage_path = get_storage().save(storage_key, data)
-        await session.commit()
+            get_storage().save(storage_key, data)
+            return
+        from app.services.audio_cache import cache_put
+
+        cache_put(storage_key, data)
     except Exception:  # noqa: BLE001
-        logger.warning("Не удалось сохранить архив %s", storage_key, exc_info=True)
+        logger.warning("Не удалось положить %s в кэш", storage_key, exc_info=True)
 
 
 async def import_track_detailed(
@@ -193,7 +182,7 @@ async def import_instrumental_via_telegram_mint(
     )
     session.add(instrumental)
     await session.commit()
-    await _archive_bytes(session, instrumental, f"instrumentals/{instrumental.id}", tagged)
+    _seed_cache(f"instrumentals/{instrumental.id}", tagged)
     return instrumental, True
 
 
@@ -323,5 +312,5 @@ async def import_via_telegram_mint(
         cover_url=cover_url,
         album=album,
     )
-    await _archive_bytes(session, track, f"tracks/{track.id}", tagged)
+    _seed_cache(f"tracks/{track.id}", tagged)
     return track, True

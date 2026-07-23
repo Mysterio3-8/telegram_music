@@ -93,7 +93,7 @@ async def test_process_import_creates_track_with_metadata_from_audio_tags(sessio
     assert track.artist == "DJ KL"
     assert track.tg_file_id == "tg_file_1"
     assert track.meta_synced is True
-    assert track.storage_path == f"local://tracks/{track.id}"  # архив для стрима Mini App
+    assert track.storage_path is None  # вечного архива нет — байты в LRU-кэше
     assert len(bot.calls) == 1
 
 
