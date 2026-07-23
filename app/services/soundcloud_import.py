@@ -81,12 +81,19 @@ async def import_soundcloud_tracks(
     entries = [e for e in all_entries if not await _already_seen(session, e.url)]
     report.skipped_known = report.found - len(entries)
 
+    # Полная анти-бан-пауза нужна после реального скачивания; отказ DRM-трека —
+    # дешёвый запрос метаданных, после него хватает короткой (иначе профиль
+    # мейджора из сотен Go+-треков «сканируется» сутками впустую)
+    heavy_last = False
     for index, entry in enumerate(entries):
         if index:
-            # Рандомная пауза — не выглядеть ботом при массовой закачке 24/7
-            await asyncio.sleep(
-                random.uniform(settings.soundcloud_min_delay, settings.soundcloud_max_delay)
-            )
+            if heavy_last:
+                await asyncio.sleep(
+                    random.uniform(settings.soundcloud_min_delay, settings.soundcloud_max_delay)
+                )
+            else:
+                await asyncio.sleep(random.uniform(1.0, 3.0))
+        heavy_last = True
         try:
             result = download_soundcloud_audio(entry.url)
         except Exception as exc:  # noqa: BLE001 — один битый трек не роняет пачку
@@ -95,6 +102,7 @@ async def import_soundcloud_tracks(
                 # Go+/приватный/удалённый — не сеть, а сам трек. Больше не пытаемся.
                 logger.info("SoundCloud: %s недоступен навсегда (%s)", entry.url, exc)
                 await _mark_seen(session, entry.url)
+                heavy_last = False
             else:
                 logger.exception("SoundCloud: не скачался %s", entry.url)
             continue
