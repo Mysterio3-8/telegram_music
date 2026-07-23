@@ -55,3 +55,48 @@ async def test_active_all_time_ignores_never_logged_in(session):
 
     assert stats.users_total == 1
     assert stats.users_active_all_time == 0
+
+
+async def test_listen_dedup_blocks_rapid_repeats(session):
+    from sqlalchemy import func, select
+
+    from app.db.models import TrackEvent
+
+    user = await make_user(session)
+    track = await make_track(session)
+
+    await record_event(session, user.id, track.id, "listen")
+    await record_event(session, user.id, track.id, "listen")  # сразу же — не считается
+
+    count = await session.scalar(
+        select(func.count()).select_from(TrackEvent).where(TrackEvent.event == "listen")
+    )
+    assert count == 1
+
+
+async def test_download_not_deduped(session):
+    from sqlalchemy import func, select
+
+    from app.db.models import TrackEvent
+
+    user = await make_user(session)
+    track = await make_track(session)
+
+    await record_event(session, user.id, track.id, "download")
+    await record_event(session, user.id, track.id, "download")
+
+    count = await session.scalar(
+        select(func.count()).select_from(TrackEvent).where(TrackEvent.event == "download")
+    )
+    assert count == 2
+
+
+async def test_premium_active_excludes_expired(session):
+    active = User(telegram_id=11, premium=True, premium_until=_utcnow() + timedelta(days=5))
+    expired = User(telegram_id=12, premium=True, premium_until=_utcnow() - timedelta(days=1))
+    session.add_all([active, expired])
+    await session.commit()
+
+    stats = await collect_stats(session)
+
+    assert stats.premium_active == 1

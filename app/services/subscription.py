@@ -91,6 +91,8 @@ async def is_fully_subscribed(
     from app.services.required_channels import get_required_channels
 
     for row in await get_required_channels(session):
+        if row.kind == "bot":
+            continue  # запуск чужого бота проверить нельзя — только кнопка в гейте
         if not await is_channel_subscribed(session, bot, user_id, telegram_id, row.channel, force):
             return False
     return True

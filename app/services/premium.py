@@ -10,10 +10,23 @@ from app.services.users import count_playlists
 
 # Тарифы Premium (ТЗ §24): месяцы → множитель цены. Цена = premium_price_rub * месяцы.
 PREMIUM_PLAN_MONTHS: tuple[int, ...] = (1, 3, 6, 12)
+# «Навсегда»: ~100 лет по механике продления = вечная подписка. Цена — фиксированная.
+FOREVER_MONTHS = 1200
+
+
+def is_forever(months: int) -> bool:
+    return months >= FOREVER_MONTHS
+
+
+def plan_valid(months: int) -> bool:
+    return months in PREMIUM_PLAN_MONTHS or is_forever(months)
 
 
 def plan_price_rub(months: int, discount_pct: int = 0) -> int:
-    """Цена тарифа в рублях с учётом персональной скидки."""
+    """Цена тарифа в рублях с учётом персональной скидки.
+    Тариф «навсегда» — фиксированная цена без скидки."""
+    if is_forever(months):
+        return settings.premium_forever_price_rub
     base = settings.premium_price_rub * months
     return base * (100 - discount_pct) // 100 if discount_pct else base
 

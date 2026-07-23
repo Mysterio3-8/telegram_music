@@ -51,8 +51,15 @@ def _menu_keyboard() -> InlineKeyboardMarkup:
 async def cb_upload(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(UploadTrack.waiting_file)
     await callback.message.answer(
-        "Отправьте аудиофайл или ссылку на трек — YouTube Music или SoundCloud.\n\n"
-        "Один трек — бесплатно. Профиль, плейлист или лайки целиком — только 💎 Premium.",
+        "⬆️ <b>Загрузка музыки</b>\n\n"
+        "📎 <b>Аудиофайлом</b> — пришлите трек файлом. Столько треков, сколько хотите, "
+        "хоть всю коллекцию по очереди — это <b>бесплатно и без лимитов</b>.\n\n"
+        "🔗 <b>Ссылкой</b> — YouTube Music или SoundCloud:\n"
+        "• один трек — <b>бесплатно</b>;\n"
+        "• целый профиль, плейлист или лайки пачкой — <b>💎 Premium</b>.\n\n"
+        "⚠️ Указывайте исполнителя — иначе трек станет «Неизвестным».\n\n"
+        "Жду файл или ссылку 👇",
+        parse_mode="HTML",
         reply_markup=_cancel_keyboard(),
     )
     await callback.answer()

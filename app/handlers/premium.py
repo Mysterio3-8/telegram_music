@@ -27,26 +27,31 @@ PAYLOAD_STARS = "premium_stars"
 PAYLOAD_CARD = "premium_card"
 
 _BENEFITS = (
-    "• Отключение рекламы\n"
-    "• Неограниченные плейлисты\n"
-    "• Увеличенный лимит загрузок\n"
-    "• Ранний доступ к новым функциям\n"
-    "• Поддержка проекта"
+    "🚫 <b>Без рекламы</b> — ни баннеров, ни пауз\n"
+    "📥 <b>Офлайн-режим</b> — качайте треки, слушайте без интернета\n"
+    "🔄 <b>Перенос пачкой</b> — целые плейлисты из Spotify, Яндекса, ВК, SoundCloud\n"
+    "🎼 <b>Без лимитов</b> — сколько угодно плейлистов и своих загрузок\n"
+    "🎛 <b>Эквалайзер и таймер сна</b> — 20 пресетов, засыпайте под музыку\n"
+    "📝 <b>Тексты песен</b> — добавляйте и редактируйте\n"
+    "🎁 <b>Дни в подарок</b> — достижения и друзья приносят ещё Premium"
 )
 
 
 def _premium_text(active: bool, premium_until: datetime | None) -> str:
     if active and premium_until is not None:
         return (
-            f"💎 Premium активен до {premium_until.strftime('%d.%m.%Y')}\n\n"
+            f"💎 <b>Premium активен</b> до {premium_until.strftime('%d.%m.%Y')}\n\n"
             f"{_BENEFITS}\n\n"
-            f"Можно продлить ещё на {settings.premium_duration_days} дней:"
+            f"Можно продлить заранее — дни суммируются."
         )
     return (
-        "💎 Premium\n\n"
+        "💎 <b>TG Music Premium</b>\n\n"
         f"{_BENEFITS}\n\n"
-        f"Цена: {settings.premium_price_rub} ₽ / {settings.premium_price_stars} ⭐ "
-        f"на {settings.premium_duration_days} дней."
+        f"Цена: <b>{settings.premium_price_rub} ₽</b> или <b>{settings.premium_price_stars} ⭐</b> "
+        f"за {settings.premium_duration_days} дней. "
+        f"Есть тариф «навсегда» за {settings.premium_forever_price_rub} ₽ — "
+        f"в приложении «🎧 Открыть плеер».\n\n"
+        "Выберите способ оплаты:"
     )
 
 
@@ -59,6 +64,7 @@ async def cb_premium(callback: CallbackQuery, state: FSMContext) -> None:
         premium_until = user.premium_until
     await callback.message.edit_text(
         _premium_text(active, premium_until),
+        parse_mode="HTML",
         reply_markup=premium_keyboard(
             card_available=bool(settings.payment_provider_token),
             yookassa_available=is_yookassa_configured(),

@@ -87,8 +87,17 @@ export function hasRecSettings() {
 }
 
 // ---------- Онбординг (показывается один раз при первом входе) ----------
+// localStorage в Telegram-вебвью не везде переживает перезапуск, поэтому флаг
+// дублируется в Telegram CloudStorage (живёт на сервере Telegram, привязан к юзеру).
 
 const ONBOARDED_KEY = "tgmusic-onboarded";
+
+function cloudStorage() {
+  const tg = typeof window !== "undefined" && window.Telegram && window.Telegram.WebApp;
+  return tg && tg.CloudStorage && typeof tg.CloudStorage.getItem === "function"
+    ? tg.CloudStorage.getItem && tg.CloudStorage
+    : null;
+}
 
 export function isOnboarded() {
   try {
@@ -100,6 +109,33 @@ export function isOnboarded() {
 
 export function setOnboarded() {
   writeJson(ONBOARDED_KEY, 1);
+  const cloud = cloudStorage();
+  if (cloud) {
+    try {
+      cloud.setItem(ONBOARDED_KEY, "1", () => {});
+    } catch {
+      // CloudStorage недоступен — остаёмся на localStorage
+    }
+  }
+}
+
+// Проверка облачного флага (после переустановки/чистки localStorage).
+// Резолвится максимум через секунду — онбординг не должен ждать сеть вечно.
+export function isOnboardedCloud() {
+  const cloud = cloudStorage();
+  if (!cloud) return Promise.resolve(false);
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(false), 1000);
+    try {
+      cloud.getItem(ONBOARDED_KEY, (err, value) => {
+        clearTimeout(timer);
+        resolve(!err && value === "1");
+      });
+    } catch {
+      clearTimeout(timer);
+      resolve(false);
+    }
+  });
 }
 
 // ---------- Настройки интерфейса (акцентный цвет, тактильный отклик) ----------

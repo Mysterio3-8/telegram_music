@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user, get_db
 from app.config import settings
 from app.db.models import User
-from app.services.premium import PREMIUM_PLAN_MONTHS, plan_price_rub
+from app.services.premium import plan_price_rub, plan_valid
 from app.services.yookassa_payments import (
     apply_succeeded_payment,
     create_premium_payment,
@@ -38,7 +38,7 @@ async def create_payment_link(
     if not is_yookassa_configured():
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Оплата временно недоступна")
     months = payload.months if payload else 1
-    if months not in PREMIUM_PLAN_MONTHS:
+    if not plan_valid(months):
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Неизвестный тариф")
     discount = user.premium_discount_pct or 0
     price = plan_price_rub(months, discount)

@@ -28,16 +28,33 @@ def normalize_channel(raw: str) -> str | None:
     return None
 
 
+def normalize_bot_link(raw: str) -> str | None:
+    """«ОП на ботов»: ссылка/username бота → полная t.me-ссылка для кнопки гейта.
+    Распознаём по username, оканчивающемуся на "bot" (правило Telegram).
+    None — не похоже на бота."""
+    value = raw.strip()
+    if value.startswith("@"):
+        value = f"https://t.me/{value[1:]}"
+    if value.startswith("t.me/"):
+        value = f"https://{value}"
+    if not value.startswith("https://t.me/"):
+        return None
+    username = value.removeprefix("https://t.me/").split("?")[0].strip("/")
+    if not username or not username.lower().endswith("bot"):
+        return None
+    return value if len(value) <= 256 else None
+
+
 async def add_required_channel(
-    session: AsyncSession, channel: str, label: str
+    session: AsyncSession, channel: str, label: str, kind: str = "channel"
 ) -> RequiredChannel | None:
-    """None — такой канал уже есть."""
+    """None — такой канал/бот уже есть."""
     existing = await session.scalar(
         select(RequiredChannel).where(RequiredChannel.channel == channel)
     )
     if existing is not None:
         return None
-    row = RequiredChannel(channel=channel, label=label.strip())
+    row = RequiredChannel(channel=channel, label=label.strip(), kind=kind)
     session.add(row)
     await session.commit()
     return row

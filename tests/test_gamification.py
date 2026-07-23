@@ -196,3 +196,20 @@ def test_next_referral_reward():
     assert next_referral_reward(0) == (1, 7)
     assert next_referral_reward(1) == (1, 7)  # до порога 2
     assert next_referral_reward(9000) == (0, 0)
+
+
+def test_achievements_are_about_hundred():
+    from app.services.gamification import UserStats, build_achievements
+
+    stats = UserStats(
+        listens=0, listen_hours=0, streak_days=0, favorites=0, playlists=0,
+        invited=0, has_premium_ever=False, premium_year=False, premium_forever=False,
+        uploads=0, artists=0, downloads=0,
+    )
+    achievements = build_achievements(stats)
+
+    assert len(achievements) >= 95  # «расширь до 100»
+    codes = {a.code for a in achievements}
+    assert len(codes) == len(achievements)  # без дублей кодов
+    assert "premium_forever" in codes
+    assert "listen_100000" in codes

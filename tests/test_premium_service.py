@@ -128,3 +128,15 @@ async def test_activate_premium_months_multiplier(session):
     assert plan_price_rub(1) == settings.premium_price_rub
     assert plan_price_rub(12) == settings.premium_price_rub * 12
     assert plan_price_rub(12, discount_pct=50) == settings.premium_price_rub * 12 // 2
+
+
+def test_forever_plan_pricing(monkeypatch):
+    from app.config import settings
+    from app.services.premium import FOREVER_MONTHS, plan_price_rub, plan_valid
+
+    monkeypatch.setattr(settings, "premium_forever_price_rub", 10000)
+
+    assert plan_valid(FOREVER_MONTHS) is True
+    assert plan_valid(2) is False
+    assert plan_price_rub(FOREVER_MONTHS) == 10000
+    assert plan_price_rub(FOREVER_MONTHS, discount_pct=50) == 10000  # без скидок

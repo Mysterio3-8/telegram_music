@@ -22,8 +22,16 @@ class Settings(BaseSettings):
     # Premium (SPEC §14)
     premium_price_stars: int = 15
     premium_price_rub: int = 21
+    premium_forever_price_rub: int = 10000  # тариф «навсегда»
     premium_duration_days: int = 30
     payment_provider_token: str = ""  # токен провайдера для карты/СБП; пусто → доступны только Stars
+
+    # TON-оплата (крипта). Пусто → способ скрыт. Кошелёк владельца + опц. ключ toncenter.
+    # Оплата: пользователь шлёт нужную сумму на адрес с уникальным комментарием (order id),
+    # фоновая проверка через toncenter активирует Premium. Требует живого теста.
+    ton_wallet_address: str = ""
+    toncenter_api_key: str = ""
+    ton_rub_per_ton: int = 0  # курс: сколько рублей в 1 TON (0 → TON-оплата выключена)
 
     # ЮKassa (API ЮKassa, redirect-сценарий) — оплата 21 ₽ картой/СБП вне Telegram Payments.
     # Пустые значения → кнопка оплаты через ЮKassa не показывается.

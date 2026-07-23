@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import BigInteger, ForeignKey, String, Text, UniqueConstraint, func
+from sqlalchemy import BigInteger, ForeignKey, Index, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -120,11 +120,18 @@ class TrackEvent(Base):
     """События прослушивания/скачивания — сырьё для статистики админ-панели."""
 
     __tablename__ = "track_events"
+    # Составные индексы под горячие агрегаты статистики (WHERE user_id AND event)
+    # и антинакрутный дедуп (WHERE user_id AND track_id AND event) — без них
+    # с ростом событий эти запросы делают полный скан.
+    __table_args__ = (
+        Index("ix_track_events_user_event", "user_id", "event"),
+        Index("ix_track_events_user_track_event", "user_id", "track_id", "event"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     track_id: Mapped[int] = mapped_column(ForeignKey("tracks.id"), index=True)
-    event: Mapped[str] = mapped_column(String(16), index=True)  # listen | download
+    event: Mapped[str] = mapped_column(String(16))  # listen | download
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
 
@@ -246,8 +253,11 @@ class RequiredChannel(Base):
     __tablename__ = "required_channels"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    channel: Mapped[str] = mapped_column(String(128), unique=True)  # @handle или -100…
+    channel: Mapped[str] = mapped_column(String(256), unique=True)  # @handle, -100… или t.me-ссылка бота
     label: Mapped[str] = mapped_column(String(128))  # текст кнопки в гейте
+    # channel — подписка проверяется через getChatMember; bot — «запустите бота»:
+    # Telegram не даёт проверить запуск чужого бота, кнопка ссылкой без проверки (ОП на ботов)
+    kind: Mapped[str] = mapped_column(String(16), default="channel", server_default="channel")
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
 

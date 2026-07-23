@@ -14,8 +14,27 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
+# Антинакрутка: одно и то же прослушивание засчитывается не чаще, чем раз в это
+# окно — иначе можно накрутить статистику и нафармить дни Premium за достижения.
+LISTEN_DEDUP_SECONDS = 30
+
+
 async def record_event(session: AsyncSession, user_id: int, track_id: int, event: str) -> None:
-    """event: listen | download. Коммитит."""
+    """event: listen | download. Коммитит.
+    Для listen — дедуп: повтор того же трека в пределах LISTEN_DEDUP_SECONDS не считается."""
+    if event == "listen":
+        recent = await session.scalar(
+            select(func.count())
+            .select_from(TrackEvent)
+            .where(
+                TrackEvent.user_id == user_id,
+                TrackEvent.track_id == track_id,
+                TrackEvent.event == "listen",
+                TrackEvent.created_at >= _utcnow() - timedelta(seconds=LISTEN_DEDUP_SECONDS),
+            )
+        )
+        if recent:
+            return
     session.add(TrackEvent(user_id=user_id, track_id=track_id, event=event))
     await session.commit()
 
@@ -53,7 +72,10 @@ async def collect_stats(session: AsyncSession) -> ProjectStats:
         users_total=await _count(session, users_where()),
         users_new_day=await _count(session, users_where(User.created_at >= day_ago)),
         users_active_all_time=await _count(session, users_where(User.last_login.is_not(None))),
-        premium_active=await _count(session, users_where(User.premium.is_(True))),
+        # Только реально активные: флаг premium мог остаться у истёкших до refresh
+        premium_active=await _count(
+            session, users_where(User.premium.is_(True), User.premium_until > now)
+        ),
         tracks_total=await _count(session, select(func.count()).select_from(Track)),
         archived_on_disk=await _count(
             session, select(func.count()).select_from(Track).where(Track.storage_path.is_not(None))

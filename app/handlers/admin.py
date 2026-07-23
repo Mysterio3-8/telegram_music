@@ -23,6 +23,7 @@ from app.services.catalog_cleanup import count_junk_tracks, delete_junk_tracks, 
 from app.services.required_channels import (
     add_required_channel,
     get_required_channels,
+    normalize_bot_link,
     normalize_channel,
     remove_required_channel,
 )
@@ -150,12 +151,18 @@ async def cb_reclaim_go(callback: CallbackQuery) -> None:
 def _sub_channels_text(channels) -> str:
     if not channels:
         return (
-            "📢 Каналы обязательной подписки\n\n"
+            "📢 Обязательная подписка\n\n"
             "Список пуст — гейт подписки ВЫКЛЮЧЕН, бот доступен всем без подписки."
         )
-    lines = ["📢 Каналы обязательной подписки\n"]
-    lines += [f"{i}. {row.label} — {row.channel}" for i, row in enumerate(channels, start=1)]
-    lines.append("\nПользователи должны быть подписаны на все каналы из списка.")
+    lines = ["📢 Обязательная подписка\n"]
+    lines += [
+        f"{i}. {'🤖 ' if row.kind == 'bot' else ''}{row.label} — {row.channel}"
+        for i, row in enumerate(channels, start=1)
+    ]
+    lines.append(
+        "\nКаналы проверяются по подписке. Боты (🤖) — кнопкой в гейте: "
+        "Telegram не даёт проверить запуск чужого бота."
+    )
     return "\n".join(lines)
 
 
@@ -193,17 +200,31 @@ async def cb_sub_channel_add(callback: CallbackQuery, state: FSMContext) -> None
         return
     await state.set_state(SubChannelAdd.waiting_channel)
     await callback.message.answer(
-        "Пришлите канал: @username или id вида -100…\n\n"
-        "⚠️ Бот должен быть админом этого канала — иначе Telegram не даёт проверять подписку."
+        "Пришлите канал или бота:\n"
+        "• канал — @username или id вида -100…\n"
+        "• бот (ОП на ботов) — ссылка t.me/ИмяBot (можно с ?start=…)\n\n"
+        "⚠️ Для канала бот должен быть его админом — иначе Telegram не даёт проверять подписку.\n"
+        "🤖 Запуск чужого бота проверить нельзя — он попадёт в гейт кнопкой без проверки."
     )
     await callback.answer()
 
 
 @router.message(SubChannelAdd.waiting_channel, F.text)
 async def process_sub_channel(message: Message, state: FSMContext) -> None:
+    # «ОП на ботов»: ссылка на бота — отдельная ветка без проверки членства
+    bot_link = normalize_bot_link(message.text)
+    if bot_link is not None:
+        await state.update_data(new_channel=bot_link, new_kind="bot")
+        await state.set_state(SubChannelAdd.waiting_label)
+        await message.answer("🤖 Бот принят. Текст кнопки для гейта (например «🤖 Запусти бота»):")
+        return
+
     channel = normalize_channel(message.text)
     if channel is None:
-        await message.answer("Не похоже на канал. Формат: @username или -100XXXXXXXXXX.")
+        await message.answer(
+            "Не похоже ни на канал, ни на бота.\n"
+            "Канал: @username или -100XXXXXXXXXX. Бот: ссылка t.me/ИмяBot."
+        )
         return
     # Живая проверка тем же вызовом, которым работает гейт: если getChatMember
     # не отвечает — бот не админ канала, и подписку проверить не сможет
@@ -214,7 +235,7 @@ async def process_sub_channel(message: Message, state: FSMContext) -> None:
             "а вы сами на него подписаны, — и пришлите канал ещё раз."
         )
         return
-    await state.update_data(new_channel=channel)
+    await state.update_data(new_channel=channel, new_kind="channel")
     await state.set_state(SubChannelAdd.waiting_label)
     await message.answer("Текст кнопки для гейта (например «📢 ТГ Музыка»):")
 
@@ -228,10 +249,12 @@ async def process_sub_channel_label(message: Message, state: FSMContext) -> None
     data = await state.get_data()
     await state.set_state(None)
     async with session_factory() as session:
-        row = await add_required_channel(session, data["new_channel"], label)
+        row = await add_required_channel(
+            session, data["new_channel"], label, kind=data.get("new_kind", "channel")
+        )
         channels = await get_required_channels(session)
     if row is None:
-        await message.answer("Такой канал уже в списке.")
+        await message.answer("Такой канал/бот уже в списке.")
         return
     await message.answer(
         f"✅ Добавлен: {label} — {row.channel}\n\n{_sub_channels_text(channels)}",

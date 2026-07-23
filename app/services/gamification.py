@@ -178,8 +178,10 @@ class UserStats:
     invited: int
     has_premium_ever: bool
     premium_year: bool
+    premium_forever: bool
     uploads: int
     artists: int  # сколько разных исполнителей в библиотеке
+    downloads: int
 
 
 async def _listen_streak(session: AsyncSession, user_id: int) -> int:
@@ -232,11 +234,14 @@ async def collect_user_stats(session: AsyncSession, user: User) -> UserStats:
         .where(UserLibrary.user_id == user.id)
     ) or 0
 
+    downloads = await session.scalar(
+        select(func.count())
+        .select_from(TrackEvent)
+        .where(TrackEvent.user_id == user.id, TrackEvent.event == "download")
+    ) or 0
+
     has_premium_ever = user.premium_until is not None
-    premium_year = (
-        user.premium_until is not None
-        and (user.premium_until - user.created_at).days >= 365
-    )
+    premium_days = (user.premium_until - user.created_at).days if user.premium_until else 0
     return UserStats(
         listens=listens,
         listen_hours=round(seconds / 3600, 1),
@@ -245,9 +250,11 @@ async def collect_user_stats(session: AsyncSession, user: User) -> UserStats:
         playlists=playlists,
         invited=invited,
         has_premium_ever=has_premium_ever,
-        premium_year=premium_year,
+        premium_year=premium_days >= 365,
+        premium_forever=premium_days >= 3650,  # 10+ лет = «навсегда»
         uploads=uploads,
         artists=artists,
+        downloads=downloads,
     )
 
 
@@ -263,52 +270,97 @@ class Achievement:
     reward_days: int  # сколько дней Premium даёт достижение
 
 
-# Каждое достижение — реальные дни Premium. Пользователь видит цель и награду:
-# это и удержание («ещё 2 дня серии»), и мягкая продажа подписки (он её попробует).
+# Тиры достижений: (префикс, эмодзи, категория, шаблон названия, [(порог, дней Premium)]).
+# Награды за приглашения выдаёт grant_referral_milestones (тут reward=0, чтобы не двоить).
+# Всего ~100 достижений — длинная лестница целей удерживает и мягко продаёт Premium.
+_TIER_SPECS: list[tuple[str, str, str, str, list[tuple[int, int]]]] = [
+    ("listen", "🎵", "Прослушивание", "{n} прослушиваний", [
+        (10, 1), (50, 2), (100, 3), (250, 5), (500, 7), (1000, 14),
+        (2500, 20), (5000, 30), (10000, 45), (25000, 60), (50000, 90), (100000, 120),
+    ]),
+    ("hours", "🔥", "Прослушивание", "{n} часов музыки", [
+        (1, 1), (5, 2), (10, 3), (25, 5), (50, 7), (100, 10),
+        (250, 20), (500, 30), (1000, 45), (2000, 60), (5000, 90), (10000, 120),
+    ]),
+    ("streak", "📅", "Активность", "{n} дней подряд", [
+        (3, 1), (7, 3), (14, 7), (30, 14), (60, 25), (100, 40),
+        (180, 60), (365, 120), (500, 180), (1000, 365),
+    ]),
+    ("fav", "❤️", "Коллекция", "{n} треков в библиотеке", [
+        (10, 1), (25, 2), (50, 3), (100, 5), (250, 10), (500, 20),
+        (1000, 30), (2500, 45), (5000, 60), (10000, 90),
+    ]),
+    ("artists", "🎤", "Коллекция", "{n} разных исполнителей", [
+        (5, 1), (10, 2), (25, 3), (50, 7), (100, 14), (250, 30), (500, 45), (1000, 60), (2500, 90),
+    ]),
+    ("playlist", "🗂", "Коллекция", "{n} плейлистов", [
+        (1, 1), (3, 2), (5, 3), (10, 7), (25, 14), (50, 30), (100, 60), (250, 120),
+    ]),
+    ("upload", "⬆️", "Вклад", "{n} своих треков", [
+        (1, 2), (5, 3), (10, 7), (25, 14), (50, 20), (100, 30),
+        (250, 45), (500, 60), (1000, 90), (2500, 120), (5000, 180), (10000, 365),
+    ]),
+    ("download", "💾", "Вклад", "{n} скачиваний", [
+        (10, 1), (50, 2), (100, 3), (250, 5), (500, 10), (1000, 20), (2500, 30), (5000, 45), (10000, 60),
+    ]),
+    ("invite", "🤝", "Сообщество", "{n} приглашённых друзей", [
+        (1, 0), (3, 0), (5, 0), (10, 0), (25, 0), (50, 0),
+        (100, 0), (250, 0), (500, 0), (1000, 0), (2500, 0), (5000, 0),
+    ]),
+]
+
+
+def _metric(stats: UserStats, prefix: str) -> int:
+    return {
+        "listen": stats.listens,
+        "hours": int(stats.listen_hours),
+        "streak": stats.streak_days,
+        "fav": stats.favorites,
+        "artists": stats.artists,
+        "playlist": stats.playlists,
+        "upload": stats.uploads,
+        "download": stats.downloads,
+        "invite": stats.invited,
+    }[prefix]
+
+
 def build_achievements(stats: UserStats) -> list[Achievement]:
-    hours = int(stats.listen_hours)
-    # (code, emoji, title, category, значение, цель, дней Premium)
-    defs: list[tuple[str, str, str, str, int, int, int]] = [
-        ("listen_10", "🎵", "Первые 10 прослушиваний", "Прослушивание", stats.listens, 10, 1),
-        ("listen_100", "🎶", "100 прослушиваний", "Прослушивание", stats.listens, 100, 3),
-        ("listen_1000", "🎧", "1 000 прослушиваний", "Прослушивание", stats.listens, 1000, 14),
-        ("hours_10", "⏱", "10 часов музыки", "Прослушивание", hours, 10, 2),
-        ("hours_100", "🔥", "100 часов музыки", "Прослушивание", hours, 100, 7),
-        ("hours_500", "⏳", "500 часов музыки", "Прослушивание", hours, 500, 30),
-        ("streak_3", "📅", "3 дня подряд", "Активность", stats.streak_days, 3, 1),
-        ("streak_7", "🗓", "Неделя подряд", "Активность", stats.streak_days, 7, 3),
-        ("streak_30", "📆", "30 дней подряд", "Активность", stats.streak_days, 30, 14),
-        ("streak_100", "🏅", "100 дней подряд", "Активность", stats.streak_days, 100, 60),
-        ("fav_10", "💚", "10 треков в библиотеке", "Коллекция", stats.favorites, 10, 1),
-        ("fav_100", "❤️", "100 треков в библиотеке", "Коллекция", stats.favorites, 100, 5),
-        ("fav_500", "💖", "500 треков в библиотеке", "Коллекция", stats.favorites, 500, 20),
-        ("artists_25", "🎤", "25 разных исполнителей", "Коллекция", stats.artists, 25, 3),
-        ("artists_100", "🌟", "100 разных исполнителей", "Коллекция", stats.artists, 100, 10),
-        ("playlist_1", "📂", "Первый плейлист", "Коллекция", stats.playlists, 1, 1),
-        ("playlist_10", "🗂", "10 плейлистов", "Коллекция", stats.playlists, 10, 7),
-        ("upload_1", "⬆️", "Первый свой трек", "Вклад", stats.uploads, 1, 2),
-        ("upload_10", "📦", "10 своих треков", "Вклад", stats.uploads, 10, 7),
-        ("upload_100", "🏗", "100 своих треков", "Вклад", stats.uploads, 100, 30),
-        ("premium_first", "💎", "Первый Premium", "Premium", int(stats.has_premium_ever), 1, 0),
-        ("premium_year", "👑", "Год с Premium", "Premium", int(stats.premium_year), 1, 0),
-        ("invite_1", "🤝", "Первый друг", "Сообщество", stats.invited, 1, 0),
-        ("invite_10", "🚀", "10 друзей", "Сообщество", stats.invited, 10, 0),
-        ("invite_50", "🌍", "50 друзей", "Сообщество", stats.invited, 50, 0),
-        ("invite_100", "🏆", "100 друзей", "Сообщество", stats.invited, 100, 0),
+    result: list[Achievement] = []
+    for prefix, emoji, category, template, tiers in _TIER_SPECS:
+        value = _metric(stats, prefix)
+        for threshold, reward_days in tiers:
+            result.append(
+                Achievement(
+                    code=f"{prefix}_{threshold}",
+                    emoji=emoji,
+                    title=template.format(n=threshold),
+                    category=category,
+                    unlocked=value >= threshold,
+                    progress=min(value, threshold),
+                    target=threshold,
+                    reward_days=reward_days,
+                )
+            )
+    # Особые вехи Premium
+    specials = [
+        ("premium_first", "💎", "Первый Premium", stats.has_premium_ever),
+        ("premium_year", "👑", "Год с Premium", stats.premium_year),
+        ("premium_forever", "♾️", "Premium навсегда", stats.premium_forever),
     ]
-    return [
-        Achievement(
-            code=code,
-            emoji=emoji,
-            title=title,
-            category=category,
-            unlocked=value >= target,
-            progress=min(value, target),
-            target=target,
-            reward_days=reward_days,
+    for code, emoji, title, done in specials:
+        result.append(
+            Achievement(
+                code=code,
+                emoji=emoji,
+                title=title,
+                category="Premium",
+                unlocked=bool(done),
+                progress=int(bool(done)),
+                target=1,
+                reward_days=0,
+            )
         )
-        for code, emoji, title, category, value, target, reward_days in defs
-    ]
+    return result
 
 
 async def grant_achievement_rewards(session: AsyncSession, user: User) -> list[Achievement]:

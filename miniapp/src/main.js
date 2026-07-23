@@ -100,6 +100,7 @@ import {
   getUiSettings,
   saveUiSettings,
   isOnboarded,
+  isOnboardedCloud,
   setOnboarded,
 } from "./prefs.js";
 import { applyEqualizer, currentGains, getEqSettings, saveEqSettings } from "./equalizer.js";
@@ -118,6 +119,15 @@ const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : 
 if (tg) {
   tg.ready();
   tg.expand();
+  // «Сворачивать, а не закрывать»: подтверждение на закрытие спасает от случайного
+  // креста (музыка живёт при сворачивании ⌄, но умирает при закрытии), а отключение
+  // вертикальных свайпов Telegram даёт работать нашим свайпам внутри приложения.
+  try {
+    if (typeof tg.enableClosingConfirmation === "function") tg.enableClosingConfirmation();
+    if (typeof tg.disableVerticalSwipes === "function") tg.disableVerticalSwipes();
+  } catch {
+    // старый клиент Telegram — просто без этих плюшек
+  }
 }
 
 applyAccent(); // сохранённый акцентный цвет — до первого рендера
@@ -303,9 +313,22 @@ function loadHeavyData() {
   loadProfile();
 }
 
-// Онбординг только для новых: показываем один раз, исполнителей грузим фоном
-function maybeStartOnboarding() {
+// Онбординг только для новых и ровно один раз. Флаг ставится СРАЗУ при показе
+// (закрыл на середине — больше не мучаем), дублируется в Telegram CloudStorage:
+// localStorage в вебвью Telegram не везде переживает перезапуск, из-за чего
+// онбординг показывался бесконечно.
+async function maybeStartOnboarding() {
   if (isOnboarded()) return;
+  // У пользователя уже есть библиотека — он не новый, онбординг не нужен
+  if (getState().libraryIds.size > 0) {
+    setOnboarded();
+    return;
+  }
+  if (await isOnboardedCloud()) {
+    setOnboarded(); // мигрируем облачный флаг в localStorage
+    return;
+  }
+  setOnboarded();
   mutate({ onbActive: true, onbStep: 0 });
   getArtists()
     .then((artists) => mutate({ onbArtists: artists.slice(0, 24) }))
