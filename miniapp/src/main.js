@@ -7,7 +7,10 @@ import {
   getAlbums,
   getAlbumTracks,
   getArtists,
+  getArtistCard,
   getArtistTracks,
+  getGenres,
+  getGenreTracks,
   getInstrumentals,
   getLyrics,
   getPlaylists,
@@ -67,6 +70,7 @@ import { renderSettings } from "./screens/settings.js";
 import { renderRecommendations } from "./screens/recommendations.js";
 import { renderRecent } from "./screens/recent.js";
 import { renderArtists } from "./screens/artists.js";
+import { renderArtistCard } from "./screens/artistcard.js";
 import { renderDocs } from "./screens/docs.js";
 import { renderAchievements } from "./screens/achievements.js";
 import { renderLyrics } from "./screens/lyrics.js";
@@ -154,6 +158,7 @@ const SCREENS = {
   upload: renderUpload,
   recent: renderRecent,
   artists: renderArtists,
+  artist: renderArtistCard,
   docs: renderDocs,
   achievements: renderAchievements,
   lyrics: renderLyrics,
@@ -309,6 +314,9 @@ function loadHeavyData() {
   getPopularQueries()
     .then((queries) => mutate({ popularQueries: queries }))
     .catch(() => {});
+  getGenres()
+    .then((genres) => mutate({ genres }))
+    .catch(() => {});
   // Профиль нужен главной: доступность триала и начисленные награды
   loadProfile();
 }
@@ -438,6 +446,15 @@ async function loadAlbums() {
     mutate({ albums: await getAlbums(), albumsStatus: "ready" });
   } catch {
     mutate({ albumsStatus: "error" });
+  }
+}
+
+async function loadArtistCard(name) {
+  navigateTo("artist", { artistCard: null, artistCardStatus: "loading" });
+  try {
+    mutate({ artistCard: await getArtistCard(name), artistCardStatus: "ready" });
+  } catch {
+    mutate({ artistCardStatus: "error" });
   }
 }
 
@@ -872,11 +889,26 @@ root.addEventListener("click", (event) => {
     case "open-artists":
       loadArtists();
       break;
-    case "open-artist": {
+    case "open-artist":
+      loadArtistCard(el.dataset.artist);
+      break;
+    case "open-artist-tracks": {
       const name = el.dataset.artist;
       openCollection(name, "artist", () => getArtistTracks(name));
       break;
     }
+    case "artist-play-all": {
+      const name = el.dataset.artist;
+      getArtistTracks(name)
+        .then((tracks) => playMix(tracks, "У артиста пока нет треков"))
+        .catch(() => showToast("Не удалось загрузить треки"));
+      break;
+    }
+    case "open-genre":
+      openCollection(el.dataset.name, "genre", () =>
+        getGenreTracks(el.dataset.slug).then((page) => page.items)
+      );
+      break;
     case "open-doc":
       navigateTo("docs", { docKey: el.dataset.doc });
       break;

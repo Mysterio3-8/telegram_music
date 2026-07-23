@@ -87,6 +87,31 @@ class SearchLogIn(BaseModel):
     query: str
 
 
+class GenreOut(BaseModel):
+    id: int
+    name: str
+    slug: str
+    children: list["GenreOut"] = []
+
+
+class ArtistAlbumOut(BaseModel):
+    name: str
+    track_count: int
+    cover_url: str | None = None
+
+
+class ArtistCardOut(BaseModel):
+    name: str
+    photo_url: str | None = None
+    banner_url: str | None = None
+    description: str | None = None
+    country: str | None = None
+    genres: list[str] = []
+    track_count: int = 0
+    top_tracks: list["TrackOut"] = []
+    albums: list[ArtistAlbumOut] = []
+
+
 class AlbumOut(BaseModel):
     name: str
     track_count: int

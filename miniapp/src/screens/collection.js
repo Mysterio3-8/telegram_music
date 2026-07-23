@@ -4,7 +4,7 @@ import { renderTrackList, escapeHtml } from "../components/trackRow.js";
 // Страница плейлиста/альбома/исполнителя по референсу VK Music (ТЗ §6):
 // крупная обложка, название, счётчик и длительность, кнопки Слушать/Перемешать.
 
-const TYPE_LABEL = { playlist: "Плейлист", album: "Альбом", artist: "Исполнитель" };
+const TYPE_LABEL = { playlist: "Плейлист", album: "Альбом", artist: "Исполнитель", genre: "Жанр" };
 
 function totalDuration(tracks) {
   const total = tracks.reduce((sum, t) => sum + (t.duration || 0), 0);

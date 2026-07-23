@@ -156,6 +156,21 @@ export function getArtistTracks(name) {
   return request(`/artists/tracks?name=${encodeURIComponent(name)}`);
 }
 
+// Жанры каталога (SPEC-КАТАЛОГ §1): дерево для чипов поиска + треки жанра
+export function getGenres() {
+  return request("/genres");
+}
+
+export function getGenreTracks(slug, page = 1, pageSize = 100) {
+  const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
+  return request(`/genres/${encodeURIComponent(slug)}/tracks?${params}`);
+}
+
+// Карточка артиста (SPEC-КАТАЛОГ §2): фото, баннер, жанры, топ, альбомы
+export function getArtistCard(name) {
+  return request(`/artist-card?name=${encodeURIComponent(name)}`);
+}
+
 // Реальные популярные запросы (ТЗ §11). Лог — только «закоммиченный» запрос.
 export function getPopularQueries() {
   return request("/search/popular");

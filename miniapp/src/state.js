@@ -66,6 +66,9 @@ const state = {
   collectionStatus: "idle",
   collectionType: "playlist", // playlist | album | artist — влияет на шапку экрана
   popularQueries: [], // реальные популярные запросы с сервера (ТЗ §11)
+  genres: [], // дерево жанров с сервера — чипы в поиске (SPEC-КАТАЛОГ §1)
+  artistCard: null, // карточка артиста: фото, баннер, жанры, топ, альбомы (§2)
+  artistCardStatus: "idle", // idle | loading | ready | error
   artists: [], // [{name, track_count}] с сервера, дедуп (ТЗ §13)
   artistsStatus: "idle",
   myTracksTab: "all", // all | downloaded (ТЗ §5)

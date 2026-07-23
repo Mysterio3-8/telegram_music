@@ -67,7 +67,7 @@ class Track(Base):
 
 
 class Artist(Base):
-    """Артист как сущность (P4): имя, фото, описание, ссылка на SoundCloud.
+    """Артист как сущность (P4 + мировой каталог): имя, фото, описание, ссылки.
     Треки пока связываются по lower(trim(tracks.artist)) — artist_id придёт
     отдельной миграцией после биндинга."""
 
@@ -79,7 +79,41 @@ class Artist(Base):
     soundcloud_url: Mapped[str | None] = mapped_column(String(512))
     photo_url: Mapped[str | None] = mapped_column(String(512))  # аватар артиста
     description: Mapped[str | None] = mapped_column(Text)
+    # Мировой каталог (SPEC-КАТАЛОГ §2): карточка артиста + ключи внешних источников
+    banner_url: Mapped[str | None] = mapped_column(String(512))
+    country: Mapped[str | None] = mapped_column(String(2), index=True)  # ISO 3166-1 alpha-2
+    aliases: Mapped[str | None] = mapped_column(Text)  # JSON-массив альтернативных написаний
+    mbid: Mapped[str | None] = mapped_column(String(36), unique=True)  # MusicBrainz id
+    deezer_id: Mapped[int | None] = mapped_column(BigInteger)
+    youtube_url: Mapped[str | None] = mapped_column(String(512))  # официальный канал (фолбэк-источник)
+    # none — источник ещё не привязывался; soundcloud/youtube — привязан; no_source — искали, нет
+    source_status: Mapped[str | None] = mapped_column(String(16), index=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
+class Genre(Base):
+    """Жанр с иерархией (SPEC-КАТАЛОГ §1): «Электроника → Phonk → Drift Phonk».
+    Сид — python -m app.cli.genres seed (курируемый список на базе MusicBrainz)."""
+
+    __tablename__ = "genres"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(128))
+    slug: Mapped[str] = mapped_column(String(128), unique=True)
+    parent_id: Mapped[int | None] = mapped_column(ForeignKey("genres.id"), index=True)
+
+
+class ArtistGenre(Base):
+    """M2M артист↔жанр. Трек наследует жанры артиста — track_genres не материализуем."""
+
+    __tablename__ = "artist_genres"
+
+    artist_id: Mapped[int] = mapped_column(
+        ForeignKey("artists.id", ondelete="CASCADE"), primary_key=True
+    )
+    genre_id: Mapped[int] = mapped_column(
+        ForeignKey("genres.id", ondelete="CASCADE"), primary_key=True, index=True
+    )
 
 
 class Instrumental(Base):

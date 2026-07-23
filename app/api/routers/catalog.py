@@ -2,10 +2,20 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db
-from app.api.schemas import InstrumentalOut, Page, TrackOut, track_out
+from app.api.schemas import (
+    ArtistAlbumOut,
+    ArtistCardOut,
+    GenreOut,
+    InstrumentalOut,
+    Page,
+    TrackOut,
+    track_out,
+)
 from app.api.security import build_instrumental_audio_url
 from app.config import settings
 from app.db.models import Instrumental
+from app.services.artist_card import get_artist_card
+from app.services.genres import genre_tracks, genre_tree, get_genre_by_slug
 from app.services.library import get_track
 from app.services.search import get_instrumental, search_instrumentals, search_tracks
 
@@ -90,6 +100,50 @@ async def list_instrumentals(
         page=page,
         page_size=page_size or settings.page_size,
     )
+
+
+@router.get("/artist-card", response_model=ArtistCardOut)
+async def artist_card(
+    name: str = Query(..., min_length=1), session: AsyncSession = Depends(get_db)
+) -> ArtistCardOut:
+    """Карточка артиста (SPEC-КАТАЛОГ §2): фото, баннер, жанры, топ, альбомы."""
+    card = await get_artist_card(session, name)
+    return ArtistCardOut(
+        name=card.name,
+        photo_url=card.photo_url,
+        banner_url=card.banner_url,
+        description=card.description,
+        country=card.country,
+        genres=card.genres,
+        track_count=card.track_count,
+        top_tracks=[track_out(t) for t in card.top_tracks],
+        albums=[
+            ArtistAlbumOut(name=a.name, track_count=a.track_count, cover_url=a.cover_url)
+            for a in card.albums
+        ],
+    )
+
+
+@router.get("/genres", response_model=list[GenreOut])
+async def list_genres(session: AsyncSession = Depends(get_db)) -> list[GenreOut]:
+    """Дерево жанров каталога (SPEC-КАТАЛОГ §1) — чипы поиска Mini App."""
+    return [GenreOut(**node) for node in await genre_tree(session)]
+
+
+@router.get("/genres/{slug}/tracks", response_model=Page[TrackOut])
+async def tracks_by_genre(
+    slug: str,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(None, ge=1, le=MINIAPP_MAX_PAGE_SIZE),
+    session: AsyncSession = Depends(get_db),
+) -> Page[TrackOut]:
+    """Треки жанра и его поджанров — через жанры артистов."""
+    genre = await get_genre_by_slug(session, slug)
+    if genre is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Жанр не найден")
+    size = page_size or settings.page_size
+    tracks, total = await genre_tracks(session, genre, page, size)
+    return Page(items=[track_out(t) for t in tracks], total=total, page=page, page_size=size)
 
 
 @router.get("/instrumental/{instrumental_id}", response_model=InstrumentalOut)

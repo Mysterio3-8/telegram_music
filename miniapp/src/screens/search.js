@@ -48,10 +48,27 @@ function renderSuggestions(state) {
     `
     : "";
 
-  if (!historyBlock && !recentBlock && !popularBlock) {
+  // Жанры каталога (SPEC-КАТАЛОГ §1): топ-уровень дерева как чипы, тап → экран жанра
+  const genres = state.genres || [];
+  const genresBlock = genres.length
+    ? `
+      <div class="section-head"><span class="section-title">Жанры</span></div>
+      <div class="chip-cloud">${genres
+        .map(
+          (g) => `
+            <button class="search-chip" data-action="open-genre" data-slug="${escapeHtml(g.slug)}" data-name="${escapeHtml(g.name)}">
+              <span>${escapeHtml(g.name)}</span>
+            </button>
+          `
+        )
+        .join("")}</div>
+    `
+    : "";
+
+  if (!historyBlock && !recentBlock && !popularBlock && !genresBlock) {
     return '<div class="empty-state">Введите название трека или исполнителя</div>';
   }
-  return `${historyBlock}${recentBlock}${popularBlock}`;
+  return `${historyBlock}${recentBlock}${popularBlock}${genresBlock}`;
 }
 
 // Результаты живут в отдельном контейнере: ввод перерисовывает только его,

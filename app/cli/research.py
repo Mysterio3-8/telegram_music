@@ -1,0 +1,134 @@
+"""Исследователь мирового каталога (SPEC-КАТАЛОГ §3-4).
+
+  python -m app.cli.research country RU --limit 200          # артисты страны из MusicBrainz
+  python -m app.cli.research search "phonk" --limit 100      # по произвольному Lucene-запросу
+  python -m app.cli.research attach-sources --limit 500      # привязать источники закачки
+  python -m app.cli.research stats
+
+Темп ограничен MusicBrainz (1 req/sec): ~2 запроса на артиста → ~25 артистов/мин.
+Запускать фоном на VPS: nohup python -m app.cli.research country RU --limit 1000 &
+"""
+import argparse
+import asyncio
+
+from sqlalchemy import func, select
+
+from app.db.base import session_factory
+from app.db.models import Artist
+from app.services import deezer, musicbrainz
+from app.services.artist_research import (
+    artists_without_source,
+    attach_source_for_artist,
+    save_researched,
+)
+
+SEARCH_PAGE_SIZE = 100
+MIN_SEARCH_SCORE = 60  # ниже — мусорные совпадения поиска MusicBrainz
+
+
+async def _research(query: str, limit: int, offset: int, with_photos: bool) -> None:
+    created = updated = failed = 0
+    processed = 0
+    async with session_factory() as session:
+        while processed < limit:
+            page = musicbrainz.search_artists(
+                query, limit=min(SEARCH_PAGE_SIZE, limit - processed), offset=offset + processed
+            )
+            if not page:
+                break
+            for brief in page:
+                processed += 1
+                if brief.get("score", 0) < MIN_SEARCH_SCORE:
+                    continue
+                try:
+                    details = musicbrainz.artist_details(brief["id"])
+                    researched = musicbrainz.parse_artist(details)
+                    photo = banner = None
+                    deezer_id = None
+                    if with_photos:
+                        try:
+                            found = deezer.find_artist(researched.name)
+                        except Exception:  # noqa: BLE001 — сеть Deezer: фото добьём позже
+                            found = None
+                        if found:
+                            photo = banner = found.picture_xl
+                            deezer_id = found.id
+                    _, is_new = await save_researched(
+                        session,
+                        researched,
+                        photo_url=photo,
+                        banner_url=banner,
+                        deezer_id=deezer_id,
+                    )
+                    created += is_new
+                    updated += not is_new
+                except Exception as error:  # noqa: BLE001 — один артист не роняет прогон
+                    failed += 1
+                    print(f"  ! {brief.get('name')}: {error}")
+                if processed % 25 == 0:
+                    print(f"…{processed}/{limit} (создано {created}, обновлено {updated})")
+    print(f"Готово: создано {created}, обновлено {updated}, ошибок {failed}, просмотрено {processed}")
+
+
+async def _attach_sources(limit: int) -> None:
+    counts = {"soundcloud": 0, "youtube": 0, "no_source": 0}
+    async with session_factory() as session:
+        for artist in await artists_without_source(session, limit):
+            status = await attach_source_for_artist(session, artist)
+            counts[status] += 1
+    print(
+        f"SoundCloud: {counts['soundcloud']}, YouTube: {counts['youtube']}, "
+        f"без источника: {counts['no_source']}"
+    )
+
+
+async def _stats() -> None:
+    async with session_factory() as session:
+        total = (await session.scalar(select(func.count()).select_from(Artist))) or 0
+        with_mbid = (
+            await session.scalar(
+                select(func.count()).select_from(Artist).where(Artist.mbid.is_not(None))
+            )
+        ) or 0
+        rows = await session.execute(
+            select(Artist.source_status, func.count()).group_by(Artist.source_status)
+        )
+        by_status = dict(rows.all())
+    print(f"Артистов: {total}, из MusicBrainz: {with_mbid}, источники: {by_status}")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Исследователь каталога артистов")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    country = sub.add_parser("country", help="артисты страны (ISO-код: RU, US, KR…)")
+    country.add_argument("code")
+    country.add_argument("--limit", type=int, default=200)
+    country.add_argument("--offset", type=int, default=0)
+    country.add_argument("--no-photos", action="store_true")
+
+    search = sub.add_parser("search", help="произвольный Lucene-запрос MusicBrainz")
+    search.add_argument("query")
+    search.add_argument("--limit", type=int, default=100)
+    search.add_argument("--offset", type=int, default=0)
+    search.add_argument("--no-photos", action="store_true")
+
+    attach = sub.add_parser("attach-sources")
+    attach.add_argument("--limit", type=int, default=500)
+
+    sub.add_parser("stats")
+
+    args = parser.parse_args()
+    if args.command == "country":
+        query = f"country:{args.code.upper()}"
+        asyncio.run(_research(query, args.limit, args.offset, not args.no_photos))
+    elif args.command == "search":
+        asyncio.run(_research(args.query, args.limit, args.offset, not args.no_photos))
+    elif args.command == "attach-sources":
+        asyncio.run(_attach_sources(args.limit))
+    else:
+        asyncio.run(_stats())
+
+
+if __name__ == "__main__":
+    main()
