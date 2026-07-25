@@ -53,7 +53,7 @@ def main() -> None:
     p_scan = sub.add_parser("scan", help="Сканировать источник")
     p_scan.add_argument("source", help="ID источника или 'all'")
 
-    sub.add_parser("scan-due", help="Сканировать просроченные источники (§11)")
+    sub.add_parser("scan-due", help="Ежедневная автопроверка источников (только SoundCloud)")
     sub.add_parser("recover", help="Вернуть оборванные задачи в очередь (§15)")
 
     args = parser.parse_args()
@@ -70,9 +70,10 @@ def main() -> None:
             youtube_scan_source.delay(source_id=int(args.source))
             logger.info("Сканирование источника %s запущено в фоне", args.source)
     elif args.command == "scan-due":
-        youtube_scan_due.delay()
-        soundcloud_scan_due.delay()  # SoundCloud-источники минусов едут тем же ежедневным таймером
-        logger.info("Проверка просроченных источников (YouTube + SoundCloud) запущена в фоне")
+        # Автопополнение каталога 24/7 идёт только с SoundCloud (решение владельца).
+        # YouTube-источники остаются, но сканируются лишь вручную: `scan <id>` / `scan all`.
+        soundcloud_scan_due.delay()
+        logger.info("Ежедневная проверка SoundCloud-источников запущена в фоне")
     elif args.command == "recover":
         youtube_recover.delay()
         logger.info("Восстановление очереди запущено в фоне")

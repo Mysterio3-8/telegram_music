@@ -19,6 +19,7 @@ from app.api.schemas import (
     ProfileTopOut,
     RankOut,
     ReferralOut,
+    SearchFetchIn,
     SearchLogIn,
     TrackOut,
     TransferIn,
@@ -173,6 +174,25 @@ async def personalized_mix(
         language=language,
     )
     return [track_out(t) for t in tracks]
+
+
+@router.post("/search/fetch", status_code=status.HTTP_202_ACCEPTED)
+async def fetch_from_web(
+    payload: SearchFetchIn,
+    user: User = Depends(get_current_user),
+) -> dict:
+    """Поисковый парсер (скрытый): нет в базе — ищем в открытых источниках,
+    трек придёт в чат бота и в библиотеку. Возвращаем сразу, работа — в Celery."""
+    query = payload.query.strip()
+    if not query:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Пустой запрос")
+    try:
+        from app.tasks.search_fetch import search_fetch
+
+        search_fetch.delay(query=query, telegram_id=user.telegram_id, chat_id=user.telegram_id)
+    except Exception as exc:  # noqa: BLE001 — брокер недоступен
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Поиск в сети недоступен") from exc
+    return {"queued": True}
 
 
 @router.get("/playlists", response_model=list[PlaylistSummaryOut])

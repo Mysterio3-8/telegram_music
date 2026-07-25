@@ -171,7 +171,9 @@ export function renderSearchResults(state) {
     sections &&
     (sections.artists.length || sections.albums.length || sections.playlists.length || sections.tracks.length);
   if (!hasAny) {
-    return `<div class="empty-state">Ничего не найдено по «${escapeHtml(query)}»</div>`;
+    return `<div class="empty-state">Ничего не найдено по «${escapeHtml(query)}»
+      <button class="btn btn--primary search-web-btn" data-action="search-web">Поискать ещё</button>
+    </div>`;
   }
   return renderSections(sections, state);
 }

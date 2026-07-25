@@ -72,7 +72,9 @@ async def test_save_researched_merges_with_owner_seeded_artist(session):
 
 
 @pytest.mark.asyncio
-async def test_attach_sources_priority_and_status(session):
+async def test_attach_sources_soundcloud_only(session):
+    """Массовый парсер — SoundCloud-only (решение владельца): YouTube-артист
+    получает no_source, YouTube-источник не заводится."""
     sc_artist = Artist(name="A", normalized_name="a",
                        soundcloud_url="https://soundcloud.com/a", youtube_url="https://youtube.com/@a")
     yt_artist = Artist(name="B", normalized_name="b", youtube_url="https://www.youtube.com/channel/UCb")
@@ -81,20 +83,41 @@ async def test_attach_sources_priority_and_status(session):
     await session.commit()
 
     assert await attach_source_for_artist(session, sc_artist) == "soundcloud"
-    assert await attach_source_for_artist(session, yt_artist) == "youtube"
+    assert await attach_source_for_artist(session, yt_artist) == "no_source"  # YouTube не источник
     assert await attach_source_for_artist(session, empty) == "no_source"
 
     sc = await session.scalar(select(SoundcloudSource))
     assert sc.url == "https://soundcloud.com/a" and sc.title == "A"
-    yt = await session.scalar(select(YoutubeSource))
-    assert yt.url == "https://www.youtube.com/channel/UCb"
-
-    # Повторный attach того же YouTube не создаёт дубль источника
-    yt_artist.source_status = None
-    await session.commit()
-    await attach_source_for_artist(session, yt_artist)
-    count = len((await session.scalars(select(YoutubeSource))).all())
-    assert count == 1
+    # YouTube-источник не создаётся вовсе
+    assert (await session.scalars(select(YoutubeSource))).first() is None
 
     remaining = await artists_without_source(session, 10)
     assert remaining == []
+
+
+@pytest.mark.asyncio
+async def test_disable_research_youtube_sources(session):
+    """Чистка: research-YouTube отключается, канал владельца остаётся."""
+    from app.services.artist_research import disable_research_youtube_sources
+
+    yt_artist = Artist(
+        name="B", normalized_name="b",
+        youtube_url="https://www.youtube.com/channel/UCb", source_status="youtube",
+    )
+    session.add(yt_artist)
+    session.add(YoutubeSource(url="https://www.youtube.com/channel/UCb", title="B", status="active"))
+    session.add(YoutubeSource(url="https://www.youtube.com/@owner_channel", title="Owner", status="active"))
+    await session.commit()
+
+    disabled = await disable_research_youtube_sources(session)
+    assert disabled == 1
+    research_src = await session.scalar(
+        select(YoutubeSource).where(YoutubeSource.url == "https://www.youtube.com/channel/UCb")
+    )
+    assert research_src.status == "disabled"
+    owner_src = await session.scalar(
+        select(YoutubeSource).where(YoutubeSource.url == "https://www.youtube.com/@owner_channel")
+    )
+    assert owner_src.status == "active"  # канал владельца не тронут
+    await session.refresh(yt_artist)
+    assert yt_artist.source_status == "no_source"

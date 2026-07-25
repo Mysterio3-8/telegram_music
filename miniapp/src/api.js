@@ -125,6 +125,11 @@ export function logChannelClick(channelId) {
   return request(`/subscription/click/${channelId}`, { method: "POST" });
 }
 
+// Нет в базе — ищем в открытых источниках; трек придёт в бота и в библиотеку
+export function fetchFromWeb(query) {
+  return request("/search/fetch", { method: "POST", body: JSON.stringify({ query }) });
+}
+
 export function getProfile() {
   return request("/profile");
 }

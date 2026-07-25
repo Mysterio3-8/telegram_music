@@ -23,6 +23,7 @@ from app.services import deezer, musicbrainz
 from app.services.artist_research import (
     artists_without_source,
     attach_source_for_artist,
+    disable_research_youtube_sources,
     save_researched,
 )
 
@@ -123,15 +124,18 @@ async def _enrich(limit: int, with_photos: bool) -> None:
 
 
 async def _attach_sources(limit: int) -> None:
-    counts = {"soundcloud": 0, "youtube": 0, "no_source": 0}
+    counts = {"soundcloud": 0, "no_source": 0}
     async with session_factory() as session:
         for artist in await artists_without_source(session, limit):
             status = await attach_source_for_artist(session, artist)
             counts[status] += 1
-    print(
-        f"SoundCloud: {counts['soundcloud']}, YouTube: {counts['youtube']}, "
-        f"без источника: {counts['no_source']}"
-    )
+    print(f"SoundCloud: {counts['soundcloud']}, без источника: {counts['no_source']}")
+
+
+async def _disable_youtube() -> None:
+    async with session_factory() as session:
+        disabled = await disable_research_youtube_sources(session)
+    print(f"Отключено research-YouTube источников: {disabled}")
 
 
 async def _stats() -> None:
@@ -172,6 +176,8 @@ def main() -> None:
     enrich.add_argument("--limit", type=int, default=500)
     enrich.add_argument("--no-photos", action="store_true")
 
+    sub.add_parser("disable-youtube-sources")
+
     sub.add_parser("stats")
 
     args = parser.parse_args()
@@ -184,6 +190,8 @@ def main() -> None:
         asyncio.run(_attach_sources(args.limit))
     elif args.command == "enrich":
         asyncio.run(_enrich(args.limit, not args.no_photos))
+    elif args.command == "disable-youtube-sources":
+        asyncio.run(_disable_youtube())
     else:
         asyncio.run(_stats())
 

@@ -172,13 +172,18 @@ def _read_supported(path: Path) -> tuple[bytes, str]:
     return converted.read_bytes(), "m4a"
 
 
+def search_videos(query: str, limit: int = 1) -> list[VideoEntry]:
+    """Результаты поиска YouTube по свободному запросу, до limit штук."""
+    opts = {**_base_opts(), "extract_flat": "in_playlist", "skip_download": True}
+    with yt_dlp.YoutubeDL(opts) as ydl:
+        info = ydl.extract_info(f"ytsearch{max(1, limit)}:{query}", download=False)
+    return _collect_entries(info)
+
+
 def search_first_video(query: str) -> VideoEntry | None:
     """Первый результат поиска YouTube по запросу «исполнитель название».
     Нужен переносу плейлистов: чужие сервисы отдают только метаданные."""
-    opts = {**_base_opts(), "extract_flat": "in_playlist", "skip_download": True}
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(f"ytsearch1:{query}", download=False)
-    entries = _collect_entries(info)
+    entries = search_videos(query, limit=1)
     return entries[0] if entries else None
 
 

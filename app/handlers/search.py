@@ -45,7 +45,7 @@ async def cb_search(callback: CallbackQuery, state: FSMContext) -> None:
 
 async def _render_track_results(
     message: Message, state: FSMContext, query: str, page: int, edit: bool
-) -> None:
+) -> int:
     async with session_factory() as session:
         tracks, total = await search_tracks(session, query, page)
     total_pages = max(1, math.ceil(total / settings.page_size))
@@ -56,12 +56,27 @@ async def _render_track_results(
         await message.edit_text(text, reply_markup=keyboard)
     else:
         await message.answer(text, reply_markup=keyboard)
+    return total
+
+
+def _fetch_from_web(query: str, chat_id: int) -> None:
+    """Поисковый парсер (скрытый): нет в базе — ищем в открытых источниках.
+    Без брокера Celery молча пропускаем — локальный поиск уже отработал."""
+    try:
+        from app.tasks.search_fetch import search_fetch
+
+        search_fetch.delay(query=query, telegram_id=chat_id, chat_id=chat_id)
+    except Exception:  # noqa: BLE001 — брокер недоступен, не ломаем поиск
+        pass
 
 
 @router.message(TrackSearch.waiting_query, F.text)
 async def process_track_query(message: Message, state: FSMContext) -> None:
     await state.set_state(None)  # выходим из ожидания, но данные запроса сохраняем
-    await _render_track_results(message, state, message.text, page=1, edit=False)
+    total = await _render_track_results(message, state, message.text, page=1, edit=False)
+    if total == 0:
+        _fetch_from_web(message.text, message.chat.id)
+        await message.answer("🔎 Ищу в сети — пришлю трек через минуту.")
 
 
 async def _restart_search(callback: CallbackQuery, state: FSMContext, new_state, prompt: str) -> None:

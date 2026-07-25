@@ -55,22 +55,44 @@ async def save_researched(
 
 
 async def attach_source_for_artist(session: AsyncSession, artist: Artist) -> str:
-    """Регистрирует источник закачки (§4): SoundCloud приоритетнее YouTube.
-    Возвращает и пишет в artist.source_status: soundcloud | youtube | no_source."""
+    """Регистрирует источник закачки для автономного парсера (§4).
+
+    Решение владельца: массовый парсер качает 24/7 ТОЛЬКО с SoundCloud. YouTube
+    как источник дискавери не используется — нет SoundCloud → no_source (карточка
+    живёт по данным MusicBrainz/Deezer, треки не качаются). YouTube-каналы,
+    добавленные владельцем вручную, — отдельный пайплайн, этой функции не касаются.
+    Возвращает и пишет в artist.source_status: soundcloud | no_source."""
     if artist.soundcloud_url:
         await add_soundcloud_source(session, artist.soundcloud_url, title=artist.name)
         status = "soundcloud"
-    elif artist.youtube_url:
-        clean = artist.youtube_url.strip().rstrip("/")
-        existing = await session.scalar(select(YoutubeSource).where(YoutubeSource.url == clean))
-        if existing is None:
-            session.add(YoutubeSource(url=clean, title=artist.name, status="active"))
-        status = "youtube"
     else:
         status = "no_source"
     artist.source_status = status
     await session.commit()
     return status
+
+
+async def disable_research_youtube_sources(session: AsyncSession) -> int:
+    """Одноразовая чистка после перевода парсера на SoundCloud-only: отключает
+    YouTube-источники, заведённые прошлым attach-sources (их url == artists.youtube_url),
+    и перемечает такие карточки в no_source. Каналы владельца (их url нет среди
+    artists.youtube_url) не трогаются. Возвращает число отключённых источников."""
+    yt_artists = await session.scalars(
+        select(Artist).where(Artist.source_status == "youtube")
+    )
+    disabled = 0
+    for artist in list(yt_artists.all()):
+        if artist.youtube_url:
+            clean = artist.youtube_url.strip().rstrip("/")
+            source = await session.scalar(
+                select(YoutubeSource).where(YoutubeSource.url == clean)
+            )
+            if source is not None and source.status == "active":
+                source.status = "disabled"
+                disabled += 1
+        artist.source_status = "no_source"
+    await session.commit()
+    return disabled
 
 
 async def artists_without_source(session: AsyncSession, limit: int) -> list[Artist]:

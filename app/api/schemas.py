@@ -230,6 +230,10 @@ class ProfileOut(BaseModel):
     trial_available: bool = False
 
 
+class SearchFetchIn(BaseModel):
+    query: str
+
+
 class SubChannelOut(BaseModel):
     id: int
     label: str

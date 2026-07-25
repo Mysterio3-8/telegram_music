@@ -23,6 +23,7 @@ celery_app.conf.update(
         "soundcloud.*": {"queue": "soundcloud"},
         "youtube.user_import": {"queue": "youtube_user"},
         "youtube.*": {"queue": "youtube"},
+        "search.fetch": {"queue": "youtube_user"},
         "telegram_channel.*": {"queue": "telegram_channel"},
     },
 )
@@ -31,6 +32,7 @@ celery_app.conf.update(
 from app.tasks import (  # noqa: E402,F401
     broadcast,
     enrich,
+    search_fetch,
     soundcloud,
     telegram_channel,
     transfer,

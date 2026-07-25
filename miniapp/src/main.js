@@ -24,6 +24,7 @@ import {
   getPremiumStatus,
   getSubscriptionStatus,
   logChannelClick,
+  fetchFromWeb,
   getProfile,
   getTracks,
   login,
@@ -950,6 +951,14 @@ root.addEventListener("click", (event) => {
       mutate({ subGate: null });
       navigateTo("premium");
       break;
+    case "search-web": {
+      const q = getState().searchQuery.trim();
+      if (!q) break;
+      fetchFromWeb(q)
+        .then(() => showToast("Ищем — трек придёт в бота и в вашу библиотеку 🎧"))
+        .catch(() => showToast("Поиск временно недоступен"));
+      break;
+    }
     case "nav":
       resetToTab(el.dataset.screen);
       break;

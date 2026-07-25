@@ -19,7 +19,7 @@ from app.services.catalog_import import import_via_telegram_mint
 from app.services.fingerprint import compute_fingerprint_from_bytes
 from app.services.library import add_to_library
 from app.services.title_parser import parse_title
-from app.services.youtube.downloader import download_audio, fetch_thumbnail
+from app.services.youtube.downloader import DownloadedAudio, download_audio, fetch_thumbnail
 
 logger = logging.getLogger(__name__)
 
@@ -73,20 +73,19 @@ class UserImportRejected(Exception):
     """Контент не прошёл фильтры — НЕ повторять задачу, сообщить пользователю."""
 
 
-async def process_user_import(
-    session: AsyncSession, bot: Bot, video_id: str, telegram_id: int
+async def import_downloaded_audio(
+    session: AsyncSession, bot: Bot, audio: DownloadedAudio, telegram_id: int
 ) -> tuple[Track, bool]:
-    """Скачивает и заводит трек от имени пользователя. Возвращает (трек, создан_ли).
-    Кидает UserImportRejected при нарушении фильтров (без повторов)."""
+    """Общий хвост импорта: фильтры, запись в общую базу, библиотека, лимит загрузок.
+
+    Одинаков для импорта по ссылке и по поисковому запросу — источник роли не играет,
+    на вход приходит уже скачанное аудио.
+    """
     from app.services.users import get_user_by_telegram_id
 
     user = await get_user_by_telegram_id(session, telegram_id)
     if user is None:
         raise UserImportRejected("Пользователь не найден — отправьте /start")
-
-    audio = download_audio(video_id)
-    if audio is None:
-        raise RuntimeError(f"yt-dlp не вернул аудио для {video_id}")
 
     # Повторная проверка по факту: метаданные могли соврать
     error = duration_error(audio.duration)
@@ -120,8 +119,21 @@ async def process_user_import(
         session.add(Upload(user_id=user.id, track_id=track.id))
         await session.commit()
     await add_to_library(session, user.id, track.id)
+    return track, created
+
+
+async def process_user_import(
+    session: AsyncSession, bot: Bot, video_id: str, telegram_id: int
+) -> tuple[Track, bool]:
+    """Скачивает и заводит трек от имени пользователя. Возвращает (трек, создан_ли).
+    Кидает UserImportRejected при нарушении фильтров (без повторов)."""
+    audio = download_audio(video_id)
+    if audio is None:
+        raise RuntimeError(f"yt-dlp не вернул аудио для {video_id}")
+
+    track, created = await import_downloaded_audio(session, bot, audio, telegram_id)
     logger.info(
-        "User-импорт video=%s user=%s → track=%s (created=%s)",
+        "Импорт по ссылке video=%s user=%s → track=%s (created=%s)",
         video_id, telegram_id, track.id, created,
     )
     return track, created
