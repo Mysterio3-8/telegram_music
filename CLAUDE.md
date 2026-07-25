@@ -128,6 +128,17 @@ $env:DATABASE_URL="sqlite+aiosqlite:///_tmp.db"; .\.venv\Scripts\python.exe -m a
 - Обогащение (отпечаток+архив) — асинхронно в воркере: сразу после загрузки трека `storage_path` ещё пуст, появляется через секунды. Если воркер лежит — трек работает по `tg_file_id`, отпечаток не считается
 - Windows-консоль: путь проекта с кириллицей, в PowerShell возможны артефакты кодировки в выводе — на работу не влияет
 
+## Checkpoint (2026-07-26) — БЛОКИ A, B, C ЗАДЕПЛОЕНЫ (299 тестов)
+
+Автономный прогон по большому плану A–G. **A, B, C — на проде.** Осталось: D, E, F, G.
+
+- **Блок B — подписка 2.0 (коммит `653b89e`):** фикс бага ОП ([subscription.py](app/services/subscription.py) `is_bot_admin_of_channel` — при добавлении канала проверяем, что БОТ админ, а не подписку владельца-админа); Premium снимает ОП (`is_fully_subscribed` + гейт в Mini App: [subgate.js](miniapp/src/screens/subgate.js), `GET /subscription/status`, «Я подписался» force-recheck, «Убрать подписки — Premium»); статистика каналов для рекламы (`channel_ad_stats`: подписчики=охват + клики; `click_count` миграция `fba9cf9d09e3`; `POST /subscription/click`; видно в админке). Второй админ 7446911479 добавлен в ADMIN_IDS на VPS.
+- **Блок C — парсеры (коммиты `26b69e1` + наследие):** ⚠️ рабочее дерево пришло с готовой работой ПРОШЛОЙ сессии (search_download.py, track_lookup/, tasks/search_fetch.py, cli/search_fetch.py, конкурсы). Свой дубликат track_finder.py/tasks/search.py удалил, взял готовую реализацию.
+  - **Поисковый парсер #2 (скрытый):** [search_download.py](app/services/search_download.py) `search_and_download` (SoundCloud→YouTube, приоритет mp3 `bestaudio[ext=mp3]/...`) + `fetch_track_by_query` (минт+библиотека). [track_lookup/](app/services/track_lookup/) — транслит/ранжирование (пока не в download-пути). Celery `search.fetch` ([tasks/search_fetch.py](app/tasks/search_fetch.py), очередь youtube_user). Фолбэк: бот (пустой поиск → `_fetch_from_web` в [search.py](app/handlers/search.py)), Mini App (кнопка «Поискать ещё» → `POST /search/fetch`). **Проверено вживую на VPS:** «kizaru fake id»→Fake ID mp3, «элджей розовое вино»→Розовое вино feat FEDUK mp3. CLI теста: `python -m app.cli.search_fetch "запрос" [--user tid]`
+  - **Массовый парсер #1 — только SoundCloud:** [artist_research.py](app/services/artist_research.py) `attach_source_for_artist` не заводит YouTube (нет SC → no_source); `python -m app.cli.research disable-youtube-sources` чистит прошлые. Автодискавери до 10k артистов/1M треков — операционный прогон на VPS ([docs/BLOCK-C-PARSER-GOALS.md](docs/BLOCK-C-PARSER-GOALS.md))
+  - **Конкурсы** (наследие, срез 0, коммит отдельный): модели contests+contest_participants (миграция `a367a749c438`), [contests.py](app/services/contests.py). API/экран/кнопка/рассылка/CLI розыгрыша — НЕ доделаны
+- Прод на **SQLite** (миграции идут). Все сервисы active. `фон.png` в корне не коммитил (заменён на miniapp/assets/mix-bg.jpg)
+
 ## Checkpoint (2026-07-25, вечер) — БОЛЬШОЙ ПЛАН A–G, блок A ЗАДЕПЛОЕН
 
 Владелец скинул пачку задач голосом. Разбито на блоки **A–G** (H-караоке отменён владельцем; магазин битов и веб-админка отложены; реклама-в-треках/premium-артистам/помесячная подписка — «на будущее»). Работаю автономно по блокам: спек → код → тесты → деплой.
@@ -140,6 +151,29 @@ $env:DATABASE_URL="sqlite+aiosqlite:///_tmp.db"; .\.venv\Scripts\python.exe -m a
   - Тесты **268 passed** (+новые в test_recommendations). Прод: миграция применена, bot+worker+api active, mix-bg.jpg отдаётся 200
 - **Цели парсера SoundCloud 24/7** зафиксированы в [docs/BLOCK-C-PARSER-GOALS.md](docs/BLOCK-C-PARSER-GOALS.md): 1 млн треков (топ→андеграунд), 10k артистов, только SC, автодискавери профилей без владельца, треки+альбомы+плейлисты. + поисковый парсер #2 (спрятанный, YT Music→SC→VK/Яндекс, только mp3)
 - **Осталось по плану:** B подписка 2.0 (баг ОП: [admin.py:231](app/handlers/admin.py:231) проверяет подписку админа вместо «бот — админ канала»; 2-й админ 7446911479; гейт в Mini App; Premium снимает ОП; статистика каналов для рекламы), C парсеры, D модерация+антидубли, E деньги (49₽+автосписание, урезать раздачу премиума, антинакрутка, статистика выручки, юр.доки; владелец — самозанятый), F поддержка (@suptgmusic_bot, токен в память сохранён), G надёжность (бэкап БД, PostgreSQL, 1млн, ускорение). Прод пока на **SQLite** (видно в логах alembic)
+
+## Checkpoint (2026-07-26) — SPEC-2.0: две ветки каталога + конкурсы
+
+Владелец дал 33 раздела требований → [SPEC-2.0.md](SPEC-2.0.md) (9 срезов, инварианты, риски).
+Решения владельца: PostgreSQL сейчас, первым срезом UI/UX+баги+скорость, иконки владелец
+генерирует по промтам, новые подсистемы — все.
+
+- **Две ветки пополнения каталога разделены** (приоритет владельца):
+  - массовая закачка 24/7 — **только SoundCloud**: `youtube scan-due` больше не дёргает
+    `youtube_scan_due` (YouTube-источники живы, но сканируются вручную `scan <id>`/`scan all`)
+  - **поиск по запросу — во всех источниках сразу**: [track_lookup/](app/services/track_lookup/) —
+    `ranking.py` (чистая логика: транслит кириллица↔латиница, опечатки, отсев клипов),
+    `providers.py` (SoundCloud `scsearch` + YouTube `ytsearch`, отказ одного источника не роняет
+    поиск), `importer.py` (`import_by_query` — загрузка из найденного источника, YouTube → mp3)
+  - общий хвост импорта вынесен в `user_import.import_downloaded_audio` — ветка по ссылке и
+    ветка по запросу больше не дублируют фильтры/минт/библиотеку
+- **Конкурсы (срез 0, дедлайн 9 августа)**: модели `contests` + `contest_participants`
+  (миграция `a367a749c438`), [contests.py](app/services/contests.py) — условия проверяются
+  на сервере, повторное участие невозможно, приглашённые пересчитываются на момент розыгрыша
+  (накрученные и «отвязавшиеся» в барабан не попадают), победитель — `secrets.choice`
+- ⏳ **Не доделано в срезе 0**: API-роутер, экран и баннер в Mini App, кнопка в боте,
+  рассылка, CLI розыгрыша. Текст поста владелец прислал — лежит в истории задачи
+- Тесты: **299 passed** (+17: конкурсы 7, поиск трека 13 при 3 переиспользованных)
 
 ## Checkpoint (2026-07-25) — ДОРАБОТКА ПО РЕФЕРЕНСАМ (папка проверка/): артисты, поиск, шит трека
 
