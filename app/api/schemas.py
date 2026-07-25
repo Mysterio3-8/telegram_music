@@ -234,6 +234,10 @@ class SearchFetchIn(BaseModel):
     query: str
 
 
+class AutorenewIn(BaseModel):
+    enabled: bool
+
+
 class SubChannelOut(BaseModel):
     id: int
     label: str

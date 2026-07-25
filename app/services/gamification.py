@@ -57,6 +57,16 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
+def _scaled_reward(base_days: int) -> int:
+    """Дни Premium за достижение с учётом урезающего множителя (блок E).
+    «Навсегда» не масштабируем; мелкие награды после урезки становятся 0."""
+    from app.config import settings
+
+    if base_days >= LIFETIME_DAYS:
+        return base_days
+    return int(base_days * settings.premium_reward_factor)
+
+
 # ---------- Рефералы и ранги ----------
 
 
@@ -89,8 +99,21 @@ def referral_rank(invited: int) -> RankProgress:
 
 
 async def count_referrals(session: AsyncSession, telegram_id: int) -> int:
+    """Антинакрутка (блок E): засчитываем только «живых» приглашённых — тех, кто
+    реально слушал музыку и не заблокировал бота. Фейк-аккаунты, которые сделали
+    /start ради накрутки и ушли, в счётчик наград не попадают. referred_by
+    write-once (register_referral) не даёт переприсвоить друзей второму аккаунту."""
+    listeners = (
+        select(TrackEvent.user_id).where(TrackEvent.event == "listen").distinct().subquery()
+    )
     count = await session.scalar(
-        select(func.count()).select_from(User).where(User.referred_by == telegram_id)
+        select(func.count())
+        .select_from(User)
+        .where(
+            User.referred_by == telegram_id,
+            User.bot_blocked.is_(False),
+            User.id.in_(select(listeners.c.user_id)),
+        )
     )
     return count or 0
 
@@ -131,7 +154,7 @@ async def grant_referral_milestones(session: AsyncSession, referrer: User) -> in
         threshold, days = REFERRAL_MILESTONES[referrer.referral_milestones_claimed]
         if invited < threshold:
             break
-        _extend_premium(referrer, days)
+        _extend_premium(referrer, _scaled_reward(days))
         referrer.referral_milestones_claimed += 1
         granted += 1
     if granted:
@@ -157,7 +180,7 @@ def next_referral_reward(invited: int) -> tuple[int, int]:
     (0, 0) — все пороги пройдены."""
     for threshold, days in REFERRAL_MILESTONES:
         if invited < threshold:
-            return threshold - invited, days
+            return threshold - invited, _scaled_reward(days)
     return 0, 0
 
 
@@ -338,7 +361,7 @@ def build_achievements(stats: UserStats) -> list[Achievement]:
                     unlocked=value >= threshold,
                     progress=min(value, threshold),
                     target=threshold,
-                    reward_days=reward_days,
+                    reward_days=_scaled_reward(reward_days),
                 )
             )
     # Особые вехи Premium

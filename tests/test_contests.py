@@ -1,6 +1,6 @@
 from datetime import timedelta
 
-from app.db.models import Contest, User
+from app.db.models import Contest, TrackEvent, User
 from app.services.contests import (
     active_contests,
     award_winner,
@@ -43,7 +43,11 @@ async def test_active_contests_skips_finished_and_drawn(session):
 async def test_join_requires_conditions_and_is_idempotent(session):
     contest = await _add_contest(session, required_channel="@tgramuzuka", required_referrals=1)
     user = await _add_user(session, 100)
-    session.add(User(telegram_id=200, referred_by=100))
+    invited = User(telegram_id=200, referred_by=100)
+    session.add(invited)
+    await session.commit()
+    # «живой» приглашённый (антинакрутка засчитывает только с прослушиванием)
+    session.add(TrackEvent(user_id=invited.id, track_id=1, event="listen"))
     await session.commit()
 
     not_subscribed = await check_eligibility(session, contest, user, channel_subscribed=False)
@@ -77,6 +81,12 @@ async def test_draw_excludes_participant_who_lost_referrals(session):
     invited = User(telegram_id=200, referred_by=100)
     unbound = User(telegram_id=400, referred_by=300)
     session.add_all([invited, unbound])
+    await session.commit()
+    # оба приглашённых «живые» на момент вступления
+    session.add_all([
+        TrackEvent(user_id=invited.id, track_id=1, event="listen"),
+        TrackEvent(user_id=unbound.id, track_id=1, event="listen"),
+    ])
     await session.commit()
 
     for user in (honest, cheater):

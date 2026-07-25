@@ -115,5 +115,10 @@ export function renderPremium(state) {
       ${isActive ? "Продлить" : "Оформить"} за ${effective} ₽
     </button>
     <p class="page-hint" style="text-align:center">Оплата картой, СБП или SberPay через ЮKassa. Подписка активируется сразу после оплаты.</p>
+    <p class="page-hint" style="text-align:center">
+      Оформляя, вы соглашаетесь с
+      <a href="#" data-action="open-doc" data-doc="offer">офертой</a> и автосписанием 49 ₽/мес.
+      Отключить автопродление можно в настройках.
+    </p>
   `;
 }

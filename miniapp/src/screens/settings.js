@@ -48,6 +48,7 @@ export function renderSettings(state) {
     <div class="rec-section-label">Документы</div>
     <div class="card card--rows">
       ${navRow("Политика конфиденциальности", "lock", "open-doc", ' data-doc="privacy"')}
+      ${navRow("Публичная оферта", "doc", "open-doc", ' data-doc="offer"')}
       ${navRow("Лицензионное соглашение", "doc", "open-doc", ' data-doc="license"')}
       ${navRow("О приложении", "sparkles", "open-doc", ' data-doc="about"')}
     </div>

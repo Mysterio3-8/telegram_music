@@ -26,6 +26,10 @@ class User(Base):
     bot_blocked: Mapped[bool] = mapped_column(default=False, server_default="0")
     # Пробный Premium выдаётся один раз на аккаунт
     trial_used: Mapped[bool] = mapped_column(default=False, server_default="0")
+    # Автопродление Premium (блок E): сохранённый способ оплаты ЮKassa + флаг.
+    # Пока pay_method_id пуст — списывать нечем; юзер может выключить autorenew.
+    autorenew: Mapped[bool] = mapped_column(default=True, server_default="1")
+    pay_method_id: Mapped[str | None] = mapped_column(String(64))
 
 
 class UserAchievement(Base):
@@ -211,6 +215,21 @@ class TrackEvent(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     track_id: Mapped[int] = mapped_column(ForeignKey("tracks.id"), index=True)
     event: Mapped[str] = mapped_column(String(16))  # listen | download
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
+class Payment(Base):
+    """Лог успешных платежей — сырьё для статистики выручки (блок E).
+    amount_rub — сумма в рублях (Stars пишем с 0, считаем отдельно по count)."""
+
+    __tablename__ = "payments"
+    __table_args__ = (Index("ix_payments_created", "created_at"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    amount_rub: Mapped[int] = mapped_column(default=0, server_default="0")
+    source: Mapped[str] = mapped_column(String(16))  # yookassa | card | stars | ton
+    charge_id: Mapped[str | None] = mapped_column(String(128))
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
 

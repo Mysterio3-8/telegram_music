@@ -18,6 +18,7 @@ from app.api.schemas import (
     ProfileOut,
     ProfileTopOut,
     RankOut,
+    AutorenewIn,
     ReferralOut,
     SearchFetchIn,
     SearchLogIn,
@@ -37,6 +38,7 @@ from app.services.gamification import (
     build_achievements,
     collect_user_stats,
     grant_achievement_rewards,
+    grant_referral_milestones,
     next_referral_reward,
     referral_leaderboard,
     referral_link,
@@ -193,6 +195,19 @@ async def fetch_from_web(
     except Exception as exc:  # noqa: BLE001 — брокер недоступен
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Поиск в сети недоступен") from exc
     return {"queued": True}
+
+
+@router.post("/premium/autorenew", status_code=status.HTTP_204_NO_CONTENT)
+async def set_autorenew(
+    payload: AutorenewIn,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+) -> None:
+    """Включить/выключить автопродление Premium (блок E: требование оферты —
+    пользователь может отключить в любой момент)."""
+    db_user = await session.get(User, user.id)
+    db_user.autorenew = payload.enabled
+    await session.commit()
 
 
 @router.get("/playlists", response_model=list[PlaylistSummaryOut])
@@ -525,7 +540,10 @@ async def profile(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> ProfileOut:
-    # Открытие профиля — момент, когда начисляем заработанные дни Premium
+    # Открытие профиля — момент, когда начисляем заработанные дни Premium.
+    # Реферальные вехи пересчитываем здесь же: «живые» приглашённые (антинакрутка,
+    # блок E) становятся активными со временем, и награда доначисляется на их фоне.
+    await grant_referral_milestones(session, user)
     fresh = await grant_achievement_rewards(session, user)
     stats = await collect_user_stats(session, user)
     achievements = build_achievements(stats)

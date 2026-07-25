@@ -18,6 +18,7 @@ from app.db.base import session_factory
 from app.handlers.common import ensure_user
 from app.keyboards.premium import premium_keyboard
 from app.services.premium import activate_premium, is_premium_active
+from app.services.revenue import record_payment
 from app.services.yookassa_payments import create_premium_payment, is_yookassa_configured
 
 router = Router()
@@ -166,6 +167,11 @@ async def cb_successful_payment(message: Message) -> None:
             session, user.id, payment_type, payment.telegram_payment_charge_id
         )
         until = updated.premium_until
+        # Лог выручки (блок E): карта в рублях (total_amount в копейках), Stars — 0 ₽
+        amount_rub = payment.total_amount // 100 if payment.currency != "XTR" else 0
+        await record_payment(
+            session, user.id, amount_rub, payment_type, payment.telegram_payment_charge_id
+        )
     logger.info(
         "Premium activated user=%s type=%s charge=%s",
         message.from_user.id,

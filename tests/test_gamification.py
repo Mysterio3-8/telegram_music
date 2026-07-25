@@ -40,6 +40,13 @@ async def _add_user(session, telegram_id: int) -> User:
     return user
 
 
+async def _activate(session, user: User) -> None:
+    """Делает приглашённого «живым» — с прослушиванием он засчитывается в рефералы
+    (антинакрутка, блок E)."""
+    session.add(TrackEvent(user_id=user.id, track_id=1, event="listen"))
+    await session.commit()
+
+
 async def test_register_referral_binds_and_ignores_invalid(session):
     referrer = await _add_user(session, 100)
     invitee = await _add_user(session, 200)
@@ -56,15 +63,19 @@ async def test_register_referral_binds_and_ignores_invalid(session):
     another = await _add_user(session, 400)
     assert await register_referral(session, another, 55555) is False
 
+    await _activate(session, invitee)  # «живой» приглашённый засчитывается
     assert await count_referrals(session, 100) == 1
 
 
 async def test_referral_milestones_grant_premium_idempotently(session):
     referrer = await _add_user(session, 1)
-    # приглашаем 3 пользователей — закрываются пороги 1, 2 и 3
+    # приглашаем 3 «живых» пользователей — закрываются пороги 1, 2 и 3
     for tid in (10, 11, 12):
         invitee = await _add_user(session, tid)
         await register_referral(session, invitee, 1)
+        await _activate(session, invitee)
+    # активными стали после регистрации → пересчитываем вехи (как на открытии профиля)
+    await grant_referral_milestones(session, referrer)
 
     assert referrer.referral_milestones_claimed == 3  # пороги 1, 2, 3
     assert is_premium_active(referrer)
@@ -82,9 +93,11 @@ async def test_referral_lifetime_milestone(session):
     referrer = User(telegram_id=1, referral_milestones_claimed=len(REFERRAL_MILESTONES) - 1)
     session.add(referrer)
     await session.commit()
-    session.add_all(
-        [User(telegram_id=10_000 + i, referred_by=1) for i in range(last_threshold)]
-    )
+    invitees = [User(telegram_id=10_000 + i, referred_by=1) for i in range(last_threshold)]
+    session.add_all(invitees)
+    await session.commit()
+    # все «живые» (антинакрутка засчитывает только с прослушиванием)
+    session.add_all([TrackEvent(user_id=u.id, track_id=1, event="listen") for u in invitees])
     await session.commit()
 
     await grant_referral_milestones(session, referrer)
@@ -140,9 +153,12 @@ async def test_collect_stats_and_achievements(session):
     assert by_code["streak_7"].progress == 3
 
 
-async def test_achievement_rewards_granted_once(session):
+async def test_achievement_rewards_granted_once(session, monkeypatch):
+    from app.config import settings
     from app.services.gamification import grant_achievement_rewards
 
+    # тест про идемпотентность начисления, а не про размер награды — фактор 1.0
+    monkeypatch.setattr(settings, "premium_reward_factor", 1.0)
     user = await _add_user(session, 1)
     track = Track(title="T", artist="A", duration=60)
     session.add(track)
@@ -193,8 +209,9 @@ async def test_referral_leaderboard_sorted(session):
 def test_next_referral_reward():
     from app.services.gamification import next_referral_reward
 
-    assert next_referral_reward(0) == (1, 7)
-    assert next_referral_reward(1) == (1, 7)  # до порога 2
+    # дни урезаны множителем premium_reward_factor (0.25): 7 → 1
+    assert next_referral_reward(0) == (1, 1)
+    assert next_referral_reward(1) == (1, 1)  # до порога 2
     assert next_referral_reward(9000) == (0, 0)
 
 

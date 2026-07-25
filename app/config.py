@@ -21,10 +21,16 @@ class Settings(BaseSettings):
 
     # Premium (SPEC §14)
     premium_price_stars: int = 15
-    premium_price_rub: int = 21
+    premium_price_rub: int = 49  # базовая цена месяца (владелец поднял с 21)
     premium_forever_price_rub: int = 10000  # тариф «навсегда»
     premium_duration_days: int = 30
     payment_provider_token: str = ""  # токен провайдера для карты/СБП; пусто → доступны только Stars
+    # Множитель бесплатных дней Premium за достижения (блок E: владелец урезал
+    # раздачу — премиум должен покупаться, а не капать). 0.25 = четверть прежнего.
+    premium_reward_factor: float = 0.25
+    # Автосписание Premium каждый месяц (рекуррент ЮKassa). Требует сохранённого
+    # способа оплаты и согласия пользователя при первом платеже.
+    premium_autorenew: bool = True
 
     # TON-оплата (крипта). Пусто → способ скрыт. Кошелёк владельца + опц. ключ toncenter.
     # Оплата: пользователь шлёт нужную сумму на адрес с уникальным комментарием (order id),

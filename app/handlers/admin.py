@@ -30,6 +30,7 @@ from app.services.required_channels import (
 )
 from app.services.subscription import is_bot_admin_of_channel
 from app.services.moderation import count_pending, pending_tracks, set_status
+from app.services.revenue import collect_revenue
 from app.services.library import get_track, update_track_meta
 from app.services.recommendations import VALID_MOODS
 from app.services.stats import ProjectStats, collect_stats
@@ -57,7 +58,7 @@ def _format_mb(size_bytes: int) -> str:
     return f"{size_bytes / (1024 * 1024):.1f} МБ"
 
 
-def _stats_text(stats: ProjectStats) -> str:
+def _stats_text(stats: ProjectStats, revenue=None) -> str:
     lines = [
         "📊 Статистика проекта",
         "",
@@ -69,6 +70,15 @@ def _stats_text(stats: ProjectStats) -> str:
         f"🎵 Треков в базе: {stats.tracks_total} — все доступны для прослушивания",
         f"📀 Из них с архивом на диске: {stats.archived_on_disk}",
     ]
+    if revenue is not None:
+        lines += [
+            "",
+            "💰 Выручка (₽):",
+            f"├ За день: {revenue.day}",
+            f"├ За неделю: {revenue.week}",
+            f"├ За месяц: {revenue.month}",
+            f"└ За всё время: {revenue.total} ({revenue.payments_total} платежей)",
+        ]
     if stats.reclaimable_count > 0:
         lines.append(
             f"   └ 🧹 можно освободить: {stats.reclaimable_count} "
@@ -89,8 +99,9 @@ async def cmd_admin(message: Message) -> None:
     async with session_factory() as session:
         stats = await collect_stats(session)
         pending = await count_pending(session)
+        revenue = await collect_revenue(session)
     await message.answer(
-        _stats_text(stats),
+        _stats_text(stats, revenue),
         reply_markup=admin_panel_keyboard(stats.reclaimable_count, stats.junk_count, pending),
     )
 
@@ -103,9 +114,10 @@ async def cb_admin_stats(callback: CallbackQuery) -> None:
     async with session_factory() as session:
         stats = await collect_stats(session)
         pending = await count_pending(session)
+        revenue = await collect_revenue(session)
     try:
         await callback.message.edit_text(
-            _stats_text(stats),
+            _stats_text(stats, revenue),
             reply_markup=admin_panel_keyboard(stats.reclaimable_count, stats.junk_count, pending),
         )
     except TelegramBadRequest:
