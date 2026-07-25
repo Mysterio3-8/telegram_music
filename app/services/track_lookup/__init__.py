@@ -22,10 +22,27 @@ from app.services.track_lookup.ranking import (
     to_latin,
 )
 
+# Порог уверенного совпадения понижен: владелец хочет выдачу даже по слабому
+# запросу. best_match вызываем с ним; ниже порога — фолбэк на топ (см. find_track).
+CONFIDENT_MATCH = 0.3
 
-def find_track(query: str, limit: int = 5) -> Candidate | None:
-    """Лучшее совпадение по запросу среди всех источников; None — не нашли."""
-    return best_match(query, collect_candidates(query, limit))
+
+def find_track(query: str, limit: int = 8) -> Candidate | None:
+    """Лучшее совпадение по запросу среди всех источников; None — не нашли.
+
+    Владелец: выдавать трек даже по слабому запросу (одно слово, только артист,
+    только альбом, одна буква). Поэтому если ни один кандидат не дотянул до
+    порога уверенного совпадения — отдаём топ по ранжированию (что-то релевантное
+    лучше, чем «не нашли»). None только когда источники не вернули ничего."""
+    candidates = collect_candidates(query, limit)
+    confident = best_match(query, candidates, min_score=CONFIDENT_MATCH)
+    if confident is not None:
+        return confident
+    ranked = rank_candidates(query, candidates)
+    if ranked:
+        return ranked[0]
+    # ранжирование отбросило всё (мусор/ноль) — берём первый непустой кандидат
+    return candidates[0] if candidates else None
 
 
 __all__ = [

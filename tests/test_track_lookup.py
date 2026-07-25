@@ -105,3 +105,15 @@ def test_find_track_returns_best_across_sources(monkeypatch):
 def test_find_track_returns_none_when_nothing_matches(monkeypatch):
     monkeypatch.setattr(providers, "PROVIDERS", ())
     assert find_track("кизару фейк айди") is None
+
+
+def test_find_track_weak_query_still_returns_something(monkeypatch):
+    # Владелец: даже по одному слову/букве выдавать трек. Уверенного совпадения нет,
+    # но источник что-то вернул → отдаём топ-кандидата, а не «не нашли».
+    def youtube(query, limit):
+        return [_candidate("Some Popular Song", artist="Some Artist", source="youtube")]
+
+    monkeypatch.setattr(providers, "PROVIDERS", (youtube,))
+    found = find_track("s")
+    assert found is not None
+    assert found.title == "Some Popular Song"

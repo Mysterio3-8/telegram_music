@@ -13,30 +13,31 @@ from aiogram import Bot
 
 from app.config import settings
 from app.db.base import session_factory
-from app.services.search_download import fetch_track_by_query, search_and_download
+from app.services.track_lookup import find_track
+from app.services.track_lookup.importer import import_by_query
+from app.services.youtube.user_import import UserImportRejected
 
 
 async def _dry(query: str) -> None:
-    found = search_and_download(query)
+    found = find_track(query)  # ранжирование: транслит/опечатки/по 1 слову
     if found is None:
         print(f"Не нашли: {query}")
         return
-    audio, uploader = found
-    print(f"Найдено: {audio.video_title} | uploader={uploader} | "
-          f"{audio.duration} сек | {audio.file_format} | {len(audio.data)} байт")
+    print(f"Найдено [{found.source}]: {found.title}"
+          f"{f' — {found.artist}' if found.artist else ''} | {found.url}")
 
 
 async def _fetch(query: str, telegram_id: int) -> None:
     bot = Bot(token=settings.bot_token)
     try:
         async with session_factory() as session:
-            result = await fetch_track_by_query(session, bot, query, telegram_id)
+            try:
+                track, created = await import_by_query(session, bot, query, telegram_id)
+            except UserImportRejected as exc:
+                print(f"Не удалось: {exc}")
+                return
     finally:
         await bot.session.close()
-    if result is None:
-        print(f"Не нашли или пользователь {telegram_id} не найден: {query}")
-        return
-    track, created = result
     print(f"{'Создан' if created else 'Уже был'}: {track.artist} — {track.title} (id={track.id})")
 
 

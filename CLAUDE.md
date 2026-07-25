@@ -128,9 +128,15 @@ $env:DATABASE_URL="sqlite+aiosqlite:///_tmp.db"; .\.venv\Scripts\python.exe -m a
 - Обогащение (отпечаток+архив) — асинхронно в воркере: сразу после загрузки трека `storage_path` ещё пуст, появляется через секунды. Если воркер лежит — трек работает по `tg_file_id`, отпечаток не считается
 - Windows-консоль: путь проекта с кириллицей, в PowerShell возможны артефакты кодировки в выводе — на работу не влияет
 
-## Checkpoint (2026-07-26) — БЛОКИ A, B, C ЗАДЕПЛОЕНЫ (299 тестов)
+## Checkpoint (2026-07-26) — БЛОКИ A–E ЗАДЕПЛОЕНЫ (310 тестов)
 
-Автономный прогон по большому плану A–G. **A, B, C — на проде.** Осталось: D, E, F, G.
+Автономный прогон по большому плану A–G. **A, B, C, D, E — на проде.** Осталось: F, G + усиление C (приоритет владельца).
+
+- **Блок E — деньги+антифрод (коммит `67d111a`):** Premium **49₽** (было 21), автопродление ЮKassa (save_payment_method → `User.pay_method_id`/`autorenew`, миграция `bdc78a272fb3`; `charge_due_subscriptions` + ежедневный `app.cli.autorenew` в таймере обслуживания; toggle `POST /premium/autorenew`; ⚠️ **живой рекуррент владелец должен проверить реальной картой** — деньги, тестом не покрыто). Урезка премиума: `premium_reward_factor=0.25` ([gamification.py](app/services/gamification.py) `_scaled_reward`). Антинакрутка: `count_referrals` считает только «живых» (есть listen, не bot_blocked), `referred_by` write-once, пересчёт вех на профиле. Выручка: `Payment`-лог (миграция `cd600706b345`), `collect_revenue` в админке. Оферта+согласие ([docs.js](miniapp/src/screens/docs.js), самозанятый, 49₽/мес автосписание)
+- **Приоритет владельца (повторил трижды):** поисковый парсер должен работать по ЛЮБОМУ написанию (транслит/русский/вперемешку/др.язык, даже по 1 букве, артист/альбом/название) и выдавать треки; массовый — автодискавери артистов на SoundCloud 24/7 к 1М треков/10к артистов (топ→андеграунд). `track_lookup/ranking.py` (to_latin/match_score) есть, но НЕ в пути скачивания `search_download.py` — усилить
+
+- **Блок D — модерация + антидубли (коммит `1a336e4`):** мягкий антидубль при загрузке файла (предупреждение на подтверждении, можно поменять название на вариант или залить как есть — [upload.py](app/handlers/upload.py)); автомодерация по стоп-словам ([moderation.py](app/services/moderation.py): терроризм/экстремизм/насилие → `Track.moderation_status=pending`, миграция `4f77633f0bf0`), pending скрыт из поиска ([search.py](app/services/search.py)) и микса ([recommendations.py](app/services/recommendations.py)), одобрение/отклонение в админке «🛡 Модерация», автор уведомлён при загрузке
+
 
 - **Блок B — подписка 2.0 (коммит `653b89e`):** фикс бага ОП ([subscription.py](app/services/subscription.py) `is_bot_admin_of_channel` — при добавлении канала проверяем, что БОТ админ, а не подписку владельца-админа); Premium снимает ОП (`is_fully_subscribed` + гейт в Mini App: [subgate.js](miniapp/src/screens/subgate.js), `GET /subscription/status`, «Я подписался» force-recheck, «Убрать подписки — Premium»); статистика каналов для рекламы (`channel_ad_stats`: подписчики=охват + клики; `click_count` миграция `fba9cf9d09e3`; `POST /subscription/click`; видно в админке). Второй админ 7446911479 добавлен в ADMIN_IDS на VPS.
 - **Блок C — парсеры (коммиты `26b69e1` + наследие):** ⚠️ рабочее дерево пришло с готовой работой ПРОШЛОЙ сессии (search_download.py, track_lookup/, tasks/search_fetch.py, cli/search_fetch.py, конкурсы). Свой дубликат track_finder.py/tasks/search.py удалил, взял готовую реализацию.

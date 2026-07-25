@@ -34,17 +34,18 @@ async def _with_session(coro):
 def search_fetch(self, query: str, telegram_id: int, chat_id: int, quiet: bool = False) -> None:
     """Ищет трек по запросу отовсюду, минтит и присылает в чат. quiet — без
     сообщения о неудаче (например, авто-дозагрузка по промаху поиска в Mini App)."""
-    from app.services.search_download import fetch_track_by_query
+    from app.services.track_lookup.importer import import_by_query
+    from app.services.youtube.user_import import UserImportRejected
 
     async def _run(session):
         bot = Bot(token=settings.bot_token)
         try:
-            result = await fetch_track_by_query(session, bot, query, telegram_id)
-            if result is None:
+            try:
+                track, _ = await import_by_query(session, bot, query, telegram_id)
+            except UserImportRejected:
                 if not quiet:
                     await bot.send_message(chat_id, f"❌ Не нашли «{query}». Попробуйте иначе.")
                 return
-            track, _ = result
             if quiet:
                 return
             if track.tg_file_id:

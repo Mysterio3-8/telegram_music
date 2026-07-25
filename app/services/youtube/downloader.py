@@ -187,7 +187,9 @@ def search_first_video(query: str) -> VideoEntry | None:
     return entries[0] if entries else None
 
 
-def download_audio(video_id: str) -> DownloadedAudio | None:
+def download_audio(video_id: str, as_mp3: bool = False) -> DownloadedAudio | None:
+    """as_mp3=True — гарантированно mp3 (перекодирование ffmpeg): поисковый парсер
+    отдаёт пользователю mp3. Массовая закачка зовёт без флага (bestaudio)."""
     with tempfile.TemporaryDirectory() as tmp:
         opts = {
             **_base_opts(),
@@ -196,6 +198,10 @@ def download_audio(video_id: str) -> DownloadedAudio | None:
             "noplaylist": True,
             "retries": settings.youtube_max_retries,
         }
+        if as_mp3:
+            opts["postprocessors"] = [
+                {"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "192"}
+            ]
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(
                 f"https://www.youtube.com/watch?v={video_id}", download=True
