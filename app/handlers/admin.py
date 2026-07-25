@@ -29,6 +29,7 @@ from app.services.required_channels import (
     remove_required_channel,
 )
 from app.services.subscription import is_bot_admin_of_channel
+from app.services.moderation import count_pending, pending_tracks, set_status
 from app.services.library import get_track, update_track_meta
 from app.services.recommendations import VALID_MOODS
 from app.services.stats import ProjectStats, collect_stats
@@ -87,8 +88,10 @@ async def cmd_admin(message: Message) -> None:
         return  # для остальных команда невидима
     async with session_factory() as session:
         stats = await collect_stats(session)
+        pending = await count_pending(session)
     await message.answer(
-        _stats_text(stats), reply_markup=admin_panel_keyboard(stats.reclaimable_count, stats.junk_count)
+        _stats_text(stats),
+        reply_markup=admin_panel_keyboard(stats.reclaimable_count, stats.junk_count, pending),
     )
 
 
@@ -99,13 +102,80 @@ async def cb_admin_stats(callback: CallbackQuery) -> None:
         return
     async with session_factory() as session:
         stats = await collect_stats(session)
+        pending = await count_pending(session)
     try:
         await callback.message.edit_text(
-            _stats_text(stats), reply_markup=admin_panel_keyboard(stats.reclaimable_count, stats.junk_count)
+            _stats_text(stats),
+            reply_markup=admin_panel_keyboard(stats.reclaimable_count, stats.junk_count, pending),
         )
     except TelegramBadRequest:
         pass  # цифры не изменились
     await callback.answer("Обновлено")
+
+
+# --- Модерация загруженных треков (блок D) ---
+
+
+def _moderation_keyboard(tracks):
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+    rows = []
+    for t in tracks:
+        rows.append([InlineKeyboardButton(text=f"🎵 {t.artist} — {t.title}", callback_data="noop")])
+        rows.append(
+            [
+                InlineKeyboardButton(text="✅ Одобрить", callback_data=f"adm:mod:ok:{t.id}"),
+                InlineKeyboardButton(text="🚫 Отклонить", callback_data=f"adm:mod:no:{t.id}"),
+            ]
+        )
+    rows.append([InlineKeyboardButton(text="◀️ В админку", callback_data="adm:stats")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+async def _show_moderation(message) -> None:
+    async with session_factory() as session:
+        tracks = await pending_tracks(session)
+    if not tracks:
+        await message.edit_text("🛡 Очередь модерации пуста.", reply_markup=admin_panel_keyboard())
+        return
+    await message.edit_text(
+        "🛡 На проверке (стоп-слова в названии). Одобрите — попадёт в общий каталог, "
+        "отклоните — останется скрытым:",
+        reply_markup=_moderation_keyboard(tracks),
+    )
+
+
+@router.callback_query(F.data == "adm:mod")
+async def cb_moderation(callback: CallbackQuery) -> None:
+    if not is_admin(callback.from_user.id):
+        await callback.answer("Недоступно", show_alert=True)
+        return
+    await _show_moderation(callback.message)
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("adm:mod:ok:"))
+async def cb_moderation_approve(callback: CallbackQuery) -> None:
+    if not is_admin(callback.from_user.id):
+        await callback.answer("Недоступно", show_alert=True)
+        return
+    track_id = int(callback.data.rsplit(":", 1)[1])
+    async with session_factory() as session:
+        await set_status(session, track_id, "approved")
+    await _show_moderation(callback.message)
+    await callback.answer("Одобрено")
+
+
+@router.callback_query(F.data.startswith("adm:mod:no:"))
+async def cb_moderation_reject(callback: CallbackQuery) -> None:
+    if not is_admin(callback.from_user.id):
+        await callback.answer("Недоступно", show_alert=True)
+        return
+    track_id = int(callback.data.rsplit(":", 1)[1])
+    async with session_factory() as session:
+        await set_status(session, track_id, "rejected")
+    await _show_moderation(callback.message)
+    await callback.answer("Отклонено")
 
 
 # --- Очистка архивных копий с диска (уже надёжно доступны через tg_file_id) ---

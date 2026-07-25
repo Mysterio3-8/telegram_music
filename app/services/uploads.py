@@ -87,6 +87,9 @@ async def find_by_fingerprint(session: AsyncSession, fingerprint: str) -> Track 
     return await session.scalar(stmt)
 
 
+from app.services.moderation import initial_status
+
+
 async def create_uploaded_track(
     session: AsyncSession, user_id: int, meta: AudioMeta, title: str, artist: str
 ) -> Track:
@@ -102,6 +105,7 @@ async def create_uploaded_track(
         file_size=meta.file_size,
         format=detect_format(meta.file_name, meta.mime_type),
         tg_file_id=meta.file_id,
+        moderation_status=initial_status(title, artist),
     )
     session.add(track)
     await session.flush()

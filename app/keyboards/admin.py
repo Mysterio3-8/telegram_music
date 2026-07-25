@@ -1,8 +1,19 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 
-def admin_panel_keyboard(reclaimable_count: int = 0, junk_count: int = 0) -> InlineKeyboardMarkup:
+def admin_panel_keyboard(
+    reclaimable_count: int = 0, junk_count: int = 0, pending_count: int = 0
+) -> InlineKeyboardMarkup:
     rows = [[InlineKeyboardButton(text="🔄 Обновить", callback_data="adm:stats")]]
+    if pending_count > 0:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=f"🛡 Модерация ({pending_count})",
+                    callback_data="adm:mod",
+                )
+            ]
+        )
     if reclaimable_count > 0:
         rows.append(
             [

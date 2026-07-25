@@ -67,6 +67,12 @@ class Track(Base):
     # старые треки добиваются backfill-ом (python -m app.cli.artists bind-tracks);
     # NULL — артиста-сущности нет, строка tracks.artist остаётся источником правды
     artist_id: Mapped[int | None] = mapped_column(ForeignKey("artists.id"), index=True)
+    # Модерация (блок D): approved (по умолчанию) — виден везде; pending — загружен
+    # юзером со стоп-словом, ждёт одобрения админа, скрыт из поиска/микса/алгоритма;
+    # rejected — отклонён админом, скрыт навсегда. Парсер/админ-импорт — сразу approved.
+    moderation_status: Mapped[str] = mapped_column(
+        String(16), default="approved", server_default="approved", index=True
+    )
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
 

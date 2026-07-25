@@ -122,7 +122,9 @@ async def _by_artists(
 ) -> list[Track]:
     if not artist_ids:
         return []
-    stmt = select(Track).where(Track.artist_id.in_(artist_ids))
+    stmt = select(Track).where(
+        Track.artist_id.in_(artist_ids), Track.moderation_status == "approved"
+    )
     if exclude_ids:
         stmt = stmt.where(Track.id.not_in(exclude_ids))
     stmt = stmt.order_by(func.random()).limit(limit)
@@ -139,7 +141,9 @@ async def _by_genres(
     if not genre_ids:
         return []
     artists_in_genres = select(ArtistGenre.artist_id).where(ArtistGenre.genre_id.in_(genre_ids))
-    stmt = select(Track).where(Track.artist_id.in_(artists_in_genres))
+    stmt = select(Track).where(
+        Track.artist_id.in_(artists_in_genres), Track.moderation_status == "approved"
+    )
     if exclude_artist_ids:
         stmt = stmt.where(Track.artist_id.not_in(exclude_artist_ids))
     if exclude_ids:
@@ -149,7 +153,7 @@ async def _by_genres(
 
 
 async def _discovery(session: AsyncSession, exclude_ids: set[int], limit: int) -> list[Track]:
-    stmt = select(Track)
+    stmt = select(Track).where(Track.moderation_status == "approved")
     if exclude_ids:
         stmt = stmt.where(Track.id.not_in(exclude_ids))
     stmt = stmt.order_by(func.random()).limit(limit)
@@ -158,7 +162,7 @@ async def _discovery(session: AsyncSession, exclude_ids: set[int], limit: int) -
 
 async def _fresh(session: AsyncSession, exclude_ids: set[int], limit: int) -> list[Track]:
     """Новичку без вкуса — свежие треки каталога вперемешку."""
-    stmt = select(Track)
+    stmt = select(Track).where(Track.moderation_status == "approved")
     if exclude_ids:
         stmt = stmt.where(Track.id.not_in(exclude_ids))
     stmt = stmt.order_by(Track.created_at.desc()).limit(limit)

@@ -10,7 +10,7 @@ from app.handlers.common import ensure_user, format_duration
 from app.config import settings
 from app.services.premium import is_premium_active
 from app.services.soundcloud import is_soundcloud_link, normalize_soundcloud_url, soundcloud_link_kind
-from app.services.uploads import AudioMeta, create_uploaded_track, validate_audio
+from app.services.uploads import AudioMeta, create_uploaded_track, find_duplicate, validate_audio
 from app.services.youtube.user_import import duration_error, extract_video_id, is_playlist_link
 from app.tasks import enqueue_enrich, enqueue_soundcloud_user_import, enqueue_user_import
 
@@ -290,11 +290,26 @@ async def process_artist(message: Message, state: FSMContext) -> None:
     await state.update_data(artist=artist)
     await state.set_state(UploadTrack.waiting_confirm)
     data = await state.get_data()
+
+    # Мягкий антидубль (решение владельца): предупреждаем, но не блокируем — можно
+    # залить вариант, поменяв название («Rex», «без цензуры»). Регистр учитывается
+    # текстом: одинаковое название по буквам считаем совпадением, разное — новый трек.
+    async with session_factory() as session:
+        existing = await find_duplicate(session, data["title"], artist, data["duration"])
+    warning = ""
+    if existing is not None:
+        warning = (
+            f"\n\n⚠️ В базе уже есть «{existing.artist} — {existing.title}».\n"
+            "Если это другой трек — вернитесь и поменяйте название "
+            "(например, добавьте «(Rex)»). Иначе просто подтвердите."
+        )
+
     await message.answer(
         "Проверьте данные:\n\n"
         f"Название: {data['title']}\n"
         f"Исполнитель: {artist}\n"
-        f"Длительность: {format_duration(data['duration'])}",
+        f"Длительность: {format_duration(data['duration'])}"
+        f"{warning}",
         reply_markup=_confirm_keyboard(),
     )
 
@@ -316,10 +331,16 @@ async def cb_upload_confirm(callback: CallbackQuery, state: FSMContext) -> None:
         track = await create_uploaded_track(session, user.id, meta, data["title"], data["artist"])
     enqueue_enrich(track.id, meta.file_id)
     await state.clear()
-    await callback.message.edit_text(
-        f"✅ Трек «{track.artist} — {track.title}» добавлен в общую базу и вашу библиотеку.",
-        reply_markup=_menu_keyboard(),
-    )
+    if track.moderation_status == "pending":
+        # Стоп-слово в названии — трек в вашей библиотеке, но в общий каталог
+        # попадёт после проверки модератором (блок D)
+        text = (
+            f"⏳ Трек «{track.artist} — {track.title}» добавлен в вашу библиотеку "
+            "и отправлен на проверку — в общем каталоге появится после одобрения."
+        )
+    else:
+        text = f"✅ Трек «{track.artist} — {track.title}» добавлен в общую базу и вашу библиотеку."
+    await callback.message.edit_text(text, reply_markup=_menu_keyboard())
     await callback.answer()
 
 

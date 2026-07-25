@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -9,7 +9,11 @@ from app.db.models import Artist, Instrumental, Playlist, Track
 
 def _track_filter(query: str):
     pattern = f"%{query.strip()}%"
-    return or_(Track.title.ilike(pattern), Track.artist.ilike(pattern))
+    # Немодерированные (pending/rejected) не показываем в поиске (блок D)
+    return and_(
+        or_(Track.title.ilike(pattern), Track.artist.ilike(pattern)),
+        Track.moderation_status == "approved",
+    )
 
 
 async def search_tracks(
