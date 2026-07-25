@@ -45,7 +45,7 @@ export function renderPlayerScreen(state) {
           <span class="player-topbar__spacer"></span>
         </div>
 
-        ${renderCover(currentTrack, "player-art")}
+        ${renderCover(currentTrack, "player-art", true)}
 
         <div class="player-meta">
           <div class="player-meta__text">

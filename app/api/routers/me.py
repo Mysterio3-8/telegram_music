@@ -165,7 +165,13 @@ async def personalized_mix(
             )
             for item in items
         ]
-    tracks = await build_mix(session, mood=mood, recognizability=recognizability, language=language)
+    tracks = await build_mix(
+        session,
+        user_id=user.id,
+        mood=mood,
+        recognizability=recognizability,
+        language=language,
+    )
     return [track_out(t) for t in tracks]
 
 

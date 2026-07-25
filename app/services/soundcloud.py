@@ -26,6 +26,16 @@ _SOUNDCLOUD_RE = re.compile(r"(?:https?://)?(?:www\.|m\.|on\.)?soundcloud\.com/\
 # чтобы «скачать лайки» качало именно лайки, а не треки профиля.
 _BROKEN_TABS = {"popular-tracks", "top-tracks"}
 
+# yt-dlp часто отдаёт превью SoundCloud в размере -large (100×100) — на пол-экрана
+# в плеере это мыло. Апскейлим к t500x500 (тот же CDN, просто другой суффикс).
+_SC_ARTWORK_SIZE_RE = re.compile(r"-(?:large|t\d+x\d+|small|tiny|badge|mini)(\.\w+)$")
+
+
+def upscale_soundcloud_artwork(url: str) -> str:
+    if not url or "sndcdn.com" not in url:
+        return url
+    return _SC_ARTWORK_SIZE_RE.sub(r"-t500x500\1", url)
+
 
 @dataclass(frozen=True)
 class SoundcloudEntry:
@@ -196,7 +206,7 @@ def _download_soundcloud_once(url: str) -> tuple[DownloadedAudio, str] | None:
             file_format=file_format,
             duration=int(info.get("duration") or 0),
             video_title=info.get("title") or url,
-            thumbnail_url=str(info.get("thumbnail") or ""),
+            thumbnail_url=upscale_soundcloud_artwork(str(info.get("thumbnail") or "")),
             album=str(info.get("album") or "").strip(),
         )
         return audio, (info.get("uploader") or "").strip()

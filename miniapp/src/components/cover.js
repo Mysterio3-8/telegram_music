@@ -29,13 +29,21 @@ export function coverStyle(track) {
   ].join(", ");
 }
 
-export function renderCover(track, className = "track-cover") {
+// withBlur — для крупных обложек (плеер): показываем всю обложку целиком
+// (object-fit: contain), а пустоты по бокам у неквадратных источников (YouTube
+// 16:9) закрываем размытой копией той же картинки. В списках это не нужно —
+// там 46px и лишний размытый слой только грузит рендер.
+export function renderCover(track, className = "track-cover", withBlur = false) {
   if (track.cover_url) {
-    // Настоящая обложка; при ошибке загрузки картинка скрывается — остаётся градиент
+    const src = escapeAttr(track.cover_url);
+    // При ошибке загрузки убираем обе картинки — остаётся градиентная заглушка
+    const blur = withBlur
+      ? `<img class="cover-blur" src="${src}" alt="" aria-hidden="true" loading="lazy" onerror="this.remove()" />`
+      : "";
     return `
-      <div class="${className} cover-art" style="background:${coverStyle(track)}">
-        <img class="cover-img" src="${escapeAttr(track.cover_url)}" alt="" loading="lazy"
-          onerror="this.remove()" />
+      <div class="${className} cover-art${withBlur ? " cover-art--fit" : ""}" style="background:${coverStyle(track)}">
+        ${blur}
+        <img class="cover-img" src="${src}" alt="" loading="lazy" onerror="this.remove()" />
       </div>
     `;
   }
