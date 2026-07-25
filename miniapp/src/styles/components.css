@@ -754,6 +754,19 @@
   background: var(--progress-track);
   position: relative;
   cursor: pointer;
+  /* Жест перемотки не должен превращаться в скролл страницы */
+  touch-action: none;
+}
+
+/* Невидимая зона касания 34px поверх тонкой полоски — палец попадает легко */
+.progress-track::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 34px;
+  transform: translateY(-50%);
 }
 
 .progress-track__fill {
@@ -774,6 +787,13 @@
   box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.16);
   transform: translate(-50%, -50%);
   left: 0%;
+  transition: width 0.12s, height 0.12s;
+}
+
+/* Кружок вырастает, пока палец ведёт перемотку */
+.progress-track.is-seeking .progress-track__thumb {
+  width: 18px;
+  height: 18px;
 }
 
 .progress-times {
@@ -1130,6 +1150,21 @@
 
 .hero-slide:active {
   filter: brightness(0.96);
+}
+
+/* Фон под TG Микс (первый слайд): фото владельца + затемняющий слой сверху,
+   чтобы белый заголовок/кнопка Play читались на любой картинке.
+   Файла нет → остаётся исходный градиент, ничего не ломается. */
+.hero-slide:first-child {
+  background-image: linear-gradient(180deg, rgba(8, 10, 20, 0.35) 0%, rgba(8, 10, 20, 0.68) 100%),
+    url("/assets/mix-bg.jpg");
+  background-size: cover;
+  background-position: center;
+}
+
+/* Белые штрихи-эквалайзер поверх фото приглушаем, иначе спорят с картинкой */
+.hero-slide:first-child::before {
+  opacity: 0.22;
 }
 
 .hero-slide__play {
@@ -3441,6 +3476,23 @@
   object-fit: cover;
 }
 
+/* Крупная обложка (плеер): всю картинку целиком, без обрезки */
+.cover-art--fit .cover-img {
+  object-fit: contain;
+}
+
+/* Размытая копия закрывает пустоты по бокам неквадратной обложки */
+.cover-blur {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scale(1.3);
+  filter: blur(22px) saturate(1.3);
+  opacity: 0.55;
+}
+
 /* Карточка артиста (SPEC-КАТАЛОГ §2): баннер-hero, аватар, жанры, альбомы */
 .artist-hero {
   display: flex;
@@ -3538,4 +3590,101 @@
 .artist-album__count {
   font-size: 11.5px;
   color: var(--text-muted);
+}
+
+/* Карточка артиста: подписка, последний релиз, синглы, похожие */
+.artist-hero__follow {
+  margin-top: 4px;
+}
+
+.btn--outline {
+  background: transparent;
+  border: 1.5px solid var(--accent, #3b7bfe);
+  color: var(--accent, #3b7bfe);
+}
+
+.latest-release {
+  margin: 4px 0 14px;
+}
+
+.latest-release__label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--accent, #3b7bfe);
+  margin-bottom: 8px;
+}
+
+.latest-release__body {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border-radius: 12px;
+  background: var(--surface, #202022);
+  cursor: pointer;
+}
+
+.latest-release__info {
+  flex: 1;
+  min-width: 0;
+}
+
+.latest-release__play {
+  flex: 0 0 auto;
+}
+
+.similar-artists {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+}
+
+.similar-artist {
+  flex: 0 0 88px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  cursor: pointer;
+}
+
+.similar-artist__avatar {
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.similar-artist__avatar--letter {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  font-weight: 800;
+  background: linear-gradient(135deg, #2e55f2, #4a7bfb);
+  color: #fff;
+}
+
+.similar-artist__name {
+  font-size: 12px;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 84px;
+}
+
+.artist-row__avatar-img {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex: 0 0 auto;
 }

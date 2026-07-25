@@ -11,6 +11,11 @@ import {
   getArtistTracks,
   getGenres,
   getGenreTracks,
+  followArtist,
+  unfollowArtist,
+  getMyArtists,
+  addTrackToPlaylist,
+  searchAll,
   getInstrumentals,
   getLyrics,
   getPlaylists,
@@ -45,6 +50,8 @@ import {
   playPrev,
   playTrack,
   playTrackMix,
+  addToQueue,
+  playNextInQueue,
   resetToTab,
   seekToFraction,
   setSleepTimer,
@@ -60,6 +67,7 @@ import { renderBottomNav } from "./components/bottomNav.js";
 import { renderMiniPlayer } from "./components/miniPlayer.js";
 import { renderPlayerScreen } from "./components/playerScreen.js";
 import { renderTrackSheet } from "./components/trackSheet.js";
+import { renderPlaylistPicker } from "./components/playlistPicker.js";
 import { icon } from "./components/icons.js";
 import { renderHome } from "./screens/home.js";
 import { renderSearch, renderSearchResults } from "./screens/search.js";
@@ -71,6 +79,7 @@ import { renderRecommendations } from "./screens/recommendations.js";
 import { renderRecent } from "./screens/recent.js";
 import { renderArtists } from "./screens/artists.js";
 import { renderArtistCard } from "./screens/artistcard.js";
+import { renderMyArtists } from "./screens/myartists.js";
 import { renderDocs } from "./screens/docs.js";
 import { renderAchievements } from "./screens/achievements.js";
 import { renderLyrics } from "./screens/lyrics.js";
@@ -159,6 +168,7 @@ const SCREENS = {
   recent: renderRecent,
   artists: renderArtists,
   artist: renderArtistCard,
+  myartists: renderMyArtists,
   docs: renderDocs,
   achievements: renderAchievements,
   lyrics: renderLyrics,
@@ -242,6 +252,7 @@ function render() {
     </div>
     ${renderPlayerScreen(state)}
     ${renderTrackSheet(state)}
+    ${renderPlaylistPicker(state)}
     ${state.toast ? `<div class="toast">${state.toast}</div>` : ""}
   `;
 
@@ -260,9 +271,13 @@ function render() {
 
 subscribe(scheduleRender);
 
+// Пока палец ведёт перемотку — прогресс из аудио игнорируем, иначе бегунок
+// дёргается назад под пальцем.
+let isSeeking = false;
+
 // Прогресс — мимо полного рендера: правим только стили/текст существующих узлов.
 subscribeProgress((current, duration) => {
-  if (!duration) return;
+  if (!duration || isSeeking) return;
   const fraction = Math.min(1, current / duration);
   const fill = document.getElementById("player-progress-fill");
   const thumb = document.getElementById("player-progress-thumb");
@@ -458,6 +473,39 @@ async function loadArtistCard(name) {
   }
 }
 
+async function loadMyArtists() {
+  navigateTo("myartists", { myArtistsStatus: "loading" });
+  try {
+    mutate({ myArtists: await getMyArtists(), myArtistsStatus: "ready" });
+  } catch {
+    mutate({ myArtists: [], myArtistsStatus: "ready" });
+  }
+}
+
+// Подписка на артиста из карточки: оптимистично меняем флаг, шлём запрос
+async function toggleFollowArtist(artistId) {
+  const card = getState().artistCard;
+  if (!card) return;
+  const next = !card.following;
+  mutate({ artistCard: { ...card, following: next } });
+  try {
+    await (next ? followArtist(artistId) : unfollowArtist(artistId));
+    showToast(next ? "Вы подписались на артиста" : "Вы отписались");
+  } catch {
+    mutate({ artistCard: { ...getState().artistCard, following: !next } });
+    showToast("Не удалось изменить подписку");
+  }
+}
+
+async function unfollowArtistAction(artistId) {
+  try {
+    await unfollowArtist(artistId);
+    mutate({ myArtists: getState().myArtists.filter((a) => a.id !== artistId) });
+  } catch {
+    showToast("Не удалось отписаться");
+  }
+}
+
 async function loadArtists() {
   navigateTo("artists", { artistsStatus: "loading" });
   try {
@@ -496,13 +544,27 @@ function scheduleSearch(query) {
   mutateSearch({ searchStatus: "loading" });
   searchTimer = setTimeout(async () => {
     try {
-      const fetcher = getState().searchMode === "instrumentals" ? getInstrumentals : getTracks;
-      const page = await fetcher(query.trim(), 1, 50);
+      // Треки — секционная выдача (Артисты/Альбомы/Плейлисты/Треки), минусы — плоский список
+      if (getState().searchMode === "instrumentals") {
+        const page = await getInstrumentals(query.trim(), 1, 50);
+        if (seq !== searchSeq) return;
+        mutateSearch({
+          searchResults: page.items, searchTotal: page.total,
+          searchSections: null, searchStatus: "done",
+        });
+        return;
+      }
+      const sections = await searchAll(query.trim());
       if (seq !== searchSeq) return; // пришёл более свежий запрос
-      mutateSearch({ searchResults: page.items, searchTotal: page.total, searchStatus: "done" });
+      mutateSearch({
+        searchSections: sections,
+        searchResults: sections.tracks,
+        searchTotal: sections.tracks.length,
+        searchStatus: "done",
+      });
     } catch {
       if (seq !== searchSeq) return;
-      mutateSearch({ searchResults: [], searchTotal: 0, searchStatus: "done" });
+      mutateSearch({ searchResults: [], searchSections: null, searchTotal: 0, searchStatus: "done" });
     }
   }, 300);
 }
@@ -724,8 +786,18 @@ function findTrack(trackId) {
     offlineTracks().find((t) => t.id === trackId) ||
     (state.collectionTracks || []).find((t) => t.id === trackId) ||
     ((state.profileTop && state.profileTop.tracks) || []).find((t) => t.id === trackId) ||
+    (state.artistCard ? artistCardTracks(state.artistCard).find((t) => t.id === trackId) : null) ||
     (state.currentTrack && state.currentTrack.id === trackId ? state.currentTrack : null)
   );
+}
+
+// Все треки, отрисованные на карточке артиста (топ + синглы + последний релиз)
+function artistCardTracks(card) {
+  return [
+    ...(card.top_tracks || []),
+    ...(card.singles || []),
+    ...(card.latest_release ? [card.latest_release] : []),
+  ];
 }
 
 function toggleOffline(trackId) {
@@ -756,6 +828,20 @@ function openLyrics(trackId) {
     lyricsEditing: false,
   });
   loadLyrics(track);
+}
+
+// «Создать новый плейлист» прямо из шита выбора: создаём и сразу кладём трек
+function openCreatePlaylistForPicker() {
+  const trackId = getState().playlistPickerTrack;
+  const title = (window.prompt("Название плейлиста") || "").trim();
+  if (!title) return;
+  createPlaylist(title)
+    .then(async (playlist) => {
+      await addTrackToPlaylist(playlist.id, trackId);
+      mutate({ playlistPickerTrack: null, playlists: await getPlaylists() });
+      showToast("Плейлист создан, трек добавлен");
+    })
+    .catch(() => showToast("Не удалось создать плейлист"));
 }
 
 function submitCreatePlaylist() {
@@ -904,6 +990,28 @@ root.addEventListener("click", (event) => {
         .catch(() => showToast("Не удалось загрузить треки"));
       break;
     }
+    case "artist-play-similar": {
+      // «Слушать похожее»: очередь = свои треки артиста + общий микс (микс по артисту)
+      const name = el.dataset.artist;
+      Promise.all([getArtistTracks(name), getMix({})])
+        .then(([own, mix]) => {
+          const seen = new Set();
+          const pool = [...own, ...mix].filter((t) => !seen.has(t.id) && seen.add(t.id));
+          playMix(pool, "Пока нечего рекомендовать");
+        })
+        .catch(() => showToast("Не удалось собрать микс"));
+      break;
+    }
+    case "toggle-follow":
+      toggleFollowArtist(id);
+      break;
+    case "open-my-artists":
+      loadMyArtists();
+      break;
+    case "unfollow-artist":
+      event.stopPropagation();
+      unfollowArtistAction(id);
+      break;
     case "open-genre":
       openCollection(el.dataset.name, "genre", () =>
         getGenreTracks(el.dataset.slug).then((page) => page.items)
@@ -979,6 +1087,45 @@ root.addEventListener("click", (event) => {
       if (track) playTrackMix(track);
       break;
     }
+    case "queue-add": {
+      const track = findTrack(id);
+      if (track) addToQueue(track);
+      closeSheet();
+      break;
+    }
+    case "queue-next": {
+      const track = findTrack(id);
+      if (track) playNextInQueue(track);
+      closeSheet();
+      break;
+    }
+    case "sheet-open-artist": {
+      const artist = el.dataset.artist;
+      closeSheet();
+      if (artist) loadArtistCard(artist);
+      break;
+    }
+    case "add-to-playlist":
+      // шит выбора плейлиста (плейлисты грузим, если ещё не загружены)
+      mutate({ playlistPickerTrack: id, sheetTrack: null });
+      if (!getState().playlists.length) {
+        getPlaylists().then((pl) => mutate({ playlists: pl })).catch(() => {});
+      }
+      break;
+    case "close-playlist-picker":
+      mutate({ playlistPickerTrack: null });
+      break;
+    case "picker-add": {
+      const trackId = getState().playlistPickerTrack;
+      addTrackToPlaylist(Number(el.dataset.playlist), trackId)
+        .then(() => showToast("Добавлено в плейлист"))
+        .catch(() => showToast("Не удалось добавить"));
+      mutate({ playlistPickerTrack: null });
+      break;
+    }
+    case "picker-create":
+      openCreatePlaylistForPicker();
+      break;
     case "open-interface":
       navigateTo("interface");
       break;
@@ -1188,11 +1335,8 @@ root.addEventListener("click", (event) => {
     case "toggle-shuffle":
       toggleShuffle();
       break;
-    case "seek": {
-      const rect = el.getBoundingClientRect();
-      seekToFraction((event.clientX - rect.left) / rect.width);
-      break;
-    }
+    case "seek":
+      break; // перемотка — через pointer-drag ниже, не через click
     case "download":
       event.stopPropagation();
       handleDownload(id);
@@ -1319,6 +1463,48 @@ root.addEventListener("keydown", (event) => {
     if (role === "playlist-title") submitCreatePlaylist();
     event.target.blur();
   }
+});
+
+// Перемотка плеера: pointer-drag по всей зоне касания (тап + перетаскивание).
+// Делегируем на root — полоска перерисовывается при смене трека, но не во
+// время drag, поэтому захват переживает ре-рендеры. move/up слушаем на window,
+// чтобы палец мог уйти за пределы полоски и перемотка не срывалась.
+function seekFractionAt(track, clientX) {
+  const rect = track.getBoundingClientRect();
+  return Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+}
+
+function paintSeek(fraction) {
+  const pct = `${fraction * 100}%`;
+  const fill = document.getElementById("player-progress-fill");
+  const thumb = document.getElementById("player-progress-thumb");
+  const time = document.getElementById("player-time-current");
+  if (fill) fill.style.width = pct;
+  if (thumb) thumb.style.left = pct;
+  const duration = getState().currentTrack?.duration;
+  if (time && duration) time.textContent = formatDuration(fraction * duration);
+}
+
+root.addEventListener("pointerdown", (event) => {
+  const track = event.target.closest('[data-action="seek"]');
+  if (!track) return;
+  event.preventDefault();
+  isSeeking = true;
+  track.classList.add("is-seeking");
+  paintSeek(seekFractionAt(track, event.clientX));
+
+  const onMove = (e) => paintSeek(seekFractionAt(track, e.clientX));
+  const onUp = (e) => {
+    seekToFraction(seekFractionAt(track, e.clientX));
+    isSeeking = false;
+    track.classList.remove("is-seeking");
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", onUp);
+    window.removeEventListener("pointercancel", onUp);
+  };
+  window.addEventListener("pointermove", onMove);
+  window.addEventListener("pointerup", onUp);
+  window.addEventListener("pointercancel", onUp);
 });
 
 // Свайп вниз закрывает плеер/шит, на вложенных страницах — шаг назад (ТЗ §3).

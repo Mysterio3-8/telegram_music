@@ -56,7 +56,8 @@ export function renderLibrary(state) {
     ${row("Недавно прослушанные", "history", "open-recent")}
     ${row("Плейлисты", "playlist", "open-playlists")}
     ${row("Альбомы", "album", "open-albums")}
-    ${row("Исполнители", "mic", "open-artists")}
+    ${row("Мои артисты", "mic", "open-my-artists", "На кого подписаны")}
+    ${row("Все исполнители", "mic", "open-artists")}
 
     <div class="lib-add-row">
       ${row("Загрузить трек", "import", "open-upload", "Свой файл — в библиотеку")}

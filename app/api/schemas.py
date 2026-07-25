@@ -87,6 +87,24 @@ class SearchLogIn(BaseModel):
     query: str
 
 
+class SearchArtistOut(BaseModel):
+    name: str
+    photo_url: str | None = None
+
+
+class SearchAlbumOut(BaseModel):
+    name: str
+    track_count: int
+    cover_url: str | None = None
+
+
+class SearchSectionsOut(BaseModel):
+    artists: list[SearchArtistOut] = []
+    albums: list[SearchAlbumOut] = []
+    playlists: list[PlaylistSummaryOut] = []
+    tracks: list["TrackOut"] = []
+
+
 class GenreOut(BaseModel):
     id: int
     name: str
@@ -100,6 +118,11 @@ class ArtistAlbumOut(BaseModel):
     cover_url: str | None = None
 
 
+class SimilarArtistOut(BaseModel):
+    name: str
+    photo_url: str | None = None
+
+
 class ArtistCardOut(BaseModel):
     name: str
     photo_url: str | None = None
@@ -108,8 +131,20 @@ class ArtistCardOut(BaseModel):
     country: str | None = None
     genres: list[str] = []
     track_count: int = 0
+    following: bool = False
+    artist_id: int | None = None
+    latest_release: "TrackOut | None" = None
     top_tracks: list["TrackOut"] = []
+    singles: list["TrackOut"] = []
     albums: list[ArtistAlbumOut] = []
+    similar: list[SimilarArtistOut] = []
+
+
+class FollowedArtistOut(BaseModel):
+    id: int
+    name: str
+    photo_url: str | None = None
+    track_count: int
 
 
 class AlbumOut(BaseModel):

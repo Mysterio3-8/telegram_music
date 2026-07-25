@@ -71,6 +71,79 @@ function renderSuggestions(state) {
   return `${historyBlock}${recentBlock}${popularBlock}${genresBlock}`;
 }
 
+// Секционная выдача (референс): Артисты / Альбомы / Плейлисты / Треки.
+function renderSections(sections, state) {
+  const blocks = [];
+
+  if (sections.artists && sections.artists.length) {
+    const cards = sections.artists
+      .map((a) => {
+        const avatar = a.photo_url
+          ? `<img class="similar-artist__avatar" src="${escapeHtml(a.photo_url)}" alt="" loading="lazy" />`
+          : `<span class="similar-artist__avatar similar-artist__avatar--letter">${escapeHtml((a.name[0] || "♪").toUpperCase())}</span>`;
+        return `
+          <button class="similar-artist" data-action="open-artist" data-artist="${escapeHtml(a.name)}">
+            ${avatar}<span class="similar-artist__name">${escapeHtml(a.name)}</span>
+          </button>
+        `;
+      })
+      .join("");
+    blocks.push(`
+      <div class="section-head"><span class="section-title">Артисты</span></div>
+      <div class="similar-artists">${cards}</div>
+    `);
+  }
+
+  if (sections.albums && sections.albums.length) {
+    const cards = sections.albums
+      .map(
+        (a) => `
+          <button class="artist-album" data-action="open-album" data-name="${escapeHtml(a.name)}">
+            ${
+              a.cover_url
+                ? `<img class="artist-album__cover" src="${escapeHtml(a.cover_url)}" alt="" loading="lazy" />`
+                : `<span class="artist-album__cover artist-album__cover--letter">${escapeHtml((a.name[0] || "♪").toUpperCase())}</span>`
+            }
+            <span class="artist-album__name">${escapeHtml(a.name)}</span>
+            <span class="artist-album__count">${a.track_count} треков</span>
+          </button>
+        `
+      )
+      .join("");
+    blocks.push(`
+      <div class="section-head"><span class="section-title">Альбомы</span></div>
+      <div class="artist-albums">${cards}</div>
+    `);
+  }
+
+  if (sections.playlists && sections.playlists.length) {
+    const rows = sections.playlists
+      .map(
+        (p) => `
+          <button class="lib-row" data-action="open-playlist" data-id="${p.id}" data-title="${escapeHtml(p.title)}">
+            ${icon("playlist")}
+            <span class="lib-row__text"><span class="lib-row__title">${escapeHtml(p.title)}</span>
+            <span class="lib-row__sub">${p.track_count} треков</span></span>
+          </button>
+        `
+      )
+      .join("");
+    blocks.push(`
+      <div class="section-head"><span class="section-title">Плейлисты</span></div>
+      <div class="card">${rows}</div>
+    `);
+  }
+
+  if (sections.tracks && sections.tracks.length) {
+    blocks.push(`
+      <div class="section-head"><span class="section-title">Треки</span></div>
+      <div class="card">${renderTrackList(sections.tracks, { context: "search", state })}</div>
+    `);
+  }
+
+  return blocks.join("");
+}
+
 // Результаты живут в отдельном контейнере: ввод перерисовывает только его,
 // а не всё приложение (иначе инпут теряет фокус).
 export function renderSearchResults(state) {
@@ -81,13 +154,26 @@ export function renderSearchResults(state) {
   if (state.searchStatus === "loading") {
     return '<div class="empty-state">Ищу…</div>';
   }
-  if (!state.searchResults.length) {
+
+  // Минусы — плоский список; треки — секционная выдача
+  if (state.searchMode === "instrumentals") {
+    if (!state.searchResults.length) {
+      return `<div class="empty-state">Ничего не найдено по «${escapeHtml(query)}»</div>`;
+    }
+    return `
+      <div class="section-head"><span class="section-title">Найдено: ${state.searchTotal}</span></div>
+      <div class="card">${renderTrackList(state.searchResults, { context: "search", state })}</div>
+    `;
+  }
+
+  const sections = state.searchSections;
+  const hasAny =
+    sections &&
+    (sections.artists.length || sections.albums.length || sections.playlists.length || sections.tracks.length);
+  if (!hasAny) {
     return `<div class="empty-state">Ничего не найдено по «${escapeHtml(query)}»</div>`;
   }
-  return `
-    <div class="section-head"><span class="section-title">Найдено: ${state.searchTotal}</span></div>
-    <div class="card">${renderTrackList(state.searchResults, { context: "search", state })}</div>
-  `;
+  return renderSections(sections, state);
 }
 
 export function renderSearch(state) {

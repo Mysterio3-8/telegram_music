@@ -53,6 +53,7 @@ from app.services.library import (
 )
 from app.services.lyrics import get_or_fetch_lyrics, save_lyrics
 from app.services.playlists import (
+    add_track_to_playlist,
     count_playlist_tracks,
     create_playlist,
     get_all_playlists,
@@ -382,6 +383,20 @@ async def create_my_playlist(
     if not await can_create_playlist(session, user):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Лимит плейлистов бесплатного тарифа")
     return await create_playlist(session, user.id, title)
+
+
+@router.post("/playlists/{playlist_id}/tracks/{track_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def add_to_playlist(
+    playlist_id: int,
+    track_id: int,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+) -> None:
+    """Добавить трек в плейлист (референс: шит «Добавить в плейлист»)."""
+    playlist = await get_playlist(session, playlist_id)
+    if playlist is None or playlist.user_id != user.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Плейлист не найден")
+    await add_track_to_playlist(session, playlist_id, track_id)
 
 
 @router.post("/upload", response_model=TrackOut, status_code=status.HTTP_201_CREATED)

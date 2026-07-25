@@ -38,8 +38,20 @@ export function renderTrackSheet(state) {
           ${icon("download")} Скачать — бот пришлёт файл в чат
         </button>
         ${offlineItem}
+        <button class="sheet-item" data-action="add-to-playlist" data-id="${track.id}">
+          ${icon("playlist")} Добавить в плейлист
+        </button>
+        <button class="sheet-item" data-action="queue-add" data-id="${track.id}">
+          ${icon("plus")} Добавить в очередь
+        </button>
+        <button class="sheet-item" data-action="queue-next" data-id="${track.id}">
+          ${icon("next")} Воспроизвести следующим
+        </button>
         <button class="sheet-item" data-action="play-track-mix" data-id="${track.id}">
           ${icon("radio")} Включить микс по треку
+        </button>
+        <button class="sheet-item" data-action="sheet-open-artist" data-artist="${escapeHtml(track.artist)}">
+          ${icon("mic")} Перейти к артисту
         </button>
         <button class="sheet-item" data-action="open-lyrics" data-id="${track.id}">
           ${icon("lyrics")} Текст песни

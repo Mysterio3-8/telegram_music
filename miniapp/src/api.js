@@ -139,6 +139,11 @@ export function getPlaylistTracks(playlistId) {
   return request(`/playlists/${playlistId}/tracks`);
 }
 
+// Добавить трек в плейлист (референс: шит «Добавить в плейлист»)
+export function addTrackToPlaylist(playlistId, trackId) {
+  return request(`/playlists/${playlistId}/tracks/${trackId}`, { method: "POST" });
+}
+
 export function getAlbums() {
   return request("/albums");
 }
@@ -166,9 +171,27 @@ export function getGenreTracks(slug, page = 1, pageSize = 100) {
   return request(`/genres/${encodeURIComponent(slug)}/tracks?${params}`);
 }
 
-// Карточка артиста (SPEC-КАТАЛОГ §2): фото, баннер, жанры, топ, альбомы
+// Карточка артиста (SPEC-КАТАЛОГ §2): фото, баннер, жанры, топ, синглы, альбомы, похожие
 export function getArtistCard(name) {
   return request(`/artist-card?name=${encodeURIComponent(name)}`);
+}
+
+// Подписка на артиста (референс: «Мои артисты», toggle в карточке)
+export function followArtist(artistId) {
+  return request(`/artists/${artistId}/follow`, { method: "POST" });
+}
+
+export function unfollowArtist(artistId) {
+  return request(`/artists/${artistId}/follow`, { method: "DELETE" });
+}
+
+export function getMyArtists() {
+  return request("/my/artists");
+}
+
+// Секционный поиск (референс): Артисты / Альбомы / Плейлисты / Треки
+export function searchAll(query) {
+  return request(`/search/all?q=${encodeURIComponent(query)}`);
 }
 
 // Реальные популярные запросы (ТЗ §11). Лог — только «закоммиченный» запрос.

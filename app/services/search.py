@@ -1,8 +1,10 @@
+from dataclasses import dataclass, field
+
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.db.models import Instrumental, Track
+from app.db.models import Artist, Instrumental, Playlist, Track
 
 
 def _track_filter(query: str):
@@ -53,3 +55,91 @@ async def search_instrumentals(
 
 async def get_instrumental(session: AsyncSession, instrumental_id: int) -> Instrumental | None:
     return await session.get(Instrumental, instrumental_id)
+
+
+@dataclass
+class SearchArtist:
+    name: str
+    photo_url: str | None = None
+
+
+@dataclass
+class SearchAlbum:
+    name: str
+    track_count: int
+    cover_url: str | None = None
+
+
+@dataclass
+class SectionedResults:
+    artists: list[SearchArtist] = field(default_factory=list)
+    albums: list[SearchAlbum] = field(default_factory=list)
+    playlists: list[Playlist] = field(default_factory=list)
+    tracks: list[Track] = field(default_factory=list)
+
+
+SECTION_LIMIT = 8
+
+
+async def _search_artists(session: AsyncSession, query: str) -> list[SearchArtist]:
+    """Артисты-сущности по имени; добор — исполнители из треков (ещё без сущности)."""
+    pattern = f"%{query.strip()}%"
+    entities = await session.scalars(
+        select(Artist).where(Artist.name.ilike(pattern)).order_by(Artist.id).limit(SECTION_LIMIT)
+    )
+    result = [SearchArtist(name=a.name, photo_url=a.photo_url) for a in entities.all()]
+    seen = {r.name.lower() for r in result}
+    if len(result) < SECTION_LIMIT:
+        rows = await session.execute(
+            select(func.max(func.trim(Track.artist)))
+            .where(Track.artist.ilike(pattern))
+            .group_by(func.lower(func.trim(Track.artist)))
+            .limit(SECTION_LIMIT * 2)
+        )
+        for (name,) in rows.all():
+            if name and name.lower() not in seen and len(result) < SECTION_LIMIT:
+                result.append(SearchArtist(name=name))
+                seen.add(name.lower())
+    return result
+
+
+async def _search_albums(session: AsyncSession, query: str) -> list[SearchAlbum]:
+    """Альбомы, где название альбома ИЛИ артист подходят под запрос (референс:
+    в выдаче по имени артиста видны его альбомы)."""
+    pattern = f"%{query.strip()}%"
+    rows = await session.execute(
+        select(Track.album, func.count(), func.max(Track.cover_url))
+        .where(
+            Track.album.is_not(None),
+            func.trim(Track.album) != "",
+            or_(Track.album.ilike(pattern), Track.artist.ilike(pattern)),
+        )
+        .group_by(Track.album)
+        .order_by(func.count().desc())
+        .limit(SECTION_LIMIT)
+    )
+    return [
+        SearchAlbum(name=album, track_count=count, cover_url=cover)
+        for album, count, cover in rows.all()
+    ]
+
+
+async def _search_playlists(session: AsyncSession, query: str) -> list[Playlist]:
+    pattern = f"%{query.strip()}%"
+    rows = await session.scalars(
+        select(Playlist).where(Playlist.title.ilike(pattern)).order_by(Playlist.id).limit(SECTION_LIMIT)
+    )
+    return list(rows.all())
+
+
+async def search_all(session: AsyncSession, query: str) -> SectionedResults:
+    """Секционная выдача поиска (референс): Артисты / Альбомы / Плейлисты / Треки."""
+    if not query.strip():
+        return SectionedResults()
+    tracks, _ = await search_tracks(session, query, 1, SECTION_LIMIT)
+    return SectionedResults(
+        artists=await _search_artists(session, query),
+        albums=await _search_albums(session, query),
+        playlists=await _search_playlists(session, query),
+        tracks=tracks,
+    )

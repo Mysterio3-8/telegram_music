@@ -11,6 +11,7 @@ from app.services.artist_entities import get_artist_by_name, normalize_name
 from app.services.genres import artist_genre_names
 
 TOP_TRACKS_LIMIT = 10
+SINGLES_LIMIT = 10
 
 
 @dataclass
@@ -29,7 +30,9 @@ class ArtistCard:
     country: str | None = None
     genres: list[str] = field(default_factory=list)
     track_count: int = 0
+    latest_release: Track | None = None  # самый свежий трек (референс: блок «новый релиз»)
     top_tracks: list[Track] = field(default_factory=list)
+    singles: list[Track] = field(default_factory=list)  # треки без альбома
     albums: list[AlbumSummary] = field(default_factory=list)
 
 
@@ -80,6 +83,20 @@ async def _albums(session: AsyncSession, name: str, artist_id: int | None) -> li
     ]
 
 
+async def _singles(session: AsyncSession, name: str, artist_id: int | None) -> list[Track]:
+    """Треки без альбома — «Синглы» на карточке (референс). Свежие сверху."""
+    rows = await session.scalars(
+        select(Track)
+        .where(
+            _artist_match(name, artist_id),
+            (Track.album.is_(None)) | (func.trim(Track.album) == ""),
+        )
+        .order_by(Track.id.desc())
+        .limit(SINGLES_LIMIT)
+    )
+    return list(rows.all())
+
+
 async def get_artist_card(session: AsyncSession, name: str) -> ArtistCard:
     """Карточка живёт даже без записи в artists — по одним трекам."""
     entity: Artist | None = await get_artist_by_name(session, name)
@@ -97,5 +114,10 @@ async def get_artist_card(session: AsyncSession, name: str) -> ArtistCard:
         card.country = entity.country
         card.genres = await artist_genre_names(session, entity.id)
     card.top_tracks = await _top_tracks(session, name, entity_id)
+    card.singles = await _singles(session, name, entity_id)
     card.albums = await _albums(session, name, entity_id)
+    # Последний релиз — самый свежий трек артиста (по id: растёт со временем)
+    card.latest_release = await session.scalar(
+        select(Track).where(_artist_match(name, entity_id)).order_by(Track.id.desc()).limit(1)
+    )
     return card

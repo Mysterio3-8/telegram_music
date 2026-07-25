@@ -69,6 +69,10 @@ const state = {
   genres: [], // дерево жанров с сервера — чипы в поиске (SPEC-КАТАЛОГ §1)
   artistCard: null, // карточка артиста: фото, баннер, жанры, топ, альбомы (§2)
   artistCardStatus: "idle", // idle | loading | ready | error
+  myArtists: [], // подписки пользователя (референс «Мои артисты»)
+  myArtistsStatus: "idle",
+  playlistPickerTrack: null, // id трека для шита «Добавить в плейлист»
+  searchSections: null, // секционная выдача поиска: {artists, albums, playlists, tracks}
   artists: [], // [{name, track_count}] с сервера, дедуп (ТЗ §13)
   artistsStatus: "idle",
   myTracksTab: "all", // all | downloaded (ТЗ §5)
@@ -426,6 +430,31 @@ export function toggleRepeat() {
 export function playQueueIndex(index) {
   if (index < 0 || index >= state.queue.length) return;
   startTrack(index);
+}
+
+// «Добавить в очередь» (референс): трек в конец очереди. Если очереди нет — играем сразу.
+export function addToQueue(track) {
+  if (!state.queue.length) {
+    playTrack(track, [track]);
+    showToast("Играет");
+    return;
+  }
+  state.queue = [...state.queue, track];
+  showToast("Добавлено в очередь");
+  notify();
+}
+
+// «Воспроизвести следующим» (референс): трек сразу после текущего.
+export function playNextInQueue(track) {
+  if (!state.queue.length) {
+    playTrack(track, [track]);
+    return;
+  }
+  const rest = state.queue.slice(0, state.queueIndex + 1);
+  const tail = state.queue.slice(state.queueIndex + 1);
+  state.queue = [...rest, track, ...tail];
+  showToast("Прозвучит следующим");
+  notify();
 }
 
 // «Микс по треку»: очередь = сам трек + его исполнитель + общий микс

@@ -120,6 +120,22 @@ class ArtistGenre(Base):
     )
 
 
+class UserArtist(Base):
+    """Подписка пользователя на артиста (референс: «Мои артисты», кнопка-toggle
+    в карточке). Отдельно от user_library (лайк трека) и favorite_artists фронта
+    (локальная отметка для рекомендаций)."""
+
+    __tablename__ = "user_artists"
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    artist_id: Mapped[int] = mapped_column(
+        ForeignKey("artists.id", ondelete="CASCADE"), primary_key=True, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
 class Instrumental(Base):
     """Минусы — отдельная от tracks таблица (TZ §9): совпадение title/artist с полноценным
     треком не считается дубликатом, файлы физически разные."""
@@ -189,6 +205,19 @@ class TrackEvent(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     track_id: Mapped[int] = mapped_column(ForeignKey("tracks.id"), index=True)
     event: Mapped[str] = mapped_column(String(16))  # listen | download
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
+class MixHistory(Base):
+    """Что TG Микс уже показывал пользователю — чтобы не крутить одно и то же по
+    кругу. Хранится ~7 дней (старое чистится при сборке микса)."""
+
+    __tablename__ = "mix_history"
+    __table_args__ = (Index("ix_mix_history_user_created", "user_id", "created_at"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    track_id: Mapped[int] = mapped_column(ForeignKey("tracks.id"), index=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
 
