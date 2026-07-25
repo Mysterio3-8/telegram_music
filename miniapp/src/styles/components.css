@@ -3308,6 +3308,63 @@
   justify-content: center;
 }
 
+/* Гейт обязательной подписки (блок B) — поверх всего */
+.sub-gate {
+  min-height: 100dvh;
+  padding: 32px 22px calc(32px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  text-align: center;
+  gap: 14px;
+}
+
+.sub-gate__icon {
+  color: var(--accent);
+  display: flex;
+  justify-content: center;
+}
+
+.sub-gate__icon svg {
+  width: 56px;
+  height: 56px;
+}
+
+.sub-gate__title {
+  font-size: 23px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.sub-gate__text {
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.sub-gate__channels {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 8px 0;
+}
+
+.sub-gate__channel {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-decoration: none;
+}
+
+.sub-gate__channel.is-done {
+  opacity: 0.6;
+}
+
+.sub-gate__check {
+  margin-top: 6px;
+}
+
 .onb-hero {
   text-align: center;
   margin-bottom: 28px;

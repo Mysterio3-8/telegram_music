@@ -134,3 +134,86 @@ async def test_is_fully_subscribed_admin_bypass(session, monkeypatch):
 
     assert await is_fully_subscribed(session, bot, user.id, user.telegram_id) is True
     assert bot.calls == 0
+
+
+async def test_is_fully_subscribed_premium_bypass(session):
+    # Premium снимает обязательные подписки (блок B)
+    from datetime import datetime as _dt
+
+    await _seed_channels(session, "@chan1")
+    user = await make_user(session)
+    user.premium = True
+    user.premium_until = _dt.utcnow() + timedelta(days=10)
+    await session.commit()
+
+    bot = FakeBot(status=ChatMemberStatus.LEFT)
+    assert await is_fully_subscribed(session, bot, user.id, user.telegram_id) is True
+    assert bot.calls == 0
+
+
+class FakeBotWithMe(FakeBot):
+    def __init__(self, status: str) -> None:
+        super().__init__(status=status)
+
+    async def get_me(self):
+        return FakeMember(status="bot")  # нужен только .id ниже
+
+    async def get_chat_member(self, chat_id: str, user_id: int):
+        self.calls += 1
+        return FakeMember(self.status)
+
+
+async def test_is_bot_admin_of_channel_true_when_administrator():
+    from app.services.subscription import is_bot_admin_of_channel
+
+    bot = FakeBotWithMe(status=ChatMemberStatus.ADMINISTRATOR)
+    # get_me возвращает объект без .id — добавим
+    bot.get_me = _fake_get_me
+    assert await is_bot_admin_of_channel(bot, "@chan") is True
+
+
+async def test_is_bot_admin_of_channel_false_when_member():
+    from app.services.subscription import is_bot_admin_of_channel
+
+    bot = FakeBotWithMe(status=ChatMemberStatus.MEMBER)
+    bot.get_me = _fake_get_me
+    assert await is_bot_admin_of_channel(bot, "@chan") is False
+
+
+class _Me:
+    id = 42
+
+
+async def _fake_get_me():
+    return _Me()
+
+
+async def test_channel_ad_stats_and_clicks(session):
+    from app.services.required_channels import (
+        add_required_channel,
+        channel_ad_stats,
+        get_required_channels,
+        register_channel_click,
+    )
+
+    await add_required_channel(session, "@chan1", "Канал 1")
+    users = []
+    for tid in (1, 2, 3):
+        u = User(telegram_id=tid)
+        session.add(u)
+        users.append(u)
+    await session.commit()
+    # двое подписаны, один нет
+    session.add(SubscriptionStatus(user_id=users[0].id, channel="@chan1", is_subscribed=True, checked_at=datetime.now(timezone.utc)))
+    session.add(SubscriptionStatus(user_id=users[1].id, channel="@chan1", is_subscribed=True, checked_at=datetime.now(timezone.utc)))
+    session.add(SubscriptionStatus(user_id=users[2].id, channel="@chan1", is_subscribed=False, checked_at=datetime.now(timezone.utc)))
+    await session.commit()
+
+    channel = (await get_required_channels(session))[0]
+    await register_channel_click(session, channel.id)
+    await register_channel_click(session, channel.id)
+
+    stats = await channel_ad_stats(session)
+    assert len(stats) == 1
+    assert stats[0].subscribers == 2
+    assert stats[0].clicks == 2

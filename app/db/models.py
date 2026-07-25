@@ -344,6 +344,8 @@ class RequiredChannel(Base):
     # channel — подписка проверяется через getChatMember; bot — «запустите бота»:
     # Telegram не даёт проверить запуск чужого бота, кнопка ссылкой без проверки (ОП на ботов)
     kind: Mapped[str] = mapped_column(String(16), default="channel", server_default="channel")
+    # Клики по кнопке канала в гейте — воронка для продажи рекламы (блок B)
+    click_count: Mapped[int] = mapped_column(default=0, server_default="0")
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
 
@@ -388,4 +390,38 @@ class SearchQuery(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     query: Mapped[str] = mapped_column(String(256), index=True)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
+class Contest(Base):
+    """Конкурс с розыгрышем Premium (SPEC-2.0 §28): условия участия и дата итогов."""
+
+    __tablename__ = "contests"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    title: Mapped[str] = mapped_column(String(128))
+    description: Mapped[str] = mapped_column(Text)
+    banner_text: Mapped[str] = mapped_column(String(160))
+    # 0 — Premium навсегда; иначе количество дней победителю
+    prize_days: Mapped[int] = mapped_column(default=30)
+    # Канал, подписка на который обязательна (@username или -100…); пусто — не требуется
+    required_channel: Mapped[str | None] = mapped_column(String(64))
+    required_referrals: Mapped[int] = mapped_column(default=0, server_default="0")
+    ends_at: Mapped[datetime]
+    is_active: Mapped[bool] = mapped_column(default=True, server_default="1")
+    winner_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    drawn_at: Mapped[datetime | None]
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
+class ContestParticipant(Base):
+    """Участие в конкурсе. Один аккаунт — одно участие (защита от накрутки)."""
+
+    __tablename__ = "contest_participants"
+    __table_args__ = (UniqueConstraint("contest_id", "user_id", name="uq_contest_participant"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    contest_id: Mapped[int] = mapped_column(ForeignKey("contests.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    referrals_at_join: Mapped[int] = mapped_column(default=0)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())

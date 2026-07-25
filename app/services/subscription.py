@@ -39,6 +39,18 @@ async def check_channel_membership(bot: Bot, telegram_id: int, channel: str) -> 
     return False
 
 
+async def is_bot_admin_of_channel(bot: Bot, channel: str) -> bool:
+    """True — бот является администратором канала. Только это и нужно, чтобы гейт
+    мог проверять подписчиков; подписка самого владельца-админа НЕ требуется."""
+    try:
+        me = await bot.get_me()
+        member = await bot.get_chat_member(chat_id=channel, user_id=me.id)
+    except TelegramAPIError:
+        logger.warning("не удалось проверить права бота в канале %s", channel, exc_info=True)
+        return False
+    return member.status in {ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.CREATOR}
+
+
 async def _get_cached(session: AsyncSession, user_id: int, channel: str) -> SubscriptionStatus | None:
     return await session.get(SubscriptionStatus, (user_id, channel))
 
@@ -87,6 +99,13 @@ async def is_fully_subscribed(
     """True — подписан на все обязательные каналы (или админ с включённым байпасом).
     Каналы — из БД (управляются админкой); пустой список → гейт выключен."""
     if settings.admin_bypass_subscription and is_admin(telegram_id):
+        return True
+    # Premium снимает обязательные подписки (запрос владельца): платишь — нет ОП
+    from app.db.models import User
+    from app.services.premium import is_premium_active
+
+    user = await session.get(User, user_id)
+    if user is not None and is_premium_active(user):
         return True
     from app.services.required_channels import get_required_channels
 

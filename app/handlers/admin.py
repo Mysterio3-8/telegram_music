@@ -22,12 +22,13 @@ from app.keyboards.admin import (
 from app.services.catalog_cleanup import count_junk_tracks, delete_junk_tracks, list_junk_tracks
 from app.services.required_channels import (
     add_required_channel,
+    channel_ad_stats,
     get_required_channels,
     normalize_bot_link,
     normalize_channel,
     remove_required_channel,
 )
-from app.services.subscription import check_channel_membership
+from app.services.subscription import is_bot_admin_of_channel
 from app.services.library import get_track, update_track_meta
 from app.services.recommendations import VALID_MOODS
 from app.services.stats import ProjectStats, collect_stats
@@ -148,27 +149,35 @@ async def cb_reclaim_go(callback: CallbackQuery) -> None:
 # --- Каналы обязательной подписки: управление из админки (TZ §14-17) ---
 
 
-def _sub_channels_text(channels) -> str:
+def _sub_channels_text(channels, stats=None) -> str:
     if not channels:
         return (
             "📢 Обязательная подписка\n\n"
             "Список пуст — гейт подписки ВЫКЛЮЧЕН, бот доступен всем без подписки."
         )
+    by_channel = {s.channel: s for s in (stats or [])}
     lines = ["📢 Обязательная подписка\n"]
-    lines += [
-        f"{i}. {'🤖 ' if row.kind == 'bot' else ''}{row.label} — {row.channel}"
-        for i, row in enumerate(channels, start=1)
-    ]
+    for i, row in enumerate(channels, start=1):
+        head = f"{i}. {'🤖 ' if row.kind == 'bot' else ''}{row.label} — {row.channel}"
+        stat = by_channel.get(row.channel)
+        if stat:
+            # для рекламы: охват (наши подписчики) + клики по кнопке в гейте
+            head += f"\n   👥 подписаны: {stat.subscribers} · 👆 кликов: {stat.clicks}"
+        lines.append(head)
     lines.append(
         "\nКаналы проверяются по подписке. Боты (🤖) — кнопкой в гейте: "
-        "Telegram не даёт проверить запуск чужого бота."
+        "Telegram не даёт проверить запуск чужого бота.\n"
+        "«Подписаны» — сколько наших пользователей на канале (охват для рекламы)."
     )
     return "\n".join(lines)
 
 
 async def _show_sub_channels(message, session) -> None:
     channels = await get_required_channels(session)
-    await message.edit_text(_sub_channels_text(channels), reply_markup=sub_channels_keyboard(channels))
+    stats = await channel_ad_stats(session)
+    await message.edit_text(
+        _sub_channels_text(channels, stats), reply_markup=sub_channels_keyboard(channels)
+    )
 
 
 @router.callback_query(F.data == "adm:subch")
@@ -226,13 +235,13 @@ async def process_sub_channel(message: Message, state: FSMContext) -> None:
             "Канал: @username или -100XXXXXXXXXX. Бот: ссылка t.me/ИмяBot."
         )
         return
-    # Живая проверка тем же вызовом, которым работает гейт: если getChatMember
-    # не отвечает — бот не админ канала, и подписку проверить не сможет
-    if not await check_channel_membership(message.bot, message.from_user.id, channel):
+    # Проверяем, что БОТ — админ канала (только это нужно гейту). Подписка самого
+    # владельца НЕ требуется: можно добавить чужой канал, не подписываясь на него.
+    if not await is_bot_admin_of_channel(message.bot, channel):
         await message.answer(
             f"Не могу проверить участников {channel}.\n"
-            "Убедитесь, что канал существует, бот добавлен в него админом, "
-            "а вы сами на него подписаны, — и пришлите канал ещё раз."
+            "Добавьте бота в этот канал администратором — и пришлите канал ещё раз.\n"
+            "Подписываться на канал самому не нужно."
         )
         return
     await state.update_data(new_channel=channel, new_kind="channel")

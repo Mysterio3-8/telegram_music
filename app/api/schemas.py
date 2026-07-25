@@ -228,3 +228,17 @@ class ProfileOut(BaseModel):
     achievements: list[AchievementOut]
     rewarded_days: int = 0  # начислено дней Premium прямо сейчас (новые достижения)
     trial_available: bool = False
+
+
+class SubChannelOut(BaseModel):
+    id: int
+    label: str
+    url: str | None
+    kind: str  # channel | bot
+    subscribed: bool
+
+
+class SubscriptionStatusOut(BaseModel):
+    required: bool  # True — гейт активен (есть каналы и нет premium/bypass)
+    subscribed: bool  # True — подписан на все проверяемые каналы
+    channels: list[SubChannelOut]

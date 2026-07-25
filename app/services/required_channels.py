@@ -3,7 +3,9 @@
 Источник правды — таблица required_channels (сеется из .env миграцией).
 Пустая таблица → гейт подписки выключен.
 """
-from sqlalchemy import delete, select
+from dataclasses import dataclass
+
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import RequiredChannel, SubscriptionStatus
@@ -11,9 +13,63 @@ from app.db.models import RequiredChannel, SubscriptionStatus
 MAX_CHANNEL_LENGTH = 128
 
 
+@dataclass(frozen=True)
+class ChannelAdStats:
+    """Рекламная статистика по обязательному каналу."""
+
+    channel: str
+    label: str
+    kind: str
+    subscribers: int  # наших пользователей подписаны (проверено гейтом) — охват
+    clicks: int  # кликов по кнопке канала в гейте — воронка
+
+
+async def channel_ad_stats(session: AsyncSession) -> list[ChannelAdStats]:
+    """Для продажи рекламы: сколько наших пользователей подписано на каждый канал
+    и сколько раз кликнули по кнопке в гейте."""
+    channels = await get_required_channels(session)
+    subs_rows = await session.execute(
+        select(SubscriptionStatus.channel, func.count())
+        .where(SubscriptionStatus.is_subscribed.is_(True))
+        .group_by(SubscriptionStatus.channel)
+    )
+    subs = {channel: count for channel, count in subs_rows.all()}
+    return [
+        ChannelAdStats(
+            channel=row.channel,
+            label=row.label,
+            kind=row.kind,
+            subscribers=subs.get(row.channel, 0),
+            clicks=row.click_count,
+        )
+        for row in channels
+    ]
+
+
+async def register_channel_click(session: AsyncSession, channel_id: int) -> bool:
+    """+1 к кликам по кнопке канала. False — канала нет."""
+    result = await session.execute(
+        update(RequiredChannel)
+        .where(RequiredChannel.id == channel_id)
+        .values(click_count=RequiredChannel.click_count + 1)
+    )
+    await session.commit()
+    return result.rowcount > 0
+
+
 async def get_required_channels(session: AsyncSession) -> list[RequiredChannel]:
     stmt = select(RequiredChannel).order_by(RequiredChannel.id)
     return list((await session.scalars(stmt)).all())
+
+
+def channel_url(row: RequiredChannel) -> str | None:
+    """Ссылка-кнопка для гейта (бот, канал по @username). None — приватный
+    канал -100… без username, по ссылке не открыть."""
+    if row.kind == "bot":
+        return row.channel  # для ботов хранится полная t.me-ссылка
+    if row.channel.startswith("@"):
+        return f"https://t.me/{row.channel.removeprefix('@')}"
+    return None
 
 
 def normalize_channel(raw: str) -> str | None:

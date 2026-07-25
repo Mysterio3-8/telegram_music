@@ -22,6 +22,8 @@ import {
   getPlaylistTracks,
   getPopularQueries,
   getPremiumStatus,
+  getSubscriptionStatus,
+  logChannelClick,
   getProfile,
   getTracks,
   login,
@@ -95,6 +97,7 @@ import { renderStorage } from "./screens/storage.js";
 import { renderTransfer } from "./screens/transfer.js";
 import { renderUpload } from "./screens/upload.js";
 import { renderOnboarding } from "./screens/onboarding.js";
+import { renderSubGate } from "./screens/subgate.js";
 import {
   isOffline,
   offlineSupported,
@@ -231,6 +234,16 @@ function render() {
     return;
   }
 
+  // Гейт обязательной подписки — поверх всего (блок B). Premium снимает.
+  if (state.subGate) {
+    const gateHtml = renderSubGate(state);
+    if (gateHtml !== lastHtml) {
+      lastHtml = gateHtml;
+      root.innerHTML = gateHtml;
+    }
+    return;
+  }
+
   const showNav = TAB_SCREENS.has(state.screen);
   const screenRenderer = SCREENS[state.screen] || renderHome;
   root.classList.toggle("is-playing", Boolean(state.currentTrack) && !state.playerOpen);
@@ -334,6 +347,32 @@ function loadHeavyData() {
     .catch(() => {});
   // Профиль нужен главной: доступность триала и начисленные награды
   loadProfile();
+  checkSubscriptionGate();
+}
+
+// Гейт обязательной подписки (блок B): если не подписан и нет Premium — показываем
+// поверх всего. Premium/админ/пустой список каналов → required=false, гейта нет.
+function checkSubscriptionGate() {
+  getSubscriptionStatus(false)
+    .then((status) => {
+      if (status.required && !status.subscribed) mutate({ subGate: status });
+    })
+    .catch(() => {});
+}
+
+// «Я подписался» — перепроверка минуя кэш. Подписан/купил Premium → гейт снимаем.
+function recheckSubscription() {
+  getSubscriptionStatus(true)
+    .then((status) => {
+      if (!status.required || status.subscribed) {
+        mutate({ subGate: null });
+        showToast("Доступ открыт 🎧");
+      } else {
+        mutate({ subGate: status });
+        showToast("Подписка не найдена — проверьте все каналы");
+      }
+    })
+    .catch(() => showToast("Не удалось проверить подписку"));
 }
 
 // Онбординг только для новых и ровно один раз. Флаг ставится СРАЗУ при показе
@@ -899,6 +938,17 @@ root.addEventListener("click", (event) => {
   switch (action) {
     case "retry-boot":
       boot();
+      break;
+    case "sub-recheck":
+      recheckSubscription();
+      break;
+    case "sub-click":
+      // не preventDefault — ссылка канала откроется браузером, клик логируем в фоне
+      if (el.dataset.cid) logChannelClick(Number(el.dataset.cid)).catch(() => {});
+      break;
+    case "sub-premium":
+      mutate({ subGate: null });
+      navigateTo("premium");
       break;
     case "nav":
       resetToTab(el.dataset.screen);

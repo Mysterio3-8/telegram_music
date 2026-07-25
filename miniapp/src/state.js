@@ -90,6 +90,7 @@ const state = {
   onbActive: false, // онбординг при первом входе
   onbStep: 0,
   onbArtists: [], // исполнители для шага выбора
+  subGate: null, // {required, subscribed, channels} — гейт обязательной подписки (блок B)
 };
 
 const structureListeners = new Set();

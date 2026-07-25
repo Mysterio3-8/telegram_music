@@ -114,6 +114,17 @@ export function getPremiumStatus() {
   return request("/premium/status");
 }
 
+// Статус обязательной подписки: required=false → гейт не показываем (нет каналов
+// или у пользователя Premium). force=true — перепроверить сразу, минуя кэш.
+export function getSubscriptionStatus(force) {
+  return request(`/subscription/status${force ? "?force=true" : ""}`);
+}
+
+// Клик по кнопке канала в гейте — воронка для продажи рекламы (fire-and-forget)
+export function logChannelClick(channelId) {
+  return request(`/subscription/click/${channelId}`, { method: "POST" });
+}
+
 export function getProfile() {
   return request("/profile");
 }
