@@ -11,9 +11,10 @@
 | `tg-music-youtube` | Celery, массовые сканы каналов/плейлистов (очередь `youtube`, concurrency=1) |
 | `tg-music-youtube-user` | Celery, ссылки от пользователей бота (очередь `youtube_user`, concurrency=2) — отдельно от `tg-music-youtube`, чтобы не ждать за бэклогом массовых сканов |
 | `tg-music-youtube-scan.timer` | ежедневная проверка источников на новые видео (§11), заодно дёргает SoundCloud scan-due |
-| `tg-music-soundcloud` | Celery, SoundCloud-импорт (очередь `soundcloud`, concurrency=1 — анти-бан, никаких параллельных запросов) |
+| `tg-music-soundcloud` | Celery, SoundCloud-импорт (очередь `soundcloud`, concurrency=3 — темп 3000/сутки на ротации прокси; без прокси вернуть 1) |
 | `tg-music-telegram-channel` | Celery, импорт из личного Telegram-канала (очередь `telegram_channel`, БЕЗ файлов на диске) |
 | `tg-music-telegram-channel-scan.timer` | ежедневная проверка канала на новые посты |
+| `tg-music-catalog-maintain.timer` | ежедневно в 04:00: привязка новых треков к артистам + подборки по жанрам (SPEC-КАТАЛОГ §5-6) |
 
 Файлы юнитов — в этой папке. Установка нового юнита:
 ```bash
@@ -69,6 +70,29 @@ CLI-эквивалент:
 .venv/bin/python -m app.cli.telegram_channel list
 .venv/bin/python -m app.cli.telegram_channel scan <id|all>
 .venv/bin/python -m app.cli.telegram_channel recover
+```
+
+## Мировой каталог (SPEC-КАТАЛОГ)
+
+```bash
+.venv/bin/python -m app.cli.genres seed              # дерево жанров (идемпотентно)
+.venv/bin/python -m app.cli.research country US --limit 1200   # артисты страны из MusicBrainz
+bash deploy/research_world.sh                        # очередь стран целиком (запускать под setsid nohup)
+.venv/bin/python -m app.cli.research enrich --limit 500        # дообогатить артистов без mbid
+.venv/bin/python -m app.cli.research attach-sources  # SoundCloud/YouTube-источники артистов → в закачку
+.venv/bin/python -m app.cli.research stats
+```
+
+⚠️ MusicBrainz — 1 req/sec **на IP**: два прогона параллельно запускать нельзя
+(троттлинг у каждого процесса свой). Долгие прогоны — только `setsid nohup … &`,
+ожидание завершения — по PID (`kill -0`), не по `pgrep` имени команды: pgrep
+ловит сам вотчер и цикл не заканчивается никогда.
+
+Обслуживание (то же, что делает таймер):
+```bash
+.venv/bin/python -m app.cli.artists bind-tracks   # привязать новые треки к артистам
+.venv/bin/python -m app.cli.artists unbound       # имена без артиста-сущности — на чистку
+.venv/bin/python -m app.cli.genres make-playlists # подборки редакции по жанрам
 ```
 
 ## Системные зависимости

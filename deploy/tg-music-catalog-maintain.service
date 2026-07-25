@@ -1,0 +1,11 @@
+[Unit]
+Description=Telegram Music Bot — обслуживание каталога: привязка треков к артистам + подборки по жанрам (SPEC-КАТАЛОГ §5-6)
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/tg-music-bot
+# Порядок важен: сначала привязываем новые треки к артистам (artist_id),
+# затем собираем подборки — иначе свежие треки не попадут в жанры.
+ExecStart=/opt/tg-music-bot/.venv/bin/python -m app.cli.artists bind-tracks
+ExecStart=/opt/tg-music-bot/.venv/bin/python -m app.cli.genres make-playlists
