@@ -134,6 +134,16 @@ export function getProfile() {
   return request("/profile");
 }
 
+// Активные конкурсы вместе с состоянием условий текущего пользователя
+export function getContests() {
+  return request("/contests");
+}
+
+// Участие: условия проверяет сервер, ответ приходит уже с обновлённым состоянием
+export function joinContest(contestId) {
+  return request(`/contests/${contestId}/join`, { method: "POST" });
+}
+
 export function getMix({ mood, recognizability, language } = {}) {
   const params = new URLSearchParams();
   if (mood) params.set("mood", mood);

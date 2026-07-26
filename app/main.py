@@ -12,12 +12,14 @@ from app.handlers import (
     admin_telegram_channel,
     admin_upload_minus,
     admin_youtube,
+    contests,
     inline,
     library,
     news,
     player,
     playlists,
     premium,
+    quick_search,
     search,
     start,
     stubs,
@@ -60,6 +62,7 @@ async def main() -> None:
         transfer.router,
         premium.router,
         player.router,
+        contests.router,
         admin.router,  # до track_actions: перехватывает ta:edit
         admin_broadcast.router,
         admin_upload_minus.router,
@@ -68,6 +71,7 @@ async def main() -> None:
         track_actions.router,
         inline.router,  # inline_query — вне гейта подписки (middleware только message/callback)
         news.router,  # channel_post новостного канала → кросс-пост в ВК
+        quick_search.router,  # свободный текст боту → трек (регистрируется поздно, после FSM)
         stubs.router,
     )
     await dp.start_polling(bot)

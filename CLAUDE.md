@@ -184,13 +184,19 @@ $env:DATABASE_URL="sqlite+aiosqlite:///_tmp.db"; .\.venv\Scripts\python.exe -m a
     поиск), `importer.py` (`import_by_query` — загрузка из найденного источника, YouTube → mp3)
   - общий хвост импорта вынесен в `user_import.import_downloaded_audio` — ветка по ссылке и
     ветка по запросу больше не дублируют фильтры/минт/библиотеку
-- **Конкурсы (срез 0, дедлайн 9 августа)**: модели `contests` + `contest_participants`
-  (миграция `a367a749c438`), [contests.py](app/services/contests.py) — условия проверяются
-  на сервере, повторное участие невозможно, приглашённые пересчитываются на момент розыгрыша
-  (накрученные и «отвязавшиеся» в барабан не попадают), победитель — `secrets.choice`
-- ⏳ **Не доделано в срезе 0**: API-роутер, экран и баннер в Mini App, кнопка в боте,
-  рассылка, CLI розыгрыша. Текст поста владелец прислал — лежит в истории задачи
-- Тесты: **299 passed** (+17: конкурсы 7, поиск трека 13 при 3 переиспользованных)
+- **Конкурсы (срез 0, дедлайн 9 августа) — ГОТОВО end-to-end**: модели `contests` +
+  `contest_participants` (миграция `a367a749c438`), [contests.py](app/services/contests.py) —
+  условия на сервере, повторное участие невозможно, приглашённые пересчитываются на момент
+  розыгрыша (накрученные и «отвязавшиеся» в барабан не попадают), победитель — `secrets.choice`
+  - API [routers/contests.py](app/api/routers/contests.py): `GET /contests`, `POST /contests/{id}/join`
+  - Mini App: баннер на главной + экран [contests.js](miniapp/src/screens/contests.js)
+  - Бот: кнопка «Участвовать» ([handlers/contests.py](app/handlers/contests.py)), рассылка
+    поста с кнопкой (`broadcast.send` принимает `contest_id` → клавиатура конкурса)
+  - CLI [cli/contests.py](app/cli/contests.py): `create` / `list` / `announce [--preview]` /
+    `draw [--dry]`
+  - ⚠️ Репост во ВК и в Telegram Stories проверить нельзя (нет API) — эти условия на честном
+    слове, сервером гарантированы только подписка на канал и приглашённые
+- Тесты: **321 passed** (+28: конкурсы 7 + API конкурсов 5, поиск трека 13)
 
 ## Checkpoint (2026-07-25) — ДОРАБОТКА ПО РЕФЕРЕНСАМ (папка проверка/): артисты, поиск, шит трека
 

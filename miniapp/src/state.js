@@ -47,6 +47,7 @@ const state = {
   docKey: "about", // активный статический документ (faq/privacy/license/about)
   profile: null, // геймификация: ранг, приглашённые, достижения (грузится при открытии профиля)
   referralTop: [], // топ приглашающих (лидерборд рефералки)
+  contests: null, // активные конкурсы; null — ещё не загрузились, [] — конкурсов нет
   profileTop: null, // {artists, tracks} — топы пользователя в профиле
   profileStatus: "idle", // idle | loading | ready | error
   lyricsTrack: null, // трек, для которого открыт экран текста
@@ -125,6 +126,7 @@ audio.addEventListener("ended", () => {
 });
 
 audio.addEventListener("play", () => {
+  if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "playing";
   if (!state.isPlaying) {
     state.isPlaying = true;
     notify();
@@ -132,10 +134,19 @@ audio.addEventListener("play", () => {
 });
 
 audio.addEventListener("pause", () => {
+  if ("mediaSession" in navigator && !audio.ended) navigator.mediaSession.playbackState = "paused";
   // pause в конце трека прилетает перед ended — не дёргаем структуру зря
   if (state.isPlaying && !audio.ended) {
     state.isPlaying = false;
     notify();
+  }
+});
+
+// Возврат из фона: iOS/Android могли поставить аудио на паузу — восстанавливаем,
+// если пользователь не останавливал сам (state.isPlaying всё ещё true)
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && state.isPlaying && audio.paused) {
+    audio.play().catch(() => {});
   }
 });
 
@@ -242,12 +253,26 @@ export function showToast(text) {
 
 function updateMediaSession(track) {
   if (!("mediaSession" in navigator)) return;
-  navigator.mediaSession.metadata = new MediaMetadata({
+  const ms = navigator.mediaSession;
+  ms.metadata = new MediaMetadata({
     title: track.title,
     artist: track.artist,
+    artwork: track.cover_url
+      ? [{ src: track.cover_url, sizes: "512x512", type: "image/jpeg" }]
+      : [],
   });
-  navigator.mediaSession.setActionHandler("nexttrack", playNext);
-  navigator.mediaSession.setActionHandler("previoustrack", playPrev);
+  // Полный набор действий — управление с экрана блокировки и продолжение в фоне
+  ms.setActionHandler("play", () => audio.play().catch(() => {}));
+  ms.setActionHandler("pause", () => audio.pause());
+  ms.setActionHandler("nexttrack", playNext);
+  ms.setActionHandler("previoustrack", playPrev);
+  try {
+    ms.setActionHandler("seekto", (e) => {
+      if (e.seekTime != null && audio.duration) audio.currentTime = e.seekTime;
+    });
+  } catch {
+    // старый webview — перемотка с локскрина недоступна, не критично
+  }
 }
 
 let currentObjectUrl = null;
@@ -325,6 +350,7 @@ function startTrack(index) {
   state.queueIndex = index;
   state.currentTrack = track;
   state.isPlaying = true;
+  audio.volume = 1; // страховка от «затихания»: держим полную громкость на каждом треке
   pushRecentTrack(track);
   if (typeof track.id === "number" && track.id > 0) recordListen(track.id); // минусы (id<0) не пишем
   setAudioSource(track);

@@ -250,3 +250,25 @@ class SubscriptionStatusOut(BaseModel):
     required: bool  # True — гейт активен (есть каналы и нет premium/bypass)
     subscribed: bool  # True — подписан на все проверяемые каналы
     channels: list[SubChannelOut]
+
+
+class ContestOut(BaseModel):
+    id: int
+    title: str
+    description: str
+    banner_text: str
+    prize_days: int  # 0 — Premium навсегда
+    ends_at: datetime
+    participants: int
+    # Состояние условий для текущего пользователя
+    joined: bool
+    can_join: bool
+    is_subscribed: bool
+    referrals: int
+    required_referrals: int
+    channel_url: str | None
+
+
+class ContestJoinOut(BaseModel):
+    joined: bool
+    contest: ContestOut

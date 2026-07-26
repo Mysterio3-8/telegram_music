@@ -75,6 +75,10 @@ def _stats_text(stats: ProjectStats, revenue=None) -> str:
         "",
         f"🎵 Треков в базе: {stats.tracks_total} — все доступны для прослушивания",
         f"📀 Из них с архивом на диске: {stats.archived_on_disk}",
+        "",
+        "🎯 Прогресс к цели (SoundCloud 24/7):",
+        f"├ Треки: {stats.tracks_total} / 1 000 000 ({stats.tracks_total * 100 // 1_000_000}%)",
+        f"└ Артисты: {stats.artists_total} / 10 000 ({stats.artists_total * 100 // 10_000}%)",
     ]
     if revenue is not None:
         lines += [

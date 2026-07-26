@@ -9,6 +9,7 @@ import {
   getArtists,
   getArtistCard,
   getArtistTracks,
+  getContests,
   getGenres,
   getGenreTracks,
   followArtist,
@@ -21,6 +22,7 @@ import {
   getPlaylists,
   getPlaylistTracks,
   getPopularQueries,
+  joinContest,
   getPremiumStatus,
   getSubscriptionStatus,
   logChannelClick,
@@ -92,6 +94,7 @@ import { renderAlbums } from "./screens/albums.js";
 import { renderCollection } from "./screens/collection.js";
 import { renderReferral } from "./screens/referral.js";
 import { renderPremium } from "./screens/premium.js";
+import { renderContests } from "./screens/contests.js";
 import { renderEqualizer } from "./screens/equalizer.js";
 import { renderInterface } from "./screens/interface.js";
 import { renderStorage } from "./screens/storage.js";
@@ -182,6 +185,7 @@ const SCREENS = {
   collection: renderCollection,
   referral: renderReferral,
   premium: renderPremium,
+  contests: renderContests,
 };
 
 const TAB_SCREENS = new Set(["home", "search", "library"]);
@@ -346,9 +350,37 @@ function loadHeavyData() {
   getGenres()
     .then((genres) => mutate({ genres }))
     .catch(() => {});
+  // Конкурсы: баннер на главной показывается, только когда розыгрыш идёт
+  getContests()
+    .then((contests) => mutate({ contests }))
+    .catch(() => mutate({ contests: [] }));
   // Профиль нужен главной: доступность триала и начисленные награды
   loadProfile();
   checkSubscriptionGate();
+}
+
+function refreshContests() {
+  getContests()
+    .then((contests) => mutate({ contests }))
+    .catch(() => {});
+}
+
+// Участие: сервер сам проверяет условия и возвращает конкурс с новым состоянием.
+// Отказ приходит текстом («подпишитесь», «пригласите друзей») — показываем как есть.
+function joinContestAction(contestId) {
+  if (!contestId) return;
+  joinContest(contestId)
+    .then((result) => {
+      const contests = (getState().contests || []).map((item) =>
+        item.id === contestId ? result.contest : item
+      );
+      mutate({ contests });
+      showToast("Вы участвуете в розыгрыше 🍀");
+    })
+    .catch((error) => {
+      showToast(error.message || "Не удалось записать вас в конкурс");
+      refreshContests();
+    });
 }
 
 // Гейт обязательной подписки (блок B): если не подписан и нет Premium — показываем
@@ -984,6 +1016,13 @@ root.addEventListener("click", (event) => {
       break;
     case "open-premium":
       navigateTo("premium");
+      break;
+    case "open-contests":
+      navigateTo("contests");
+      refreshContests();
+      break;
+    case "contest-join":
+      joinContestAction(Number(el.dataset.id));
       break;
     case "premium-plan":
       mutate({ premiumMonths: Number(el.dataset.months) || 1 });

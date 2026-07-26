@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routers import audio, auth, catalog, me, payments, subscription
+from app.api.routers import audio, auth, catalog, contests, me, payments, subscription
 from app.config import settings
 
 
@@ -22,6 +22,7 @@ def create_app() -> FastAPI:
     app.include_router(audio.router)
     app.include_router(payments.router)
     app.include_router(subscription.router)
+    app.include_router(contests.router)
 
     @app.get("/health", tags=["health"])
     async def health() -> dict[str, str]:

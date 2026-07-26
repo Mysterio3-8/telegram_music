@@ -86,6 +86,24 @@ function renderReferralTeaser(state) {
   `;
 }
 
+// Баннер конкурса — над плитками, чтобы розыгрыш видели все, кто открыл приложение
+function renderContestBanner(state) {
+  const contest = (state.contests || [])[0];
+  if (!contest) return "";
+  return `
+    <button class="contest-banner" data-action="open-contests">
+      <span class="contest-banner__emoji">🎉</span>
+      <span class="contest-banner__text">
+        <span class="contest-banner__title">${contest.banner_text}</span>
+        <span class="contest-banner__sub">
+          ${contest.joined ? "Вы участвуете — ждём итогов" : "Нажмите, чтобы участвовать"}
+        </span>
+      </span>
+      ${icon("chevron")}
+    </button>
+  `;
+}
+
 function renderTiles(state) {
   const recentCount = getRecentTracks().length;
   const tiles = [
@@ -159,6 +177,7 @@ function renderVibes() {
 export function renderHome(state) {
   return `
     ${renderHero(state)}
+    ${renderContestBanner(state)}
     ${renderSubscription(state)}
     ${renderTiles(state)}
     ${renderVibes()}

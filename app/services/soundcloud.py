@@ -37,6 +37,23 @@ def upscale_soundcloud_artwork(url: str) -> str:
     return _SC_ARTWORK_SIZE_RE.sub(r"-t500x500\1", url)
 
 
+def fetch_cover_url(query: str) -> str | None:
+    """Обложка первого результата SoundCloud по запросу «Исполнитель Название» —
+    без скачивания аудио (только метаданные). Для восстановления обложек треков,
+    залитых без картинки. None — не нашли."""
+    opts = {**_base_opts(impersonate=True, use_proxy=True), "skip_download": True, "extract_flat": False}
+    try:
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(f"scsearch1:{query}", download=False)
+    except Exception:  # noqa: BLE001 — источник мог отвалиться
+        return None
+    entries = (info or {}).get("entries") or []
+    if not entries or not entries[0]:
+        return None
+    thumb = entries[0].get("thumbnail") or ""
+    return upscale_soundcloud_artwork(thumb) or None
+
+
 @dataclass(frozen=True)
 class SoundcloudEntry:
     url: str

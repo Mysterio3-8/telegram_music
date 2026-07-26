@@ -18,14 +18,30 @@ from app.tasks.celery_app import celery_app
 logger = logging.getLogger(__name__)
 
 
-async def _send_one(bot: Bot, chat_id: int, text: str, photo_file_id: str | None) -> None:
+async def _send_one(
+    bot: Bot, chat_id: int, text: str, photo_file_id: str | None, markup=None
+) -> None:
     if photo_file_id:
-        await bot.send_photo(chat_id, photo_file_id, caption=text or None)
+        await bot.send_photo(chat_id, photo_file_id, caption=text or None, reply_markup=markup)
     else:
-        await bot.send_message(chat_id, text)
+        await bot.send_message(chat_id, text, reply_markup=markup)
 
 
-async def _run_broadcast(text: str, photo_file_id: str | None, admin_chat_id: int) -> None:
+async def _contest_markup(factory, contest_id: int | None):
+    """Кнопки конкурса под постом рассылки. None — обычная рассылка без кнопок."""
+    if contest_id is None:
+        return None
+    from app.keyboards.contests import contest_keyboard
+    from app.services.contests import get_contest
+
+    async with factory() as session:
+        contest = await get_contest(session, contest_id)
+    return contest_keyboard(contest, joined=False) if contest else None
+
+
+async def _run_broadcast(
+    text: str, photo_file_id: str | None, admin_chat_id: int, contest_id: int | None = None
+) -> None:
     engine = create_async_engine(settings.database_url)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     bot = Bot(token=settings.bot_token)
@@ -33,15 +49,16 @@ async def _run_broadcast(text: str, photo_file_id: str | None, admin_chat_id: in
     try:
         async with factory() as session:
             recipients = await active_recipient_ids(session)
+        markup = await _contest_markup(factory, contest_id)
         for chat_id in recipients:
             try:
-                await _send_one(bot, chat_id, text, photo_file_id)
+                await _send_one(bot, chat_id, text, photo_file_id, markup)
                 delivered += 1
             except TelegramRetryAfter as exc:
                 # Telegram просит притормозить — ждём и повторяем один раз
                 await asyncio.sleep(exc.retry_after + 1)
                 try:
-                    await _send_one(bot, chat_id, text, photo_file_id)
+                    await _send_one(bot, chat_id, text, photo_file_id, markup)
                     delivered += 1
                 except Exception:  # noqa: BLE001
                     failed += 1
@@ -71,5 +88,7 @@ async def _run_broadcast(text: str, photo_file_id: str | None, admin_chat_id: in
 
 
 @celery_app.task(name="broadcast.send")
-def send_broadcast(text: str, photo_file_id: str | None, admin_chat_id: int) -> None:
-    asyncio.run(_run_broadcast(text, photo_file_id, admin_chat_id))
+def send_broadcast(
+    text: str, photo_file_id: str | None, admin_chat_id: int, contest_id: int | None = None
+) -> None:
+    asyncio.run(_run_broadcast(text, photo_file_id, admin_chat_id, contest_id))

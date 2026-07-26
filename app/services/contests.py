@@ -36,6 +36,14 @@ class Eligibility:
         return self.is_subscribed and self.referrals >= self.required_referrals
 
 
+def contest_channel_url(contest: Contest) -> str | None:
+    """Ссылка на канал-условие. None — приватный канал без username."""
+    channel = contest.required_channel
+    if not channel:
+        return None
+    return f"https://t.me/{channel.removeprefix('@')}" if channel.startswith("@") else None
+
+
 async def active_contests(session: AsyncSession) -> list[Contest]:
     """Идущие конкурсы: активные, ещё не разыгранные, срок не истёк."""
     rows = await session.scalars(

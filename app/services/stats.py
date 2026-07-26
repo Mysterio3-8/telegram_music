@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Track, TrackEvent, User
+from app.db.models import Artist, Track, TrackEvent, User
 from app.services.storage_cleanup import count_reclaimable
 
 
@@ -50,6 +50,7 @@ class ProjectStats:
     reclaimable_count: int  # архив-дубли: tg_file_id уже есть и подтверждён — можно удалить
     reclaimable_bytes: int
     junk_count: int  # не похоже на музыку: короче track_min_seconds / длиннее track_max_seconds
+    artists_total: int  # артистов-сущностей в каталоге (цель массового парсера — 10k)
 
 
 async def _count(session: AsyncSession, stmt) -> int:
@@ -83,4 +84,5 @@ async def collect_stats(session: AsyncSession) -> ProjectStats:
         reclaimable_count=reclaimable_count,
         reclaimable_bytes=reclaimable_bytes,
         junk_count=junk.count,
+        artists_total=await _count(session, select(func.count()).select_from(Artist)),
     )
