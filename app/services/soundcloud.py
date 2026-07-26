@@ -191,6 +191,10 @@ def download_soundcloud_audio(url: str) -> tuple[DownloadedAudio, str] | None:
     """Скачивает один трек. Возвращает (аудио, uploader) или None.
     Ошибка сети/прокси → повтор через следующий прокси; последняя ошибка наружу
     (вызывающая сторона различает постоянные отказы по тексту)."""
+    from app.services.disk import enough_free_disk
+
+    if not enough_free_disk():
+        return None  # диск почти полон — 24/7-парсер не забивает диск (бережём бота)
     last_error: Exception | None = None
     for attempt in range(_proxy_attempts()):
         try:

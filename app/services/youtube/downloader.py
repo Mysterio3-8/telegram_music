@@ -190,6 +190,10 @@ def search_first_video(query: str) -> VideoEntry | None:
 def download_audio(video_id: str, as_mp3: bool = False) -> DownloadedAudio | None:
     """as_mp3=True — гарантированно mp3 (перекодирование ffmpeg): поисковый парсер
     отдаёт пользователю mp3. Массовая закачка зовёт без флага (bestaudio)."""
+    from app.services.disk import enough_free_disk
+
+    if not enough_free_disk():
+        return None  # диск почти полон — не забиваем /tmp, бережём Redis/бота
     with tempfile.TemporaryDirectory() as tmp:
         opts = {
             **_base_opts(),

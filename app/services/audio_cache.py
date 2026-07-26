@@ -50,6 +50,8 @@ def cache_put(storage_key: str, data: bytes) -> None:
 
 
 def _evict_lru() -> None:
+    from app.services.disk import free_mb
+
     limit = settings.audio_cache_max_mb * 1024 * 1024
     root = Path(settings.audio_cache_dir)
     entries: list[tuple[float, int, Path]] = []
@@ -63,8 +65,10 @@ def _evict_lru() -> None:
         return
 
     total = sum(size for _, size, _ in entries)
+    # Вытесняем, пока не уложились И в свой лимит, И в запас свободного диска:
+    # кэш не должен доедать последние мегабайты (иначе падает Redis/бот)
     for _, size, file in sorted(entries):
-        if total <= limit:
+        if total <= limit and free_mb() >= settings.min_free_disk_mb:
             break
         try:
             file.unlink()
