@@ -1417,8 +1417,9 @@ root.addEventListener("click", (event) => {
       handlePayPremium();
       break;
     case "open-support":
-      if (tg) tg.openTelegramLink("https://t.me/Mystadm");
-      else window.open("https://t.me/Mystadm", "_blank");
+      // Бот поддержки (блок F): жалобы/отзывы/идеи с медиа
+      if (tg) tg.openTelegramLink("https://t.me/suptgmusic_bot");
+      else window.open("https://t.me/suptgmusic_bot", "_blank");
       break;
     case "open-bot":
       if (tg) tg.openTelegramLink("https://t.me/tgram_music_bot");

@@ -35,10 +35,35 @@ def _junk_condition():
     return or_(*conditions) if conditions else false()
 
 
+# Клипы/видео с YouTube («кишлак» по словам владельца): чистим по маркерам в
+# названии. is_probably_junk — регексом в Python; для SQL берём ILIKE-паттерны.
+_CLIP_MARKERS = ("%клип%", "%премьера%", "%official video%", "%music video%", "%лирик%", "%видеоклип%")
+
+
+def _clip_condition():
+    from sqlalchemy import or_ as _or
+
+    return _or(*[Track.title.ilike(p) for p in _CLIP_MARKERS])
+
+
 @dataclass(frozen=True)
 class JunkStats:
     count: int
     total_bytes: int  # по file_size, где он известен
+
+
+async def count_clip_tracks(session: AsyncSession) -> int:
+    from sqlalchemy import func
+
+    return await session.scalar(
+        select(func.count()).select_from(Track).where(_clip_condition())
+    ) or 0
+
+
+async def delete_clip_tracks(session: AsyncSession, storage: StorageBackend) -> int:
+    """Удаляет клипы/видео (мусор с YouTube) по маркерам в названии."""
+    tracks = list((await session.scalars(select(Track).where(_clip_condition()))).all())
+    return await _delete_tracks(session, storage, tracks)
 
 
 async def count_junk_tracks(session: AsyncSession) -> JunkStats:
@@ -57,6 +82,11 @@ async def list_junk_tracks(session: AsyncSession, limit: int = 15) -> list[Track
 async def delete_junk_tracks(session: AsyncSession, storage: StorageBackend) -> int:
     """Удаляет мусорные треки целиком. Возвращает число удалённых."""
     tracks = list((await session.scalars(select(Track).where(_junk_condition()))).all())
+    return await _delete_tracks(session, storage, tracks)
+
+
+async def _delete_tracks(session: AsyncSession, storage: StorageBackend, tracks: list[Track]) -> int:
+    """Удаляет треки целиком: файл + все связи + запись. Возвращает число удалённых."""
     if not tracks:
         return 0
     ids = [t.id for t in tracks]

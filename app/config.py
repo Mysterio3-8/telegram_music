@@ -169,9 +169,25 @@ class Settings(BaseSettings):
     def effective_celery_broker(self) -> str:
         return self.celery_broker_url or self.redis_url
 
+    # Поддержка (блок F): отдельный бот @suptgmusic_bot собирает жалобы/отзывы/идеи.
+    # Токен — только в .env (SUPPORT_BOT_TOKEN). Пусто → бот поддержки не запускается.
+    support_bot_token: str = ""
+    support_bot_username: str = "suptgmusic_bot"  # для кнопки-ссылки в основном боте
+    # Куда падают обращения (chat_id). Пусто → личка первого администратора.
+    support_chat_id: int = 0
+
     @property
     def admin_id_set(self) -> set[int]:
         return {int(part) for part in self.admin_ids.split(",") if part.strip().isdigit()}
+
+    @property
+    def first_admin_id(self) -> int | None:
+        ids = [int(p) for p in self.admin_ids.split(",") if p.strip().isdigit()]
+        return ids[0] if ids else None
+
+    @property
+    def effective_support_chat_id(self) -> int | None:
+        return self.support_chat_id or self.first_admin_id
 
 
 settings = Settings()

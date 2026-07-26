@@ -8,6 +8,12 @@ def main_menu_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="⬆️ Загрузить трек", callback_data="menu:upload")],
         [InlineKeyboardButton(text="📥 Перенести музыку из сервисов", callback_data="menu:transfer")],
         [InlineKeyboardButton(text="💎 Купить Premium", callback_data="menu:premium")],
+        [
+            InlineKeyboardButton(
+                text="🆘 Поддержка / жалобы / идеи",
+                url=f"https://t.me/{settings.support_bot_username}",
+            )
+        ],
     ]
     if settings.public_base_url:
         rows.insert(

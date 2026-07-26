@@ -55,6 +55,7 @@ def main() -> None:
 
     sub.add_parser("scan-due", help="Ежедневная автопроверка источников (только SoundCloud)")
     sub.add_parser("recover", help="Вернуть оборванные задачи в очередь (§15)")
+    sub.add_parser("disable-all", help="Отключить ВСЕ YouTube-источники (24/7 только SoundCloud)")
 
     args = parser.parse_args()
 
@@ -77,6 +78,25 @@ def main() -> None:
     elif args.command == "recover":
         youtube_recover.delay()
         logger.info("Восстановление очереди запущено в фоне")
+    elif args.command == "disable-all":
+        asyncio.run(_disable_all())
+
+
+async def _disable_all() -> None:
+    """Отключает все YouTube-источники — 24/7-парсер качает только с SoundCloud
+    (решение владельца: с YouTube лезут клипы/видео/мусор)."""
+    from sqlalchemy import update
+
+    from app.db.models import YoutubeSource
+
+    async with session_factory() as session:
+        result = await session.execute(
+            update(YoutubeSource)
+            .where(YoutubeSource.status == "active")
+            .values(status="disabled")
+        )
+        await session.commit()
+    logger.info("Отключено YouTube-источников: %s", result.rowcount)
 
 
 if __name__ == "__main__":

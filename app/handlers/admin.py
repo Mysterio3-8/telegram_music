@@ -19,7 +19,13 @@ from app.keyboards.admin import (
     reclaim_confirm_keyboard,
     sub_channels_keyboard,
 )
-from app.services.catalog_cleanup import count_junk_tracks, delete_junk_tracks, list_junk_tracks
+from app.services.catalog_cleanup import (
+    count_clip_tracks,
+    count_junk_tracks,
+    delete_clip_tracks,
+    delete_junk_tracks,
+    list_junk_tracks,
+)
 from app.services.required_channels import (
     add_required_channel,
     channel_ad_stats,
@@ -100,9 +106,10 @@ async def cmd_admin(message: Message) -> None:
         stats = await collect_stats(session)
         pending = await count_pending(session)
         revenue = await collect_revenue(session)
+        clips = await count_clip_tracks(session)
     await message.answer(
         _stats_text(stats, revenue),
-        reply_markup=admin_panel_keyboard(stats.reclaimable_count, stats.junk_count, pending),
+        reply_markup=admin_panel_keyboard(stats.reclaimable_count, stats.junk_count, pending, clips),
     )
 
 
@@ -115,10 +122,11 @@ async def cb_admin_stats(callback: CallbackQuery) -> None:
         stats = await collect_stats(session)
         pending = await count_pending(session)
         revenue = await collect_revenue(session)
+        clips = await count_clip_tracks(session)
     try:
         await callback.message.edit_text(
             _stats_text(stats, revenue),
-            reply_markup=admin_panel_keyboard(stats.reclaimable_count, stats.junk_count, pending),
+            reply_markup=admin_panel_keyboard(stats.reclaimable_count, stats.junk_count, pending, clips),
         )
     except TelegramBadRequest:
         pass  # цифры не изменились
@@ -350,6 +358,55 @@ async def process_sub_channel_label(message: Message, state: FSMContext) -> None
     await message.answer(
         f"✅ Добавлен: {label} — {row.channel}\n\n{_sub_channels_text(channels)}",
         reply_markup=sub_channels_keyboard(channels),
+    )
+
+
+# --- Очистка клипов/видео с YouTube («кишлак») — по маркерам в названии ---
+
+
+@router.callback_query(F.data == "adm:clip:ask")
+async def cb_clip_ask(callback: CallbackQuery) -> None:
+    if not is_admin(callback.from_user.id):
+        await callback.answer("Недоступно", show_alert=True)
+        return
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+    async with session_factory() as session:
+        count = await count_clip_tracks(session)
+    if count == 0:
+        await callback.answer("Клипов/видео не найдено", show_alert=True)
+        return
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=f"🗑 Удалить {count} клипов НАВСЕГДА", callback_data="adm:clip:go")],
+            [InlineKeyboardButton(text="◀️ Отмена", callback_data="adm:stats")],
+        ]
+    )
+    await callback.message.edit_text(
+        f"Найдено {count} треков-клипов/видео (по словам «клип/премьера/official video» "
+        "в названии — обычно мусор с YouTube).\n\n"
+        "⚠️ Удаляются НАВСЕГДА: файлы, записи, связи. Отменить нельзя.",
+        reply_markup=kb,
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "adm:clip:go")
+async def cb_clip_go(callback: CallbackQuery) -> None:
+    if not is_admin(callback.from_user.id):
+        await callback.answer("Недоступно", show_alert=True)
+        return
+    async with session_factory() as session:
+        removed = await delete_clip_tracks(session, get_storage())
+    await callback.answer(f"Удалено клипов: {removed}", show_alert=True)
+    async with session_factory() as session:
+        stats = await collect_stats(session)
+        pending = await count_pending(session)
+        revenue = await collect_revenue(session)
+        clips = await count_clip_tracks(session)
+    await callback.message.edit_text(
+        _stats_text(stats, revenue),
+        reply_markup=admin_panel_keyboard(stats.reclaimable_count, stats.junk_count, pending, clips),
     )
 
 

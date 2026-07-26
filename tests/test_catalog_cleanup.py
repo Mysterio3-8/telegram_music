@@ -1,8 +1,15 @@
 import pytest
+from sqlalchemy import select
 
 from app.config import settings
 from app.db.models import Lyrics, Playlist, PlaylistTrack, Track, TrackEvent, Upload, User, UserLibrary
-from app.services.catalog_cleanup import count_junk_tracks, delete_junk_tracks, list_junk_tracks
+from app.services.catalog_cleanup import (
+    count_clip_tracks,
+    count_junk_tracks,
+    delete_clip_tracks,
+    delete_junk_tracks,
+    list_junk_tracks,
+)
 
 
 @pytest.fixture
@@ -31,6 +38,19 @@ async def _track(session, title, duration, storage_path=None, file_size=None) ->
     session.add(track)
     await session.commit()
     return track
+
+
+async def test_clip_cleanup_removes_video_junk(session):
+    await _track(session, "Big Baby Tape — Gimme the Loot", 200)  # норм
+    await _track(session, "Kizaru — Фейк Айди (Официальный клип)", 200)
+    await _track(session, "Премьера клипа: Мияги", 200)
+    assert await count_clip_tracks(session) == 2
+    deleted = await delete_clip_tracks(session, FakeStorage())
+    assert deleted == 2
+    assert await count_clip_tracks(session) == 0
+    # нормальный трек не тронут
+    remaining = list((await session.scalars(select(Track))).all())
+    assert [t.title for t in remaining] == ["Big Baby Tape — Gimme the Loot"]
 
 
 async def test_no_junk_when_limits_disabled(session):

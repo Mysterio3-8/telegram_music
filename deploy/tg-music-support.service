@@ -1,0 +1,13 @@
+[Unit]
+Description=Telegram Music — бот поддержки @suptgmusic_bot (жалобы/отзывы/идеи, блок F)
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/tg-music-bot
+ExecStart=/opt/tg-music-bot/.venv/bin/python -m app.support_bot
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -2,7 +2,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 
 def admin_panel_keyboard(
-    reclaimable_count: int = 0, junk_count: int = 0, pending_count: int = 0
+    reclaimable_count: int = 0, junk_count: int = 0, pending_count: int = 0, clip_count: int = 0
 ) -> InlineKeyboardMarkup:
     rows = [[InlineKeyboardButton(text="🔄 Обновить", callback_data="adm:stats")]]
     if pending_count > 0:
@@ -11,6 +11,15 @@ def admin_panel_keyboard(
                 InlineKeyboardButton(
                     text=f"🛡 Модерация ({pending_count})",
                     callback_data="adm:mod",
+                )
+            ]
+        )
+    if clip_count > 0:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=f"🎬 Клипы/видео с YouTube ({clip_count})",
+                    callback_data="adm:clip:ask",
                 )
             ]
         )
