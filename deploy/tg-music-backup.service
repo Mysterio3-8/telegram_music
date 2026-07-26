@@ -1,0 +1,8 @@
+[Unit]
+Description=Telegram Music — резервная копия БД (блок G)
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/tg-music-bot
+ExecStart=/opt/tg-music-bot/.venv/bin/python -m app.cli.backup

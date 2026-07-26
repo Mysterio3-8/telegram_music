@@ -94,6 +94,9 @@ class Settings(BaseSettings):
 
     # Хранилище аудиофайлов
     storage_dir: str = "storage"  # каталог для локального бэкенда
+    # Резервные копии БД (блок G): куда складывать и сколько последних хранить
+    backup_dir: str = "backups"
+    backup_keep: int = 14
     s3_endpoint_url: str = ""  # если задан — используется S3-совместимое хранилище
     s3_bucket: str = ""
     s3_access_key: str = ""
