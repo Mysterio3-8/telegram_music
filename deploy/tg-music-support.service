@@ -8,6 +8,7 @@ WorkingDirectory=/opt/tg-music-bot
 ExecStart=/opt/tg-music-bot/.venv/bin/python -m app.support_bot
 Restart=always
 RestartSec=5
+OOMScoreAdjust=-200
 
 [Install]
 WantedBy=multi-user.target

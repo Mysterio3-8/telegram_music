@@ -11,6 +11,8 @@ ExecStartPre=/opt/tg-music-bot/.venv/bin/python -m app.cli.youtube recover
 ExecStart=/opt/tg-music-bot/.venv/bin/celery -A app.tasks.celery_app worker -Q youtube --pool=threads --concurrency=1 --loglevel=info
 Restart=always
 RestartSec=5
+MemoryMax=200M
+OOMScoreAdjust=500
 
 [Install]
 WantedBy=multi-user.target

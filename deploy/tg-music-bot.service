@@ -1,0 +1,17 @@
+[Unit]
+Description=Telegram Music Bot
+After=network-online.target redis-server.service
+Wants=network-online.target
+Requires=redis-server.service
+
+[Service]
+WorkingDirectory=/opt/tg-music-bot
+ExecStart=/opt/tg-music-bot/.venv/bin/python -m app.main
+Restart=always
+RestartSec=5
+# Защита от падений (инцидент 2026-07-26/27): бот — самый приоритетный процесс,
+# ядро должно убивать его последним при нехватке памяти (OOM), а не первым.
+OOMScoreAdjust=-800
+
+[Install]
+WantedBy=multi-user.target

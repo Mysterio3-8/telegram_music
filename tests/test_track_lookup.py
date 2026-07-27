@@ -89,31 +89,46 @@ def test_broken_source_does_not_break_the_search(monkeypatch):
 
 
 def test_find_track_returns_best_across_sources(monkeypatch):
-    def soundcloud(query, limit):
-        return [_candidate("Rasputin", artist="Boney M")]
+    import app.services.track_lookup as track_lookup
 
-    def youtube(query, limit):
-        return [_candidate("Фейк Айди", artist="Kizaru", source="youtube")]
-
-    monkeypatch.setattr(providers, "PROVIDERS", (soundcloud, youtube))
+    # SoundCloud (быстрый путь) вернул нерелевантное → добираем YouTube и находим там
+    monkeypatch.setattr(track_lookup, "search_soundcloud", lambda q, limit: [_candidate("Rasputin", artist="Boney M")])
+    monkeypatch.setattr(track_lookup, "search_youtube", lambda q, limit: [_candidate("Фейк Айди", artist="Kizaru", source="youtube")])
 
     found = find_track("кизару фейк айди")
     assert found is not None
     assert found.title == "Фейк Айди"
 
 
+def test_find_track_soundcloud_fast_path_skips_youtube(monkeypatch):
+    import app.services.track_lookup as track_lookup
+
+    # Уверенное совпадение в SoundCloud → YouTube не дёргаем (скорость)
+    monkeypatch.setattr(track_lookup, "search_soundcloud", lambda q, limit: [_candidate("Фейк Айди", artist="Kizaru")])
+
+    def youtube_must_not_run(q, limit):
+        raise AssertionError("YouTube не должен вызываться при уверенном совпадении SoundCloud")
+
+    monkeypatch.setattr(track_lookup, "search_youtube", youtube_must_not_run)
+    found = find_track("кизару фейк айди")
+    assert found is not None and found.source == "soundcloud"
+
+
 def test_find_track_returns_none_when_nothing_matches(monkeypatch):
-    monkeypatch.setattr(providers, "PROVIDERS", ())
+    import app.services.track_lookup as track_lookup
+
+    monkeypatch.setattr(track_lookup, "search_soundcloud", lambda q, limit: [])
+    monkeypatch.setattr(track_lookup, "search_youtube", lambda q, limit: [])
     assert find_track("кизару фейк айди") is None
 
 
 def test_find_track_weak_query_still_returns_something(monkeypatch):
+    import app.services.track_lookup as track_lookup
+
     # Владелец: даже по одному слову/букве выдавать трек. Уверенного совпадения нет,
     # но источник что-то вернул → отдаём топ-кандидата, а не «не нашли».
-    def youtube(query, limit):
-        return [_candidate("Some Popular Song", artist="Some Artist", source="youtube")]
-
-    monkeypatch.setattr(providers, "PROVIDERS", (youtube,))
+    monkeypatch.setattr(track_lookup, "search_soundcloud", lambda q, limit: [])
+    monkeypatch.setattr(track_lookup, "search_youtube", lambda q, limit: [_candidate("Some Popular Song", artist="Some Artist", source="youtube")])
     found = find_track("s")
     assert found is not None
     assert found.title == "Some Popular Song"

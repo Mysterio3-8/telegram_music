@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     playlist_import_limit: int = 0
 
     # Premium (SPEC §14)
-    premium_price_stars: int = 15
+    premium_price_stars: int = 50  # владелец поднял с 15 — было несоразмерно дёшево против 49₽
     premium_price_rub: int = 49  # базовая цена месяца (владелец поднял с 21)
     premium_forever_price_rub: int = 10000  # тариф «навсегда»
     premium_duration_days: int = 30

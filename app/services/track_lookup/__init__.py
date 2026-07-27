@@ -27,21 +27,35 @@ from app.services.track_lookup.ranking import (
 CONFIDENT_MATCH = 0.3
 
 
-def find_track(query: str, limit: int = 8) -> Candidate | None:
-    """Лучшее совпадение по запросу среди всех источников; None — не нашли.
+def _safe_search(provider, query: str, limit: int) -> list[Candidate]:
+    try:
+        return provider(query, limit)
+    except Exception:  # noqa: BLE001 — источник отвалился, не роняем поиск
+        return []
 
-    Владелец: выдавать трек даже по слабому запросу (одно слово, только артист,
-    только альбом, одна буква). Поэтому если ни один кандидат не дотянул до
-    порога уверенного совпадения — отдаём топ по ранжированию (что-то релевантное
-    лучше, чем «не нашли»). None только когда источники не вернули ничего."""
-    candidates = collect_candidates(query, limit)
+
+def find_track(query: str, limit: int = 4) -> Candidate | None:
+    """Лучшее совпадение по запросу среди источников; None — не нашли.
+
+    Быстрый путь (скорость — приоритет владельца): сперва только SoundCloud —
+    там готовый mp3 без перекодирования. Если совпадение уверенное, YouTube даже
+    не дёргаем (одна сетевая операция вместо двух). Иначе добираем YouTube и
+    ранжируем всё вместе.
+
+    Выдаём трек даже по слабому запросу (одно слово/буква/только артист): ниже
+    порога — топ по ранжированию. None только если источники не вернули ничего."""
+    sc = _safe_search(search_soundcloud, query, limit)
+    confident = best_match(query, sc, min_score=CONFIDENT_MATCH)
+    if confident is not None:
+        return confident
+
+    candidates = sc + _safe_search(search_youtube, query, limit)
     confident = best_match(query, candidates, min_score=CONFIDENT_MATCH)
     if confident is not None:
         return confident
     ranked = rank_candidates(query, candidates)
     if ranked:
         return ranked[0]
-    # ранжирование отбросило всё (мусор/ноль) — берём первый непустой кандидат
     return candidates[0] if candidates else None
 
 

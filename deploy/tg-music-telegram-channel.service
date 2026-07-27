@@ -10,6 +10,8 @@ ExecStartPre=/opt/tg-music-bot/.venv/bin/python -m app.cli.telegram_channel reco
 ExecStart=/opt/tg-music-bot/.venv/bin/celery -A app.tasks.celery_app worker -Q telegram_channel --concurrency=1 --loglevel=info
 Restart=always
 RestartSec=5
+MemoryMax=150M
+OOMScoreAdjust=300
 
 [Install]
 WantedBy=multi-user.target

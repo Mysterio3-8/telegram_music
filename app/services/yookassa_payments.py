@@ -32,11 +32,9 @@ def _auth() -> aiohttp.BasicAuth:
     return aiohttp.BasicAuth(settings.yookassa_shop_id, settings.yookassa_secret_key)
 
 
-async def create_premium_payment(
-    telegram_id: int, bot_username: str, price_rub: int | None = None, months: int = 1
-) -> str | None:
-    """Создаёт платёж, возвращает confirmation_url или None при ошибке."""
-    amount = settings.premium_price_rub if price_rub is None else price_rub
+def _payment_payload(
+    telegram_id: int, bot_username: str, amount: int, months: int, with_save_method: bool
+) -> dict:
     payload = {
         "amount": {"value": f"{amount}.00", "currency": "RUB"},
         "capture": True,
@@ -46,22 +44,43 @@ async def create_premium_payment(
         },
         "description": f"Premium на {settings.premium_duration_days * months} дней",
         "metadata": {"telegram_id": str(telegram_id), "months": str(months)},
+    }
+    if with_save_method:
         # Сохраняем способ оплаты для автопродления (блок E): согласие пользователь
         # даёт офертой при оформлении. Только для месячного тарифа.
-        "save_payment_method": bool(settings.premium_autorenew and months == 1),
-    }
+        payload["save_payment_method"] = True
+    return payload
+
+
+async def _post_payment(payload: dict) -> tuple[int, dict]:
+    async with aiohttp.ClientSession(auth=_auth()) as http:
+        async with http.post(
+            f"{YOOKASSA_API}/payments",
+            json=payload,
+            headers={"Idempotence-Key": str(uuid.uuid4())},
+        ) as response:
+            return response.status, await response.json()
+
+
+async def create_premium_payment(
+    telegram_id: int, bot_username: str, price_rub: int | None = None, months: int = 1
+) -> str | None:
+    """Создаёт платёж, возвращает confirmation_url или None при ошибке."""
+    amount = settings.premium_price_rub if price_rub is None else price_rub
+    want_save_method = bool(settings.premium_autorenew and months == 1)
+    payload = _payment_payload(telegram_id, bot_username, amount, months, want_save_method)
     try:
-        async with aiohttp.ClientSession(auth=_auth()) as http:
-            async with http.post(
-                f"{YOOKASSA_API}/payments",
-                json=payload,
-                headers={"Idempotence-Key": str(uuid.uuid4())},
-            ) as response:
-                body = await response.json()
-                if response.status != 200:
-                    logger.error("ЮKassa create payment %s: %s", response.status, body)
-                    return None
-                return body["confirmation"]["confirmation_url"]
+        status, body = await _post_payment(payload)
+        if status != 200 and want_save_method and body.get("code") == "forbidden":
+            # Магазин не подключил рекуррентные платежи в ЮKassa — платежи не должны
+            # падать из-за этого, повторяем без сохранения способа оплаты
+            logger.warning("ЮKassa: рекуррент недоступен для магазина, повтор без save_payment_method")
+            payload = _payment_payload(telegram_id, bot_username, amount, months, False)
+            status, body = await _post_payment(payload)
+        if status != 200:
+            logger.error("ЮKassa create payment %s: %s", status, body)
+            return None
+        return body["confirmation"]["confirmation_url"]
     except aiohttp.ClientError:
         logger.exception("ЮKassa недоступна (create payment)")
         return None

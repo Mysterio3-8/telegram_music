@@ -1,0 +1,18 @@
+[Unit]
+Description=Telegram Music Bot — Celery worker (enrichment)
+After=network-online.target redis-server.service
+Wants=network-online.target
+Requires=redis-server.service
+
+[Service]
+WorkingDirectory=/opt/tg-music-bot
+ExecStart=/opt/tg-music-bot/.venv/bin/celery -A app.tasks.celery_app worker --loglevel=info --concurrency=2
+Restart=always
+RestartSec=5
+# Защита памяти (инцидент 2026-07-26/27): воркер сам не должен вырасти настолько,
+# чтобы уронить Redis/бота — жёсткий потолок + приоритет "убить первым" при OOM.
+MemoryMax=200M
+OOMScoreAdjust=500
+
+[Install]
+WantedBy=multi-user.target

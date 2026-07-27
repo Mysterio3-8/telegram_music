@@ -11,6 +11,10 @@ WorkingDirectory=/opt/tg-music-bot
 ExecStart=/opt/tg-music-bot/.venv/bin/celery -A app.tasks.celery_app worker -Q youtube_user --pool=threads --concurrency=2 --loglevel=info
 Restart=always
 RestartSec=5
+# Эта очередь несёт поисковый парсер (search.fetch) — сейчас приоритетная фича
+# (массовый 24/7-парсер временно выключен, см. tg-music-soundcloud/youtube).
+# Не топ-приоритет как у бота, но и не первый на убой.
+MemoryMax=250M
 
 [Install]
 WantedBy=multi-user.target
