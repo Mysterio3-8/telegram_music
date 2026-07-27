@@ -3,11 +3,13 @@
 **Статус:** 🟢 прод (Этапы 1-5 задеплоены, Mini App живой на keybest.cc)
 **Что это:** Telegram-бот [@tgram_music_bot](https://t.me/tgram_music_bot) — музыкальная платформа: библиотека, плейлисты, поиск, загрузка треков, Premium. Полное ТЗ — в [SPEC.md](SPEC.md).
 
+**➡️ Новая сессия начинай с [NEXT_SESSION.md](NEXT_SESSION.md)** — приоритеты (бот не должен падать, деньги, поисковый парсер) и полный список забытого/отложенного.
+
 ## Прод
 
 - VPS: `ssh news-rewriter-vps` (root@38.244.213.132), код в `/opt/tg-music-bot`
 - Домен: **keybest.cc — жив, HTTPS выпущен** (Let's Encrypt, автопродление certbot, истекает 2026-10-10). nginx-сайт `/etc/nginx/sites-enabled/keybest.cc` (источник — [deploy/nginx-keybest.conf](deploy/nginx-keybest.conf)): статика Mini App на `/`, `/api/` → uvicorn :8010, `/webhook/` → uvicorn :8010
-- Сервисы: `tg-music-bot` (polling), `tg-music-worker` (Celery, обогащение загрузок), `tg-music-youtube` (Celery, очередь `youtube` — импорт с YouTube), таймер `tg-music-youtube-scan` (автопроверка §11), `tg-music-api` (uvicorn :8010 — API Mini App + webhook ЮKassa). Юниты — в [deploy/](deploy/), nginx-сайт — [deploy/nginx-keybest.conf](deploy/nginx-keybest.conf). `systemctl {status,restart} <сервис>`, логи: `journalctl -u <сервис> -f`
+- Сервисы: `tg-music-bot` (polling), `tg-music-worker` (Celery, обогащение загрузок), `tg-music-youtube-user` (Celery, очередь `youtube_user` — **поисковый парсер**, сейчас приоритет), `tg-music-api` (uvicorn :8010 — API Mini App + webhook ЮKassa). ⚠️ **Массовый парсер 24/7 (`tg-music-soundcloud`, `tg-music-youtube`, `tg-music-youtube-scan.timer`) ВЫКЛЮЧЕН** (27.07, решение владельца — сервер маленький, см. NEXT_SESSION.md). Юниты — в [deploy/](deploy/), nginx-сайт — [deploy/nginx-keybest.conf](deploy/nginx-keybest.conf). `systemctl {status,restart} <сервис>`, логи: `journalctl -u <сервис> -f`
 - Redis (`redis-server`) — FSM + брокер Celery. ffmpeg + libchromaprint-tools (fpcalc) — отпечатки. yt-dlp (pip) — загрузка с YouTube
 - Repo: git@github.com:Mysterio3-8/telegram_music.git (пуш только по SSH — https-креды на машине от другого аккаунта)
 - Деплой: `/deploy` (push → pull → pip install → `alembic upgrade head` → restart bot+worker)
