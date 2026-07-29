@@ -7,7 +7,12 @@ def main_menu_keyboard() -> InlineKeyboardMarkup:
     rows = [
         [InlineKeyboardButton(text="⬆️ Загрузить трек", callback_data="menu:upload")],
         [InlineKeyboardButton(text="📥 Перенести музыку из сервисов", callback_data="menu:transfer")],
-        [InlineKeyboardButton(text="💎 Купить Premium", callback_data="menu:premium")],
+        [
+            InlineKeyboardButton(
+                text=f"💎 Открыть плеер — {settings.premium_price_rub} ₽/мес",
+                callback_data="menu:premium",
+            )
+        ],
         [
             InlineKeyboardButton(
                 text="🆘 Поддержка / жалобы / идеи",

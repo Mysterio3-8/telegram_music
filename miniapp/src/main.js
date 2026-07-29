@@ -102,6 +102,7 @@ import { renderTransfer } from "./screens/transfer.js";
 import { renderUpload } from "./screens/upload.js";
 import { renderOnboarding } from "./screens/onboarding.js";
 import { renderSubGate } from "./screens/subgate.js";
+import { renderPaywall } from "./screens/paywall.js";
 import {
   isOffline,
   offlineSupported,
@@ -245,6 +246,17 @@ function render() {
     if (gateHtml !== lastHtml) {
       lastHtml = gateHtml;
       root.innerHTML = gateHtml;
+    }
+    return;
+  }
+
+  // Пэйвол: приложение — по подписке (бот остаётся бесплатным). Показываем
+  // только когда статус Premium уже известен, чтобы не мигать на загрузке.
+  if (state.premium && !state.premium.active) {
+    const paywallHtml = renderPaywall(state);
+    if (paywallHtml !== lastHtml) {
+      lastHtml = paywallHtml;
+      root.innerHTML = paywallHtml;
     }
     return;
   }
@@ -1016,6 +1028,19 @@ root.addEventListener("click", (event) => {
       break;
     case "open-premium":
       navigateTo("premium");
+      break;
+    case "paywall-trial":
+      // 1 день бесплатно — после активации приложение открывается сразу
+      startPremiumTrial()
+        .then((premium) => {
+          mutate({ premium });
+          showToast("Доступ открыт на 1 день");
+        })
+        .catch(() => showToast("Не удалось активировать — попробуйте позже"));
+      break;
+    case "paywall-buy":
+      mutate({ premiumMonths: 1 });
+      handlePayPremium();
       break;
     case "open-contests":
       navigateTo("contests");
