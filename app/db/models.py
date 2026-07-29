@@ -77,6 +77,11 @@ class Track(Base):
     moderation_status: Mapped[str] = mapped_column(
         String(16), default="approved", server_default="approved", index=True
     )
+    # «исполнитель название» в нижнем регистре + транслит — поле, по которому идёт
+    # поиск по любому слову/букве. Нужно потому, что SQLite lower()/ilike не
+    # понижают кириллицу: без него запрос «би» русскими буквами не находил ничего.
+    # Пишется при создании трека, бэкфилл — python -m app.cli.reindex_search.
+    search_index: Mapped[str | None] = mapped_column(String(600), index=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
 

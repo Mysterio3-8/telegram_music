@@ -8,10 +8,23 @@ from app.db.models import Artist, Instrumental, Playlist, Track
 
 
 def _track_filter(query: str):
+    """Поиск по автору, названию и любому их сочетанию — вплоть до одной буквы.
+
+    Основной путь — нормализованный search_index (нижний регистр + транслит
+    посчитаны в Python): только он находит кириллицу на SQLite, где lower()/ILIKE
+    работают лишь для ASCII, из-за чего запрос «ки» не находил «Кизару».
+    ILIKE по title/artist оставлен для треков без индекса (бэкфилл идёт фоном)."""
+    from app.services.search_index import normalize_search_query
+
     pattern = f"%{query.strip()}%"
+    normalized = f"%{normalize_search_query(query)}%"
     # Немодерированные (pending/rejected) не показываем в поиске (блок D)
     return and_(
-        or_(Track.title.ilike(pattern), Track.artist.ilike(pattern)),
+        or_(
+            Track.search_index.ilike(normalized),
+            Track.title.ilike(pattern),
+            Track.artist.ilike(pattern),
+        ),
         Track.moderation_status == "approved",
     )
 

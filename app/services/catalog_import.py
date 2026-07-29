@@ -250,11 +250,14 @@ async def create_track_from_telegram(
     """Создаёт трек БЕЗ архивной копии на диске — файл уже заминчен через бота
     (tg_file_id валиден сразу), сохраняется только ссылка. Дедуп — забота вызывающей
     стороны (find_existing_track), чтобы не грузить в Telegram то, что уже есть."""
+    from app.services.search_index import build_search_index
+
     bitrate = round(file_size * 8 / duration / 1000) if duration > 0 else None
     track = Track(
         title=title,
         artist=artist,
         artist_id=await resolve_artist_id(session, artist),
+        search_index=build_search_index(artist, title),
         album=album or None,
         duration=duration,
         bitrate=bitrate,
