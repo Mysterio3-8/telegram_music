@@ -37,6 +37,10 @@ def _utcnow() -> datetime:
 
 
 def is_premium_active(user: User) -> bool:
+    """Админам Premium всегда доступен: иначе владелец с истёкшей подпиской
+    упрётся в пэйвол приложения и не сможет проверить собственный сервис."""
+    if user.telegram_id in settings.admin_id_set:
+        return True
     return bool(user.premium and user.premium_until and user.premium_until > _utcnow())
 
 
