@@ -52,6 +52,26 @@ def test_rank_drops_non_tracks():
     assert [c.url for c in ranked] == ["u2"]
 
 
+def test_original_beats_slowed_version():
+    """Просили оригинал — slowed/reverb не должен его обгонять (жалоба владельца)."""
+    original = Candidate(source="soundcloud", url="orig",
+                         title="Big Baby Tape - Gimme The Loot", duration=200)
+    slowed = Candidate(source="soundcloud", url="slow",
+                       title="Big Baby Tape - Gimme The Loot (slowed)", duration=240)
+    ranked = rank_candidates("big baby tape gimme the loot", [slowed, original])
+    assert ranked[0].url == "orig"
+
+
+def test_slowed_wins_when_asked_explicitly():
+    """Если человек просит именно slowed — отдаём её."""
+    original = Candidate(source="soundcloud", url="orig",
+                         title="Розовое вино", duration=200)
+    slowed = Candidate(source="soundcloud", url="slow",
+                       title="Розовое вино (Slowed + Reverb)", duration=240)
+    ranked = rank_candidates("розовое вино slowed", [original, slowed])
+    assert ranked[0].url == "slow"
+
+
 def test_find_track_never_returns_junk_fallback(monkeypatch):
     """Даже когда ничего не совпало, часовой микс не выдаётся вместо трека."""
     junk = [Candidate(source="soundcloud", url="j", title="Full Album Mix", duration=5400)]

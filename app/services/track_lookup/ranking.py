@@ -81,6 +81,36 @@ def _token_coverage(query_tokens: list[str], target_tokens: set[str]) -> float:
     return hits / len(query_tokens)
 
 
+# Пере-версии трека: их не нужно отдавать, когда человек просил оригинал.
+# Слова в латинице — сравнение идёт после транслита (to_latin).
+_VERSION_MARKERS = tuple(
+    to_latin(word)
+    for word in (
+        "slowed", "reverb", "sped up", "spedup", "nightcore", "8d", "bass boosted",
+        "bassboosted", "mashup", "cover", "karaoke", "instrumental", "минус",
+        "ремикс", "remix", "edit", "flip", "acapella", "а капелла", "tiktok",
+        "ускоренная", "замедленная",
+    )
+)
+_VERSION_PENALTY = 0.45  # версия проигрывает оригиналу, но остаётся в выдаче
+
+
+def version_penalty(query: str, title: str) -> float:
+    """1.0 — штрафа нет; <1 — название это пере-версия, а просили оригинал.
+
+    Просят «kizaru fake id» → «(Slowed + Reverb)» отодвигается за оригинал.
+    Упомянули любую версию («розовое вино slowed», «… ремикс») — штраф выключается
+    целиком: человек ищет именно версию, и придираться к точному слову не нужно
+    («ремикс» и «remix» — одно и то же намерение)."""
+    query_latin = to_latin(query)
+    if any(marker in query_latin for marker in _VERSION_MARKERS):
+        return 1.0
+    title_latin = to_latin(title)
+    if any(marker in title_latin for marker in _VERSION_MARKERS):
+        return _VERSION_PENALTY
+    return 1.0
+
+
 def is_track_duration(seconds: int) -> bool:
     """«Это вообще трек?» по длительности (приоритет владельца: только музыка).
     0 — источник не сообщил длительность: пропускаем, проверим после скачивания.
@@ -112,7 +142,9 @@ def match_score(query: str, candidate: Candidate) -> float:
     coverage = _token_coverage(normalized_query.split(), set(normalized_target.split()))
     # Покрытие слов важнее посимвольного сходства: длинное название с лишними
     # словами («… (Official Audio)») не должно топить точное совпадение.
-    return round(coverage * 0.7 + ratio * 0.3, 4)
+    score = coverage * 0.7 + ratio * 0.3
+    # Оригинал должен обгонять slowed/reverb/cover, если их не просили явно
+    return round(score * version_penalty(query, candidate.full_title), 4)
 
 
 def rank_candidates(query: str, candidates: list[Candidate]) -> list[Candidate]:
