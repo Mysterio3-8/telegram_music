@@ -61,6 +61,9 @@ class SoundcloudEntry:
     # Длительность из выдачи (extract_flat отдаёт её для SoundCloud). 0 — неизвестна.
     # Поисковый парсер отсекает по ней мусор ДО скачивания — это и даёт «за секунды».
     duration: int = 0
+    # Автор загрузки: отличает официальный аплоад артиста от чужого реаплоада —
+    # поиск «kizaru …» не должен отдавать кавер от «кизяка».
+    uploader: str = ""
 
 
 def is_soundcloud_link(text: str) -> bool:
@@ -189,6 +192,7 @@ def collect_soundcloud_entries(info: dict) -> list[SoundcloudEntry]:
                     entry_url,
                     node.get("title") or entry_url,
                     duration=int(node.get("duration") or 0),
+                    uploader=str(node.get("uploader") or node.get("channel") or "").strip(),
                 )
             )
 

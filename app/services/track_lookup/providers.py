@@ -27,6 +27,9 @@ def search_soundcloud(query: str, limit: int = 5) -> list[Candidate]:
             url=entry.url,
             title=entry.title,
             duration=_to_seconds(entry.duration),
+            # Автор идёт в сопоставление (full_title): официальный аплоад артиста
+            # обгоняет чужой реаплоад с похожим названием
+            artist=entry.uploader or None,
         )
         for entry in entries
     ]
