@@ -13,9 +13,11 @@ from app.services.track_lookup.providers import (
     search_soundcloud,
     search_youtube,
 )
+from app.services.title_quality import is_probably_junk
 from app.services.track_lookup.ranking import (
     Candidate,
     best_match,
+    is_track_duration,
     match_score,
     normalize_query,
     rank_candidates,
@@ -56,7 +58,12 @@ def find_track(query: str, limit: int = 4) -> Candidate | None:
     ranked = rank_candidates(query, candidates)
     if ranked:
         return ranked[0]
-    return candidates[0] if candidates else None
+    # Последний шанс — топ выдачи, но НЕ мусор: клип и часовой микс лучше
+    # не отдавать вовсе, чем отдать вместо трека (приоритет владельца).
+    for candidate in candidates:
+        if not is_probably_junk(candidate.title) and is_track_duration(candidate.duration):
+            return candidate
+    return None
 
 
 __all__ = [
@@ -67,6 +74,7 @@ __all__ = [
     "best_match",
     "collect_candidates",
     "find_track",
+    "is_track_duration",
     "match_score",
     "normalize_query",
     "rank_candidates",

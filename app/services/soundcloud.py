@@ -58,6 +58,9 @@ def fetch_cover_url(query: str) -> str | None:
 class SoundcloudEntry:
     url: str
     title: str
+    # Длительность из выдачи (extract_flat отдаёт её для SoundCloud). 0 — неизвестна.
+    # Поисковый парсер отсекает по ней мусор ДО скачивания — это и даёт «за секунды».
+    duration: int = 0
 
 
 def is_soundcloud_link(text: str) -> bool:
@@ -181,14 +184,23 @@ def collect_soundcloud_entries(info: dict) -> list[SoundcloudEntry]:
         entry_url = node.get("url") or node.get("webpage_url")
         if entry_url and "soundcloud.com" in entry_url and entry_url not in seen:
             seen.add(entry_url)
-            entries.append(SoundcloudEntry(entry_url, node.get("title") or entry_url))
+            entries.append(
+                SoundcloudEntry(
+                    entry_url,
+                    node.get("title") or entry_url,
+                    duration=int(node.get("duration") or 0),
+                )
+            )
 
     walk(info)
     return entries
 
 
-def download_soundcloud_audio(url: str) -> tuple[DownloadedAudio, str] | None:
+def download_soundcloud_audio(url: str, as_mp3: bool = False) -> tuple[DownloadedAudio, str] | None:
     """Скачивает один трек. Возвращает (аудио, uploader) или None.
+    as_mp3=True — гарантированный mp3 (перекодирование ffmpeg): поисковый парсер
+    отдаёт пользователю только mp3. Массовая закачка 24/7 зовёт без флага —
+    там перекодировать каждый трек дорого, храним исходный контейнер.
     Ошибка сети/прокси → повтор через следующий прокси; последняя ошибка наружу
     (вызывающая сторона различает постоянные отказы по тексту)."""
     from app.services.disk import enough_free_disk
@@ -198,22 +210,28 @@ def download_soundcloud_audio(url: str) -> tuple[DownloadedAudio, str] | None:
     last_error: Exception | None = None
     for attempt in range(_proxy_attempts()):
         try:
-            return _download_soundcloud_once(url)
+            return _download_soundcloud_once(url, as_mp3=as_mp3)
         except Exception as exc:  # noqa: BLE001 — сеть/прокси, пробуем следующий
             last_error = exc
             logger.warning("SoundCloud: скачивание %s (попытка %s): %s", url, attempt + 1, exc)
     raise last_error if last_error else RuntimeError(f"SoundCloud: не скачался {url}")
 
 
-def _download_soundcloud_once(url: str) -> tuple[DownloadedAudio, str] | None:
+def _download_soundcloud_once(url: str, as_mp3: bool = False) -> tuple[DownloadedAudio, str] | None:
     with tempfile.TemporaryDirectory() as tmp:
         opts = {
             **_base_opts(impersonate=True, use_proxy=True),
-            "format": "bestaudio/best",
+            # mp3 предпочтительнее «на входе»: если источник уже отдаёт mp3,
+            # перекодирование не понадобится вовсе (быстрее и без потери качества)
+            "format": "bestaudio[ext=mp3]/bestaudio/best",
             "outtmpl": str(Path(tmp) / "sc.%(ext)s"),
             "noplaylist": True,
             "retries": settings.youtube_max_retries,
         }
+        if as_mp3:
+            opts["postprocessors"] = [
+                {"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "192"}
+            ]
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=True)
         if info is None:

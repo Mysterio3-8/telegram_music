@@ -81,9 +81,27 @@ def _token_coverage(query_tokens: list[str], target_tokens: set[str]) -> float:
     return hits / len(query_tokens)
 
 
+def is_track_duration(seconds: int) -> bool:
+    """«Это вообще трек?» по длительности (приоритет владельца: только музыка).
+    0 — источник не сообщил длительность: пропускаем, проверим после скачивания.
+    Границы — settings.search_min_seconds/search_max_seconds."""
+    if not seconds:
+        return True
+    from app.config import settings
+
+    if settings.search_min_seconds and seconds < settings.search_min_seconds:
+        return False  # джингл, обрезок, голосовое
+    if settings.search_max_seconds and seconds > settings.search_max_seconds:
+        return False  # часовой микс, подкаст, «весь альбом одним файлом»
+    return True
+
+
 def match_score(query: str, candidate: Candidate) -> float:
-    """Похожесть запроса на кандидата, 0.0—1.0. Клипы и промо получают 0."""
+    """Похожесть запроса на кандидата, 0.0—1.0. Клипы, промо и не-треки по
+    длительности получают 0 — до скачивания, чтобы не тратить на них время."""
     if is_probably_junk(candidate.title):
+        return 0.0
+    if not is_track_duration(candidate.duration):
         return 0.0
     normalized_query = normalize_query(query)
     normalized_target = normalize_query(candidate.full_title)

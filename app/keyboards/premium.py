@@ -4,32 +4,26 @@ from app.config import settings
 
 
 def premium_keyboard(card_available: bool, yookassa_available: bool = False) -> InlineKeyboardMarkup:
-    rows = [
-        [
-            InlineKeyboardButton(
-                text=f"⭐ Оплатить Stars ({settings.premium_price_stars})",
-                callback_data="prem:stars",
+    """Тарифы 1/3/6/12 месяцев, оплата только деньгами (Stars скрыты по решению
+    владельца — оставлены в коде для приёма платежей, но из интерфейса убраны)."""
+    from app.services.premium import PREMIUM_PLAN_MONTHS, plan_price_rub
+
+    rows: list[list[InlineKeyboardButton]] = []
+    if yookassa_available or card_available:
+        target = "prem:yookassa" if yookassa_available else "prem:card"
+        for months in PREMIUM_PLAN_MONTHS:
+            price = plan_price_rub(months)
+            label = "месяц" if months == 1 else f"{months} мес"
+            per_month = price // months
+            suffix = "" if months == 1 else f" · {per_month} ₽/мес"
+            rows.append(
+                [
+                    InlineKeyboardButton(
+                        text=f"💳 {label} — {price} ₽{suffix}",
+                        callback_data=f"{target}:{months}",
+                    )
+                ]
             )
-        ]
-    ]
-    if yookassa_available:
-        rows.append(
-            [
-                InlineKeyboardButton(
-                    text=f"💳 Карта / СБП — {settings.premium_price_rub} ₽",
-                    callback_data="prem:yookassa",
-                )
-            ]
-        )
-    elif card_available:
-        rows.append(
-            [
-                InlineKeyboardButton(
-                    text=f"💳 Картой / СБП ({settings.premium_price_rub} ₽)",
-                    callback_data="prem:card",
-                )
-            ]
-        )
     rows.append([InlineKeyboardButton(text="◀️ Назад", callback_data="menu:main")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 

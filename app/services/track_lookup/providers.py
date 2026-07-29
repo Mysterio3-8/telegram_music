@@ -18,12 +18,25 @@ _WATCH_URL = "https://www.youtube.com/watch?v={video_id}"
 
 
 def search_soundcloud(query: str, limit: int = 5) -> list[Candidate]:
-    """Кандидаты SoundCloud. Длительность на этом шаге неизвестна — проверяется после загрузки."""
+    """Кандидаты SoundCloud. Длительность приходит прямо из выдачи (extract_flat) —
+    мусор по времени отсеивается ДО скачивания, поэтому поиск укладывается в секунды."""
     entries = list_soundcloud_entries(f"scsearch{max(1, limit)}:{query}")
     return [
-        Candidate(source=SOURCE_SOUNDCLOUD, url=entry.url, title=entry.title, duration=0)
+        Candidate(
+            source=SOURCE_SOUNDCLOUD,
+            url=entry.url,
+            title=entry.title,
+            duration=_to_seconds(entry.duration),
+        )
         for entry in entries
     ]
+
+
+def _to_seconds(value) -> int:
+    """SoundCloud отдаёт длительность в миллисекундах, yt-dlp местами — в секундах.
+    Разводим по величине: 20 000 «секунд» — это 5,5 часов, такого трека не бывает."""
+    number = int(value or 0)
+    return number // 1000 if number > 20_000 else number
 
 
 def search_youtube(query: str, limit: int = 5) -> list[Candidate]:

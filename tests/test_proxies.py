@@ -30,7 +30,7 @@ def test_download_retries_with_next_proxy(monkeypatch):
     monkeypatch.setattr(settings, "proxy_list", "http://a:1,http://b:2")
     calls = []
 
-    def failing_download(url):
+    def failing_download(url, as_mp3=False):
         calls.append(url)
         raise RuntimeError("proxy connection refused")
 
@@ -49,7 +49,7 @@ def test_download_single_attempt_without_proxies(monkeypatch):
     monkeypatch.setattr(settings, "proxy_list", "")
     calls = []
 
-    def failing_download(url):
+    def failing_download(url, as_mp3=False):
         calls.append(url)
         raise RuntimeError("network down")
 

@@ -48,11 +48,9 @@ def _premium_text(active: bool, premium_until: datetime | None) -> str:
     return (
         "💎 <b>TG Music Premium</b>\n\n"
         f"{_BENEFITS}\n\n"
-        f"Цена: <b>{settings.premium_price_rub} ₽</b> или <b>{settings.premium_price_stars} ⭐</b> "
-        f"за {settings.premium_duration_days} дней. "
-        f"Есть тариф «навсегда» за {settings.premium_forever_price_rub} ₽ — "
-        f"в приложении «🎧 Открыть плеер».\n\n"
-        "Выберите способ оплаты:"
+        f"Всего <b>{settings.premium_price_rub} ₽ в месяц</b> — дешевле чашки кофе. "
+        "Чем длиннее тариф, тем ниже цена месяца.\n\n"
+        "Выберите срок:"
     )
 
 
@@ -91,11 +89,23 @@ async def cb_pay_stars(callback: CallbackQuery) -> None:
     await callback.answer()
 
 
-@router.callback_query(F.data == "prem:yookassa")
+@router.callback_query(F.data.startswith("prem:yookassa"))
 async def cb_pay_yookassa(callback: CallbackQuery) -> None:
     """Оплата через API ЮKassa: платёж создаётся напрямую, пользователь получает
-    ссылку на страницу оплаты. Подтверждение придёт webhook-ом на API-сервис."""
-    url = await create_premium_payment(callback.from_user.id, settings.bot_username)
+    ссылку на страницу оплаты. Подтверждение придёт webhook-ом на API-сервис.
+    Хвост callback_data — срок тарифа в месяцах (1/3/6/12)."""
+    from app.services.premium import plan_price_rub, plan_valid
+
+    parts = callback.data.split(":")
+    months = int(parts[2]) if len(parts) > 2 and parts[2].isdigit() else 1
+    if not plan_valid(months):
+        months = 1
+    url = await create_premium_payment(
+        callback.from_user.id,
+        settings.bot_username,
+        price_rub=plan_price_rub(months),
+        months=months,
+    )
     if url is None:
         await callback.answer("Не удалось создать платёж — попробуйте позже", show_alert=True)
         return
@@ -113,7 +123,7 @@ async def cb_pay_yookassa(callback: CallbackQuery) -> None:
     await callback.answer()
 
 
-@router.callback_query(F.data == "prem:card")
+@router.callback_query(F.data.startswith("prem:card"))
 async def cb_pay_card(callback: CallbackQuery) -> None:
     """Оплата банковской картой / СБП через платёжного провайдера Telegram Payments.
 
