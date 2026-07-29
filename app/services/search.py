@@ -15,18 +15,22 @@ def _track_filter(query: str):
     работают лишь для ASCII, из-за чего запрос «ки» не находил «Кизару».
     ILIKE по title/artist оставлен для треков без индекса (бэкфилл идёт фоном)."""
     from app.services.search_index import normalize_search_query
+    from app.services.track_lookup.ranking import to_latin
 
     pattern = f"%{query.strip()}%"
-    normalized = f"%{normalize_search_query(query)}%"
+    normalized = normalize_search_query(query)
+    conditions = [
+        Track.search_index.ilike(f"%{normalized}%"),
+        Track.title.ilike(pattern),
+        Track.artist.ilike(pattern),
+    ]
+    # Запрос кириллицей должен находить трек, записанный латиницей:
+    # «кизару» → «kizaru». Обратное направление уже покрыто индексом.
+    latin = to_latin(normalized)
+    if latin != normalized:
+        conditions.append(Track.search_index.ilike(f"%{latin}%"))
     # Немодерированные (pending/rejected) не показываем в поиске (блок D)
-    return and_(
-        or_(
-            Track.search_index.ilike(normalized),
-            Track.title.ilike(pattern),
-            Track.artist.ilike(pattern),
-        ),
-        Track.moderation_status == "approved",
-    )
+    return and_(or_(*conditions), Track.moderation_status == "approved")
 
 
 async def search_tracks(

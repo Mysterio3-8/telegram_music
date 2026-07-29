@@ -55,6 +55,15 @@ async def test_search_by_translit_and_author(session):
 
 
 @pytest.mark.asyncio
+async def test_cyrillic_query_finds_latin_track(session):
+    """Русский пишет «кизару», а трек в базе записан латиницей — должен найтись."""
+    session.add(_track("Kizaru", "Fake ID"))
+    await session.commit()
+    tracks, total = await search_tracks(session, "кизару", page=1)
+    assert total == 1 and tracks[0].artist == "Kizaru"
+
+
+@pytest.mark.asyncio
 async def test_tracks_without_index_still_found(session):
     """Бэкфилл идёт фоном — старые треки без индекса не должны пропадать из поиска."""
     session.add(Track(title="Legacy Song", artist="Old Artist", duration=100))
