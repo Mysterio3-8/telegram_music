@@ -9,9 +9,9 @@ import logging
 
 from aiogram import Bot
 from celery import Task
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.config import settings
+from app.db.base import build_task_engine
 from app.services.app_settings import is_youtube_enabled
 from app.services.youtube.importer import mark_failed, process_import
 from app.services.youtube.sources import (
@@ -27,8 +27,7 @@ logger = logging.getLogger(__name__)
 
 
 def _engine_and_factory():
-    engine = create_async_engine(settings.database_url)
-    return engine, async_sessionmaker(engine, expire_on_commit=False)
+    return build_task_engine()
 
 
 async def _with_session(coro):

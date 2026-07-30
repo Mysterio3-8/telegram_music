@@ -9,9 +9,9 @@ import logging
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramForbiddenError, TelegramRetryAfter
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.config import settings
+from app.db.base import build_task_engine
 from app.services.broadcast import MESSAGES_PER_SECOND, active_recipient_ids, mark_bot_blocked
 from app.tasks.celery_app import celery_app
 
@@ -42,8 +42,7 @@ async def _contest_markup(factory, contest_id: int | None):
 async def _run_broadcast(
     text: str, photo_file_id: str | None, admin_chat_id: int, contest_id: int | None = None
 ) -> None:
-    engine = create_async_engine(settings.database_url)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
+    engine, factory = build_task_engine()
     bot = Bot(token=settings.bot_token)
     delivered = blocked = failed = 0
     try:

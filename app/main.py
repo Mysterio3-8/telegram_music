@@ -13,6 +13,7 @@ from app.handlers import (
     admin_upload_minus,
     admin_youtube,
     contests,
+    errors,
     inline,
     library,
     news,
@@ -30,6 +31,7 @@ from app.handlers import (
 )
 from app.middlewares.ads import AdMiddleware
 from app.middlewares.subscription import SubscriptionMiddleware
+from app.middlewares.throttling import ThrottlingMiddleware
 
 
 async def main() -> None:
@@ -44,6 +46,11 @@ async def main() -> None:
     await setup_bot_commands(bot)
     dp = Dispatcher(storage=build_storage())
 
+    # Антиспам — первым: флуд должен гаситься до проверки подписки, БД и поиска
+    throttling_middleware = ThrottlingMiddleware()
+    dp.message.middleware(throttling_middleware)
+    dp.callback_query.middleware(throttling_middleware)
+
     subscription_middleware = SubscriptionMiddleware()
     dp.message.middleware(subscription_middleware)
     dp.callback_query.middleware(subscription_middleware)
@@ -53,6 +60,7 @@ async def main() -> None:
     dp.callback_query.middleware(ad_middleware)
 
     dp.include_routers(
+        errors.router,  # глобальный обработчик — ловит исключения из любого хендлера ниже
         start.router,
         subscription.router,
         library.router,

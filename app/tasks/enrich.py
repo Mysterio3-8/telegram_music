@@ -3,9 +3,9 @@ import io
 import logging
 
 from aiogram import Bot
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.config import settings
+from app.db.base import build_task_engine
 from app.db.models import Track
 from app.services.audio_cache import cache_put
 from app.services.fingerprint import compute_fingerprint_from_bytes
@@ -26,8 +26,7 @@ async def _download_bytes(file_id: str) -> bytes:
 
 
 async def _apply_enrichment(track_id: int, fingerprint: str | None) -> None:
-    engine = create_async_engine(settings.database_url)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
+    engine, factory = build_task_engine()
     try:
         async with factory() as session:
             track = await session.get(Track, track_id)
