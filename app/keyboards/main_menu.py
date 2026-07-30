@@ -6,7 +6,8 @@ from app.config import settings
 def main_menu_keyboard() -> InlineKeyboardMarkup:
     rows = [
         [InlineKeyboardButton(text="⬆️ Загрузить трек", callback_data="menu:upload")],
-        [InlineKeyboardButton(text="📥 Перенести музыку из сервисов", callback_data="menu:transfer")],
+        # Перенос плейлистов живёт в Mini App (решение владельца): в боте кнопка
+        # лишняя. Команда /transfer и обработчик menu:transfer оставлены рабочими.
         [
             InlineKeyboardButton(
                 text=f"💎 Открыть плеер — {settings.premium_price_rub} ₽/мес",
