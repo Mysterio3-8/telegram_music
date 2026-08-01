@@ -9,7 +9,8 @@
 
 - VPS: `ssh news-rewriter-vps` (root@38.244.213.132), код в `/opt/tg-music-bot`
 - Домен: **keybest.cc — жив, HTTPS выпущен** (Let's Encrypt, автопродление certbot, истекает 2026-10-10). nginx-сайт `/etc/nginx/sites-enabled/keybest.cc` (источник — [deploy/nginx-keybest.conf](deploy/nginx-keybest.conf)): статика Mini App на `/`, `/api/` → uvicorn :8010, `/webhook/` → uvicorn :8010
-- Сервисы: `tg-music-bot` (polling), `tg-music-worker` (Celery, обогащение загрузок), `tg-music-youtube-user` (Celery, очередь `youtube_user` — **поисковый парсер**, сейчас приоритет), `tg-music-api` (uvicorn :8010 — API Mini App + webhook ЮKassa). ⚠️ **Массовый парсер 24/7 (`tg-music-soundcloud`, `tg-music-youtube`, `tg-music-youtube-scan.timer`) ВЫКЛЮЧЕН** (27.07, решение владельца — сервер маленький, см. NEXT_SESSION.md). Юниты — в [deploy/](deploy/), nginx-сайт — [deploy/nginx-keybest.conf](deploy/nginx-keybest.conf). `systemctl {status,restart} <сервис>`, логи: `journalctl -u <сервис> -f`
+- Сервисы: `tg-music-bot` (polling), `tg-music-worker` (Celery, обогащение загрузок + очередь `telegram_channel`), `tg-music-youtube-user` (Celery, очередь `youtube_user` — **поисковый парсер**, сейчас приоритет), `tg-music-api` (uvicorn :8010 — API Mini App + webhook ЮKassa), `tg-music-support`. ⚠️ **Массовый парсер 24/7 (`tg-music-soundcloud`, `tg-music-youtube`, `tg-music-youtube-scan.timer`) ВЫКЛЮЧЕН** (27.07, решение владельца — сервер маленький, см. NEXT_SESSION.md). Отдельного юнита `tg-music-telegram-channel` больше нет — очередь разбирает основной воркер. Юниты — в [deploy/](deploy/), nginx-сайт — [deploy/nginx-keybest.conf](deploy/nginx-keybest.conf). `systemctl {status,restart} <сервис>`, логи: `journalctl -u <сервис> -f`
+- ⚠️ **Юниты не доезжают обычным деплоем.** `git pull` обновляет `deploy/*.service`, а systemd читает `/etc/systemd/system` — сервер молча живёт со старой конфигурацией. После правки любого юнита на сервере от root: `cd /opt/tg-music-bot && bash deploy/install-units.sh` (идемпотентен: юниты, logrotate, лимиты journald, fail2ban)
 - Redis (`redis-server`) — FSM + брокер Celery. ffmpeg + libchromaprint-tools (fpcalc) — отпечатки. yt-dlp (pip) — загрузка с YouTube
 - Repo: git@github.com:Mysterio3-8/telegram_music.git (пуш только по SSH — https-креды на машине от другого аккаунта)
 - Деплой: `/deploy` (push → pull → pip install → `alembic upgrade head` → restart bot+worker)
@@ -129,6 +130,39 @@ $env:DATABASE_URL="sqlite+aiosqlite:///_tmp.db"; .\.venv\Scripts\python.exe -m a
 - Схема БД — через Alembic. При адаптации существующей БД без `alembic_version`: `alembic stamp <ревизия-соответствующая-текущей-схеме>`, затем `upgrade head` (так приняли прод: stamp d01cfc648f91 → upgrade добавил tg_file_id)
 - Обогащение (отпечаток+архив) — асинхронно в воркере: сразу после загрузки трека `storage_path` ещё пуст, появляется через секунды. Если воркер лежит — трек работает по `tg_file_id`, отпечаток не считается
 - Windows-консоль: путь проекта с кириллицей, в PowerShell возможны артефакты кодировки в выводе — на работу не влияет
+
+## ⚠️ ИНЦИДЕНТ (2026-08-01) — «бот отвечает 20 секунд»: воркер в вечной OOM-петле
+
+**Симптом владельца:** бот откликается на команды 20 секунд.
+**Замер прода:** load average **15.24** на **одном** ядре, swap забит полностью
+(2047/2047), свободной памяти 30 МБ.
+
+**Причина — две независимые, обе про память:**
+
+1. **`tg-music-worker` рестартовал каждые 6–12 секунд, круглосуточно.** Юнит
+   стоял на **prefork**-пуле с `--concurrency=2` — это родитель плюс два форка,
+   три интерпретатора — внутри `MemoryMax=200M`. Влезть он не мог физически:
+   OOM убивал его через ~6 секунд после старта, systemd поднимал снова.
+   `NRestarts=10261`. Каждый старт — полный импорт Python + SQLAlchemy +
+   aiogram, то есть 100% единственного ядра. Остановка воркера уронила load
+   с 15.24 до 1.13 **за 20 секунд** — этим причина и доказана.
+   Остальные воркеры проекта жили нормально, потому что были на `--pool=threads`
+   (один процесс). Лечение: threads-пул, `MemoryHigh` вместо голого `MemoryMax`
+   и `StartLimitBurst=5` на всех воркерах — теперь systemd сдаётся после пяти
+   смертей за 5 минут вместо бесконечного шторма.
+2. **В Redis висела очередь `youtube` на 644 293 задачи = 651 МБ.** Диагностика
+   этого места обманчива: `used_memory_human` 724 МБ при `used_memory_rss` 5.88 МБ —
+   почти всё было выдавлено в своп, поэтому в `ps`/`top` Redis выглядел
+   безобидным пятимегабайтным процессом. Это и держало swap забитым, и раздувало
+   RDB-снимок до 125 МБ. Задачи (`youtube.recover`, `youtube.process_import`) —
+   осиротевшие после инцидентов 26–27.07; их воркер выключен насовсем, разбирать
+   их было некому, а обработка вернула бы ровно тот YouTube-мусор, который
+   владелец потом чистил вручную (318 клипов). Удалено с явного согласия
+   владельца: Redis **725 МБ → 1.69 МБ**, RDB **125 МБ → 42 КБ**, swap 2047 → 815 МБ.
+
+**Вывод на будущее:** `MemoryMax` без проверки, влезает ли в него пул воркера,
+превращается из защиты в генератор нагрузки. И проверять размер очередей Redis
+(`redis-cli llen`, `memory usage`) при любой жалобе на память — `ps` про своп врёт.
 
 ## ⚠️ ИНЦИДЕНТ (2026-07-26) — бот падал: диск 100% → Redis не пишет
 

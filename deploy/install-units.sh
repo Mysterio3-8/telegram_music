@@ -54,8 +54,18 @@ systemctl restart fail2ban
 
 echo "==> Перечитываю systemd и поднимаю сервисы"
 systemctl daemon-reload
-systemctl restart tg-music-worker tg-music-youtube-user tg-music-soundcloud
-systemctl restart tg-music-bot tg-music-api
+# Только включённые: массовый парсер (tg-music-soundcloud, tg-music-youtube)
+# выключен решением владельца 27.07 — поднимать его здесь значило бы тихо
+# отменять это решение и занимать 180 МБ из 961 МБ на боксе.
+for unit in tg-music-bot tg-music-api tg-music-worker tg-music-youtube-user \
+            tg-music-soundcloud tg-music-youtube tg-music-support; do
+    if [ "$(systemctl is-enabled "$unit" 2>/dev/null)" = "enabled" ]; then
+        systemctl restart "$unit"
+        echo "    перезапущен $unit"
+    else
+        echo "    пропущен $unit (disabled)"
+    fi
+done
 
 echo
 echo "==> Готово. Состояние:"
