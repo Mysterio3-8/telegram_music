@@ -1,17 +1,42 @@
 [Unit]
-Description=Telegram Music Bot — Celery worker (enrichment)
+Description=Telegram Music Bot — Celery worker (enrichment + telegram_channel)
 After=network-online.target redis-server.service
 Wants=network-online.target
 Requires=redis-server.service
+# Предохранитель от рестарт-шторма (инцидент 2026-08-01): воркер стоял на
+# prefork-пуле с concurrency=2 (родитель + 2 форка) внутри MemoryMax=200M —
+# влезть не мог физически, OOM убивал его через 6 секунд после старта, systemd
+# поднимал снова, и так круглосуточно. Каждый старт — полный импорт Python +
+# SQLAlchemy + aiogram, то есть 100% единственного ядра. Отсюда load average 15
+# и двадцатисекундный отклик бота. Пять смертей за 5 минут — сдаёмся и оставляем
+# юнит в failed: лучше молчащее обогащение, чем выжженный процессор.
+StartLimitIntervalSec=300
+StartLimitBurst=5
 
 [Service]
 WorkingDirectory=/opt/tg-music-bot
-ExecStart=/opt/tg-music-bot/.venv/bin/celery -A app.tasks.celery_app worker --loglevel=info --concurrency=2
+# Досылка того, что не доехало, пока воркер лежал (очередь telegram_channel).
+ExecStartPre=/opt/tg-music-bot/.venv/bin/python -m app.cli.telegram_channel recover
+# --pool=threads: обогащение упирается в ввод-вывод (fpcalc, запись в хранилище,
+# выгрузка в Telegram), а не в процессор — потоки дают ту же параллельность
+# одним интерпретатором вместо трёх. Так же живут остальные воркеры проекта.
+# -Q celery,telegram_channel: очередь каналов редкая, отдельный процесс под неё
+# на боксе с одним ядром не окупается (юнит tg-music-telegram-channel погашен).
+# -n: без уникального имени узла воркеры сыпали DuplicateNodenameWarning.
+# --without-gossip/mingle/heartbeat: переписка воркеров между собой не нужна —
+# это лишние просыпания и трафик через Redis на перегруженной машине.
+ExecStart=/opt/tg-music-bot/.venv/bin/celery -A app.tasks.celery_app worker \
+    -Q celery,telegram_channel \
+    -n worker@%%h \
+    --pool=threads --concurrency=2 \
+    --without-gossip --without-mingle --without-heartbeat \
+    --loglevel=info
 Restart=always
-RestartSec=5
-# Защита памяти (инцидент 2026-07-26/27): воркер сам не должен вырасти настолько,
-# чтобы уронить Redis/бота — жёсткий потолок + приоритет "убить первым" при OOM.
-MemoryMax=200M
+RestartSec=15
+# MemoryHigh — мягкий потолок: ядро отбирает страницы и притормаживает процесс,
+# вместо того чтобы сразу убивать. MemoryMax — жёсткий, на случай течи.
+MemoryHigh=220M
+MemoryMax=300M
 OOMScoreAdjust=500
 
 [Install]

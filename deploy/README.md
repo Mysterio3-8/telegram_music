@@ -7,19 +7,30 @@
 | Юнит | Роль |
 |---|---|
 | `tg-music-bot` | Telegram polling |
-| `tg-music-worker` | Celery, обогащение загрузок (очередь по умолчанию) |
+| `tg-music-worker` | Celery, обогащение загрузок + импорт из Telegram-канала (очереди `celery`, `telegram_channel`) |
 | `tg-music-youtube` | Celery, массовые сканы каналов/плейлистов (очередь `youtube`, concurrency=1) |
 | `tg-music-youtube-user` | Celery, ссылки от пользователей бота (очередь `youtube_user`, concurrency=2) — отдельно от `tg-music-youtube`, чтобы не ждать за бэклогом массовых сканов |
 | `tg-music-youtube-scan.timer` | ежедневная проверка источников на новые видео (§11), заодно дёргает SoundCloud scan-due |
 | `tg-music-soundcloud` | Celery, SoundCloud-импорт (очередь `soundcloud`, concurrency=3 — темп 3000/сутки на ротации прокси; без прокси вернуть 1) |
-| `tg-music-telegram-channel` | Celery, импорт из личного Telegram-канала (очередь `telegram_channel`, БЕЗ файлов на диске) |
 | `tg-music-telegram-channel-scan.timer` | ежедневная проверка канала на новые посты |
-| `tg-music-catalog-maintain.timer` | ежедневно в 04:00: привязка новых треков к артистам + подборки по жанрам (SPEC-КАТАЛОГ §5-6) |
+| `tg-music-catalog-maintain.timer` | ежедневно в 04:00: привязка треков к артистам, подборки по жанрам, автопродление Premium, сторож диска |
 
-Файлы юнитов — в этой папке. Установка нового юнита:
+Отдельного юнита `tg-music-telegram-channel` больше нет: его очередь разбирает
+`tg-music-worker`. На боксе с одним ядром отдельный интерпретатор под редкую
+очередь не окупался.
+
+### ⚠️ Юниты не доезжают обычным деплоем
+
+`git pull` обновляет `deploy/*.service` в репозитории, но systemd читает
+`/etc/systemd/system` — сервер продолжит работать по старой конфигурации.
+После правки любого юнита **на сервере от root**:
+
 ```bash
-cp deploy/<unit> /etc/systemd/system/ && systemctl daemon-reload && systemctl enable --now <unit>
+cd /opt/tg-music-bot && bash deploy/install-units.sh
 ```
+
+Скрипт идемпотентен: раскладывает юниты, ставит logrotate/journald-лимиты и
+fail2ban, гасит слитый `tg-music-telegram-channel`, перезапускает сервисы.
 
 ## Обычный деплой
 

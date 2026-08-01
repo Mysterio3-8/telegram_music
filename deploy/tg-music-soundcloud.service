@@ -3,6 +3,9 @@ Description=Telegram Music Bot — SoundCloud import worker (Celery, queue=sound
 After=network-online.target redis-server.service
 Wants=network-online.target
 Requires=redis-server.service
+# Предохранитель от рестарт-шторма — см. tg-music-worker.service (инцидент 2026-08-01).
+StartLimitIntervalSec=300
+StartLimitBurst=5
 
 [Service]
 WorkingDirectory=/opt/tg-music-bot
@@ -12,9 +15,14 @@ WorkingDirectory=/opt/tg-music-bot
 # На большем сервере вернуть 3+ для темпа к 1М.
 # (SPEC-КАТАЛОГ §4): 7 прокси в ротации размазывают параллельные запросы по
 # разным IP, анти-бан-паузы остаются на каждой задаче. Без прокси вернуть 1.
-ExecStart=/opt/tg-music-bot/.venv/bin/celery -A app.tasks.celery_app worker -Q soundcloud --pool=threads --concurrency=1 --loglevel=info
+ExecStart=/opt/tg-music-bot/.venv/bin/celery -A app.tasks.celery_app worker \
+    -Q soundcloud \
+    -n soundcloud@%%h \
+    --pool=threads --concurrency=1 \
+    --without-gossip --without-mingle --without-heartbeat \
+    --loglevel=info
 Restart=always
-RestartSec=5
+RestartSec=15
 # Защита памяти (инцидент 2026-07-26/27): массовый парсер не должен ронять бота
 MemoryMax=200M
 OOMScoreAdjust=500

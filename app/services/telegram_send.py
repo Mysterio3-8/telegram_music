@@ -15,6 +15,23 @@ logger = logging.getLogger(__name__)
 TELEGRAM_API = "https://api.telegram.org"
 
 
+async def send_message(chat_id: int, text: str) -> bool:
+    """Служебное сообщение админу из процесса без aiogram (таймеры, CLI)."""
+    try:
+        async with aiohttp.ClientSession() as http:
+            async with http.post(
+                f"{TELEGRAM_API}/bot{settings.bot_token}/sendMessage",
+                json={"chat_id": chat_id, "text": text},
+            ) as response:
+                if response.status != 200:
+                    logger.error("sendMessage %s: %s", response.status, await response.text())
+                    return False
+                return True
+    except aiohttp.ClientError:
+        logger.exception("Telegram API недоступен (sendMessage chat=%s)", chat_id)
+        return False
+
+
 async def send_audio_by_file_id(
     chat_id: int, tg_file_id: str, title: str | None = None, performer: str | None = None
 ) -> bool:

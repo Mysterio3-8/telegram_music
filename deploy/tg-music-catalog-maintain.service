@@ -13,3 +13,7 @@ ExecStart=/opt/tg-music-bot/.venv/bin/python -m app.cli.genres make-playlists
 ExecStart=/opt/tg-music-bot/.venv/bin/python -m app.cli.autorenew
 # Защита диска (инцидент 2026-07-26): чистим брошенный temp yt-dlp старше 2 часов
 ExecStart=/bin/sh -c "find /tmp -mindepth 1 -maxdepth 1 -mmin +120 -exec rm -rf {} + 2>/dev/null || true"
+# Сторож диска: кэш аудио вытесняет себя только при записи, поэтому диск, забитый
+# логами или бэкапами, никто не разгребает. Здесь чистим по порогу и, если места
+# всё равно мало, пишем админу в бот — чтобы узнавать о проблеме до падения.
+ExecStart=/opt/tg-music-bot/.venv/bin/python -m app.cli.disk_guard

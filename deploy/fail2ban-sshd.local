@@ -1,0 +1,29 @@
+# Замена /etc/fail2ban/jail.d/sshd.local на VPS.
+#
+# Зачем: /var/log/btmp.1 весил 114 МБ — это сотни тысяч неудачных попыток входа
+# по SSH. Помимо риска взлома это распухшие auth.log и syslog и лишняя нагрузка
+# на единственное ядро: каждая попытка — форк sshd, обращение к PAM, запись в лог.
+#
+# Установка (от root):
+#   apt-get install -y fail2ban
+#   cp deploy/fail2ban-sshd.local /etc/fail2ban/jail.d/sshd.local
+#   systemctl enable --now fail2ban
+#
+# Проверка: fail2ban-client status sshd
+
+[sshd]
+enabled = true
+# backend=systemd: на этом сервере логи sshd идут в journald, файла /var/log/auth.log
+# может не оказаться после смены ротации — читать журнал надёжнее.
+backend = systemd
+port = ssh
+maxretry = 4
+# Окно, в котором считаются неудачи, и срок бана. Час бана на бота-переборщика
+# достаточен: он уходит к следующей цели и не возвращается.
+findtime = 10m
+bantime = 1h
+# Повторные нарушители блокируются всё дольше, вплоть до недели.
+bantime.increment = true
+bantime.maxtime = 1w
+# Свой адрес не банить никогда: ошибиться ключом может и владелец.
+ignoreip = 127.0.0.1/8 ::1

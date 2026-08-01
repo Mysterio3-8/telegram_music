@@ -32,6 +32,7 @@ from app.handlers import (
 from app.middlewares.ads import AdMiddleware
 from app.middlewares.subscription import SubscriptionMiddleware
 from app.middlewares.throttling import ThrottlingMiddleware
+from app.middlewares.timing import TimingMiddleware
 
 
 async def main() -> None:
@@ -46,7 +47,13 @@ async def main() -> None:
     await setup_bot_commands(bot)
     dp = Dispatcher(storage=build_storage())
 
-    # Антиспам — первым: флуд должен гаситься до проверки подписки, БД и поиска
+    # Замер — самым первым: нужно полное время ожидания живого человека,
+    # включая работу антиспама и проверки подписки
+    timing_middleware = TimingMiddleware()
+    dp.message.middleware(timing_middleware)
+    dp.callback_query.middleware(timing_middleware)
+
+    # Антиспам — вторым: флуд должен гаситься до проверки подписки, БД и поиска
     throttling_middleware = ThrottlingMiddleware()
     dp.message.middleware(throttling_middleware)
     dp.callback_query.middleware(throttling_middleware)
