@@ -21,6 +21,7 @@ from app.handlers import (
     playlists,
     premium,
     quick_search,
+    referral,
     search,
     start,
     stubs,
@@ -76,6 +77,7 @@ async def main() -> None:
         upload.router,
         transfer.router,
         premium.router,
+        referral.router,
         player.router,
         contests.router,
         admin.router,  # до track_actions: перехватывает ta:edit

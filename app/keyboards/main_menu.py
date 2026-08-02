@@ -14,6 +14,7 @@ def main_menu_keyboard() -> InlineKeyboardMarkup:
                 callback_data="menu:premium",
             )
         ],
+        [InlineKeyboardButton(text="🎁 Реферальная программа", callback_data="menu:referral")],
         [
             InlineKeyboardButton(
                 text="🆘 Поддержка / жалобы / идеи",

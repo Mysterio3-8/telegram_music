@@ -24,6 +24,14 @@ SUBSCRIPTION_GATE_TEXT = (
 )
 
 
+def _tracks_word(count: int) -> str:
+    if count % 10 == 1 and count % 100 != 11:
+        return "трек"
+    if count % 10 in (2, 3, 4) and count % 100 not in (12, 13, 14):
+        return "трека"
+    return "треков"
+
+
 async def build_cabinet_text(session: AsyncSession, user: User) -> str:
     library_count = await count_library_tracks(session, user.id)
     if is_premium_active(user) and user.premium_until is not None:
@@ -32,17 +40,17 @@ async def build_cabinet_text(session: AsyncSession, user: User) -> str:
         subscription = "Бесплатный тариф"
     from app.config import settings
 
+    name = (user.first_name or "").strip() or "друг"
     return (
-        f"Привет, юзер id {user.telegram_id}\n\n"
+        f"👋 Привет, <b>{name}</b> · ID: <code>{user.telegram_id}</code>\n\n"
         f"{subscription}\n\n"
-        f"Треков в библиотеке: {library_count}\n\n"
-        "<b>Напиши название или исполнителя</b> — прямо сюда, в чат. "
-        "Найду за секунды и пришлю трек.\n\n"
-        f"💎 <b>🎧 Открыть плеер</b> — полноценное приложение как VK и Apple Music, "
-        f"но намного удобнее, за {settings.premium_price_rub} ₽/мес: миксы под настроение, "
-        "плейлисты, карточки артистов, эквалайзер, тексты песен, офлайн-режим. "
-        "<b>Первый день — бесплатно.</b>\n\n"
-        "Мини-приложение работает."
+        f"🎵 В библиотеке: {library_count} {_tracks_word(library_count)}\n\n"
+        "Просто отправьте название песни, исполнителя или строчку из текста — "
+        "я моментально найду нужный трек.\n\n"
+        "🎧 <b>Открыть плеер</b>\n"
+        "Полноценный музыкальный сервис как VK или Apple Music: миксы, плейлисты, "
+        "тексты песен, эквалайзер и офлайн-режим. Удобнее и лучше чем другие сервисы.\n\n"
+        f"💎 {settings.premium_price_rub} ₽/месяц • Первый день бесплатно"
     )
 
 
