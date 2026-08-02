@@ -101,15 +101,48 @@ async def search_candidates(query: str, limit: int | None = None) -> list[Candid
     в SoundCloud не нашлось.
     """
     per_source = limit or settings.live_search_limit
-    soundcloud = _visible_candidates(
-        query, await asyncio.to_thread(_safe_search, search_soundcloud, query, per_source)
-    )
-    if len(soundcloud) >= settings.youtube_fallback_min_results:
+    soundcloud = await _search_soundcloud_variants(query, per_source)
+    if _confident_count(query, soundcloud) >= settings.youtube_fallback_min_results:
         return soundcloud
 
     youtube = await asyncio.to_thread(_safe_search, search_youtube, query, per_source)
     music = [item for item in _visible_candidates(query, youtube) if looks_like_music(item)]
     return merge_candidates(soundcloud, music)
+
+
+async def _search_soundcloud_variants(query: str, limit: int) -> list[Candidate]:
+    """SoundCloud + тот же запрос в латинице, если исходный кириллицей.
+
+    Поиск SoundCloud буквальный: «Фейк ид» он с «Fake ID» не сопоставляет.
+    Транслитерация у нас раньше работала только на ранжировании — то есть
+    чинила порядок уже найденного, а не само нахождение. Оба варианта уходят
+    параллельно, результаты склеиваются с дедупом.
+    """
+    variants = [query]
+    latin = to_latin(query)
+    if latin != query.lower():
+        variants.append(latin)
+    results = await asyncio.gather(
+        *(
+            asyncio.to_thread(_safe_search, search_soundcloud, variant, limit)
+            for variant in variants
+        )
+    )
+    merged: list[Candidate] = []
+    for found in results:
+        merged = merge_candidates(merged, _visible_candidates(query, found))
+    return merged
+
+
+def _confident_count(query: str, candidates: list[Candidate]) -> int:
+    """Сколько кандидатов реально похожи на запрос.
+
+    Считаем именно совпадения, а не строки в ответе: на «Фейк ид» SoundCloud
+    возвращал полтора десятка чужих треков, порог «набралось много» срабатывал,
+    и YouTube — который такие запросы разбирает заметно лучше — не спрашивался
+    вовсе. Нужного трека человек не видел при формально полной выдаче.
+    """
+    return sum(1 for item in candidates if match_score(query, item) >= CONFIDENT_MATCH)
 
 
 __all__ = [

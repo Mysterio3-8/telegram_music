@@ -131,6 +131,22 @@ def test_channel_name_does_not_leak_into_matching():
     assert dedup_key(yt) == dedup_key(sc)
 
 
+def test_full_but_irrelevant_soundcloud_still_goes_to_youtube():
+    """«Фейк ид»: SoundCloud возвращал 15 чужих треков, порог «набралось много»
+    срабатывал, и YouTube не спрашивался — нужного трека человек не видел."""
+    from app.services.track_lookup import _confident_count
+
+    junk = [candidate(f"Совсем другое {i}", artist="Кто-то") for i in range(15)]
+    assert _confident_count("фейк ид", junk) == 0
+
+
+def test_matching_soundcloud_results_are_counted_as_confident():
+    from app.services.track_lookup import _confident_count
+
+    hits = [candidate("Fake ID", artist="Kizaru") for _ in range(3)]
+    assert _confident_count("kizaru fake id", hits) == 3
+
+
 def test_ref_round_trip():
     item = candidate("Fake ID", artist="Kizaru")
     assert decode_ref(encode_ref(item)) == item
