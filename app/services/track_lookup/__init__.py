@@ -15,6 +15,7 @@ from app.services.track_lookup.providers import (
     SOURCE_SOUNDCLOUD,
     SOURCE_YOUTUBE,
     collect_candidates,
+    looks_like_music,
     search_soundcloud,
     search_youtube,
 )
@@ -93,19 +94,22 @@ def _visible_candidates(query: str, candidates: list[Candidate]) -> list[Candida
 async def search_candidates(query: str, limit: int | None = None) -> list[Candidate]:
     """Список найденных треков по свободному запросу — из источников, не из базы.
 
-    SoundCloud и YouTube опрашиваются параллельно: время ответа равно медленному
-    из двух, а не их сумме. SoundCloud идёт целиком и первым; YouTube добавляет
-    только те треки, которых в SoundCloud не нашлось (решение владельца).
+    SoundCloud — музыкальный каталог, поэтому он основной и идёт целиком. YouTube
+    подключается, только если SoundCloud набрал мало: он видеохостинг, и на запрос
+    «секс» честно отдаёт ролики про игрушки и про биологию. Из его выдачи берём
+    лишь то, что по форме похоже на трек (см. looks_like_music), и только то, чего
+    в SoundCloud не нашлось.
     """
     per_source = limit or settings.live_search_limit
-    soundcloud, youtube = await asyncio.gather(
-        asyncio.to_thread(_safe_search, search_soundcloud, query, per_source),
-        asyncio.to_thread(_safe_search, search_youtube, query, per_source),
+    soundcloud = _visible_candidates(
+        query, await asyncio.to_thread(_safe_search, search_soundcloud, query, per_source)
     )
-    return merge_candidates(
-        _visible_candidates(query, soundcloud),
-        _visible_candidates(query, youtube),
-    )
+    if len(soundcloud) >= settings.youtube_fallback_min_results:
+        return soundcloud
+
+    youtube = await asyncio.to_thread(_safe_search, search_youtube, query, per_source)
+    music = [item for item in _visible_candidates(query, youtube) if looks_like_music(item)]
+    return merge_candidates(soundcloud, music)
 
 
 __all__ = [

@@ -30,6 +30,11 @@ class Candidate:
     duration: int
     artist: str | None = None
     cover_url: str | None = None
+    # Канал/автор загрузки. Отдельно от artist сознательно: у YouTube это имя
+    # канала, и в сопоставление его пускать нельзя (сломает дедуп с SoundCloud),
+    # но фильтру «похоже ли на музыку» он нужен — «Исполнитель - Topic» это
+    # автоматический музыкальный канал.
+    uploader: str | None = None
 
     @property
     def full_title(self) -> str:

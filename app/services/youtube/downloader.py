@@ -27,6 +27,9 @@ class VideoEntry:
     # Живой поиск рисует карточки до скачивания и отсекает часовые миксы сразу.
     duration: int = 0
     cover_url: str = ""
+    # Канал: «Исполнитель - Topic» — автоматический музыкальный канал YouTube,
+    # по нему живой поиск отличает трек от ролика про что-нибудь
+    uploader: str = ""
 
 
 @dataclass(frozen=True)
@@ -159,6 +162,7 @@ def _collect_entries(info: dict | None) -> list[VideoEntry]:
                     node.get("title") or video_id,
                     duration=int(node.get("duration") or 0),
                     cover_url=_entry_thumbnail(node),
+                    uploader=str(node.get("uploader") or node.get("channel") or "").strip(),
                 )
             )
 

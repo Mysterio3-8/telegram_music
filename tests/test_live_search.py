@@ -78,6 +78,40 @@ def test_visible_falls_back_when_ranking_drops_everything():
     assert _visible_candidates("совершенно другой запрос", [found]) == [found]
 
 
+def test_youtube_video_about_a_topic_is_rejected():
+    """Запрос «секс» приносил ролики про игрушки и биологию. Фильтруем форму,
+    а не тему: в песнях бывает что угодно."""
+    from app.services.track_lookup.providers import looks_like_music
+
+    video = Candidate(
+        source=YT, url="u", title="Всё что нужно знать о сексе", duration=600,
+        uploader="Научпоп",
+    )
+    assert not looks_like_music(video)
+
+
+def test_youtube_track_with_artist_dash_title_is_kept():
+    from app.services.track_lookup.providers import looks_like_music
+
+    assert looks_like_music(candidate("Kizaru - Fake ID", YT))
+
+
+def test_youtube_topic_channel_is_kept():
+    """«Исполнитель - Topic» — автоматический музыкальный канал YouTube."""
+    from app.services.track_lookup.providers import looks_like_music
+
+    track = Candidate(source=YT, url="u", title="Секс", duration=170, uploader="Lida - Topic")
+    assert looks_like_music(track)
+
+
+def test_channel_name_does_not_leak_into_matching():
+    """uploader отдельно от artist: имя канала в сопоставлении сломало бы дедуп
+    одного и того же трека между YouTube и SoundCloud."""
+    yt = Candidate(source=YT, url="u", title="Kizaru - Fake ID", duration=170, uploader="KizaruTV")
+    sc = candidate("Fake ID", artist="Kizaru")
+    assert dedup_key(yt) == dedup_key(sc)
+
+
 def test_ref_round_trip():
     item = candidate("Fake ID", artist="Kizaru")
     assert decode_ref(encode_ref(item)) == item
