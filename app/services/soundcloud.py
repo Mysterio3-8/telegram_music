@@ -169,6 +169,7 @@ def list_soundcloud_entries(url: str) -> list[SoundcloudEntry]:
     Нормализуем URL и здесь — чинит уже сохранённые источники с вкладкой-суффиксом.
     Ошибка попытки — переходим к следующей, последняя всегда без прокси."""
     last_error: Exception | None = None
+    answered = False
     for attempt, use_proxy in enumerate(attempt_plan(), start=1):
         opts = {
             **_base_opts(impersonate=True, use_proxy=use_proxy),
@@ -182,14 +183,18 @@ def list_soundcloud_entries(url: str) -> list[SoundcloudEntry]:
             last_error = exc
             logger.warning("SoundCloud: список не получен (попытка %s): %s", attempt, exc)
             continue
-        if info is None:
-            # yt-dlp гасит ошибку сам и отдаёт None — это отказ, а не пустая выдача.
-            # Раньше здесь стоял return [], и мёртвый прокси выглядел как «ничего
-            # не найдено»: ротация не срабатывала вообще.
-            logger.warning("SoundCloud: пустой ответ (попытка %s)", attempt)
-            continue
-        return collect_soundcloud_entries(info)
-    raise last_error if last_error else RuntimeError(f"SoundCloud: список не получен {url}")
+        answered = True
+        entries = collect_soundcloud_entries(info) if info else []
+        if entries:
+            return entries
+        # Пустой результат тоже повод попробовать снова. Из-за ignoreerrors=True
+        # yt-dlp гасит ошибку сети сам и отдаёт словарь с пустым entries — снаружи
+        # это неотличимо от «ничего не найдено». Раньше здесь стоял return, поэтому
+        # мёртвый прокси навсегда выключал SoundCloud, не доходя до прямой попытки.
+        logger.warning("SoundCloud: пустой ответ (попытка %s, proxy=%s)", attempt, use_proxy)
+    if not answered and last_error:
+        raise last_error
+    return []  # источник ответил, но действительно ничего не нашёл
 
 
 def entry_thumbnail(node: dict) -> str:
