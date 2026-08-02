@@ -5,7 +5,7 @@ track_max_seconds — джинглы, обрезки, подкасты, виде
 import logging
 from dataclasses import dataclass
 
-from sqlalchemy import delete, false, or_, select, update
+from sqlalchemy import and_, delete, false, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 
@@ -57,12 +57,23 @@ def _clip_condition():
 STALE_MAX_SECONDS = 900
 
 
-def _stale_condition():
-    return or_(
+def _stale_condition(keep_user_tracks: bool = True):
+    """keep_user_tracks — не трогать то, что человек добавил себе в плейлист или
+    библиотеку. Замер прода 2026-08-02: без защиты чистка уносила 2423 трека из
+    2610 плейлистных, то есть 93% всего, что люди себе собрали. Живой поиск такие
+    треки найдёт заново, но ПЛЕЙЛИСТ он не восстановит — там останется дыра."""
+    stale = or_(
         _clip_condition(),
         Track.duration > STALE_MAX_SECONDS,
         Track.cover_url.is_(None),
         Track.cover_url == "",
+    )
+    if not keep_user_tracks:
+        return stale
+    return and_(
+        stale,
+        ~Track.id.in_(select(PlaylistTrack.track_id)),
+        ~Track.id.in_(select(UserLibrary.track_id)),
     )
 
 
@@ -80,14 +91,17 @@ async def count_stale_tracks(session: AsyncSession) -> dict[str, int]:
         "clips": await total(_clip_condition()),
         "too_long": await total(Track.duration > STALE_MAX_SECONDS),
         "no_cover": await total(or_(Track.cover_url.is_(None), Track.cover_url == "")),
-        "total": await total(_stale_condition()),
+        "total": await total(_stale_condition(keep_user_tracks=False)),
+        "protected": await total(_stale_condition(keep_user_tracks=True)),
     }
 
 
-async def delete_stale_tracks(session: AsyncSession, storage: StorageBackend) -> int:
+async def delete_stale_tracks(
+    session: AsyncSession, storage: StorageBackend, keep_user_tracks: bool = True
+) -> int:
     """Удаляет шлак целиком: файл + связи + запись. Возвращает число удалённых."""
-    tracks = list((await session.scalars(select(Track).where(_stale_condition()))).all())
-    return await _delete_tracks(session, storage, tracks)
+    stmt = select(Track).where(_stale_condition(keep_user_tracks))
+    return await _delete_tracks(session, storage, list((await session.scalars(stmt)).all()))
 
 
 async def drop_fingerprints(session: AsyncSession) -> int:

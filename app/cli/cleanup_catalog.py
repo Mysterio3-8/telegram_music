@@ -28,6 +28,12 @@ async def main() -> None:
         action="store_true",
         help="стереть отпечатки (освобождает индекс на 128 МБ)",
     )
+    parser.add_argument(
+        "--include-user-tracks",
+        action="store_true",
+        help="удалять и то, что лежит у людей в плейлистах и библиотеках (плейлисты "
+        "потеряют треки безвозвратно — живой поиск их не восстановит)",
+    )
     args = parser.parse_args()
 
     async with session_factory() as session:
@@ -36,13 +42,17 @@ async def main() -> None:
             f"Клипы: {stats['clips']}\n"
             f"Длиннее 15 минут: {stats['too_long']}\n"
             f"Без обложки: {stats['no_cover']}\n"
-            f"Под удаление всего (с пересечениями): {stats['total']}"
+            f"Подходит под критерии всего: {stats['total']}\n"
+            f"Из них можно удалить безопасно: {stats['protected']} "
+            f"(остальные лежат у людей в плейлистах и библиотеках)"
         )
         if not args.apply:
             print("\nЭто предпросмотр. Удалить — повторить с --apply")
             return
 
-        deleted = await delete_stale_tracks(session, get_storage())
+        deleted = await delete_stale_tracks(
+            session, get_storage(), keep_user_tracks=not args.include_user_tracks
+        )
         print(f"Удалено треков: {deleted}")
         if args.fingerprints:
             cleared = await drop_fingerprints(session)

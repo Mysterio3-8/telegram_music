@@ -93,6 +93,35 @@ async def test_stale_cleanup_deletes_and_keeps_the_rest(session):
     assert [t.title for t in remaining] == ["Нормальный"]
 
 
+async def test_stale_cleanup_spares_tracks_from_user_playlists(session):
+    """Живой поиск найдёт трек заново, но ДЫРУ В ПЛЕЙЛИСТЕ не восстановит.
+    Замер прода: без защиты чистка уносила 2423 плейлистных трека из 2610."""
+    user = User(telegram_id=1)
+    session.add(user)
+    await session.commit()
+    track = await _covered(session, "Без обложки, но в плейлисте", 200, cover=None)
+    playlist = Playlist(user_id=user.id, title="Мой")
+    session.add(playlist)
+    await session.commit()
+    session.add(PlaylistTrack(playlist_id=playlist.id, track_id=track.id, position=1))
+    await session.commit()
+
+    assert await delete_stale_tracks(session, FakeStorage()) == 0
+    # с явным флагом — удаляем, но это осознанная потеря
+    assert await delete_stale_tracks(session, FakeStorage(), keep_user_tracks=False) == 1
+
+
+async def test_stale_cleanup_spares_tracks_from_user_library(session):
+    user = User(telegram_id=2)
+    session.add(user)
+    await session.commit()
+    track = await _covered(session, "Без обложки, но в библиотеке", 200, cover=None)
+    session.add(UserLibrary(user_id=user.id, track_id=track.id))
+    await session.commit()
+
+    assert await delete_stale_tracks(session, FakeStorage()) == 0
+
+
 async def test_drop_fingerprints_clears_only_fingerprints(session):
     track = Track(title="T", artist="A", duration=200, fingerprint="AQADtMkU", cover_url="c")
     session.add(track)
