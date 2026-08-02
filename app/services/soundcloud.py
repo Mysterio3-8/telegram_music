@@ -158,10 +158,14 @@ def attempt_plan() -> list[bool]:
     отвечали Connection refused, и SoundCloud — приоритетный источник поиска —
     молча отдавал ноль результатов месяцами. Мёртвый пул прокси не должен
     выключать источник целиком; напрямую SoundCloud отвечает нормально.
+
+    Через прокси пробуем ОДИН раз, а не три: живой поиск ждёт человек, и с
+    мёртвым пулом три попытки превращали 6 секунд в 19. Ротация всё равно
+    работает — следующий вызов возьмёт следующий прокси из пула.
     """
     if not settings.proxy_list_items:
         return [False]
-    return [True] * _proxy_attempts() + [False]
+    return [True, False]
 
 
 def list_soundcloud_entries(url: str) -> list[SoundcloudEntry]:

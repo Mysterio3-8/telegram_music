@@ -42,7 +42,7 @@ def test_download_retries_with_next_proxy(monkeypatch):
     except RuntimeError:
         pass
 
-    assert calls == [True, True, False]  # по попытке на прокси, затем напрямую
+    assert calls == [True, False]  # одна попытка через прокси, затем напрямую
 
 
 def test_dead_proxies_do_not_disable_soundcloud(monkeypatch):
