@@ -30,6 +30,21 @@ async def test_count_reclaimable_only_counts_synced_tracks_with_archive(session)
     assert total_bytes == 1_000_000
 
 
+async def test_count_reclaimable_returns_zeros_when_nothing_to_reclaim(session):
+    """Ровно случай прода: подходящих треков нет, sum() даёт NULL.
+
+    Счёт и сумма считаются одним запросом — агрегат без GROUP BY возвращает
+    строку даже при пустой выборке, и NULL из sum() должен стать нулём, а не
+    уронить распаковку."""
+    session.add(Track(title="A", artist="X", duration=100, tg_file_id="f1", meta_synced=True))
+    await session.commit()
+
+    count, total_bytes = await count_reclaimable(session)
+
+    assert count == 0
+    assert total_bytes == 0
+
+
 async def test_reclaim_deletes_files_and_clears_storage_path(session, tmp_path):
     storage = LocalStorage(str(tmp_path))
     storage.save("tracks/1", b"audio-bytes")

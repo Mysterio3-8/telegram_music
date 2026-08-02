@@ -23,14 +23,20 @@ def _reclaimable_where():
 
 
 async def count_reclaimable(session: AsyncSession) -> tuple[int, int]:
-    """(число треков с архивом-дублем, сумма их file_size в байтах)."""
-    count = await session.scalar(
-        select(func.count()).select_from(Track).where(*_reclaimable_where())
-    )
-    total_bytes = await session.scalar(
-        select(func.coalesce(func.sum(Track.file_size), 0)).where(*_reclaimable_where())
-    )
-    return count or 0, total_bytes or 0
+    """(число треков с архивом-дублем, сумма их file_size в байтах).
+
+    Счёт и сумма — одним запросом. Раньше это были два отдельных обращения с
+    одинаковым условием, то есть таблица прочитывалась дважды; на холодном кэше
+    каждый проход стоил ~2.9 сек и вдвоём давал большую часть пятисекундной
+    паузы на экране /admin (замер прода 2026-08-02)."""
+    row = (
+        await session.execute(
+            select(func.count(), func.coalesce(func.sum(Track.file_size), 0))
+            .select_from(Track)
+            .where(*_reclaimable_where())
+        )
+    ).one()
+    return row[0] or 0, row[1] or 0
 
 
 async def reclaim_disk_space(session: AsyncSession, storage: StorageBackend) -> int:

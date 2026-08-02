@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import BigInteger, ForeignKey, Index, String, Text, UniqueConstraint, func
+from sqlalchemy import BigInteger, ForeignKey, Index, String, Text, UniqueConstraint, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -83,6 +83,25 @@ class Track(Base):
     # Пишется при создании трека, бэкфилл — python -m app.cli.reindex_search.
     search_index: Mapped[str | None] = mapped_column(String(600), index=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+    __table_args__ = (
+        # Экран /admin считает архивные копии на диске: три запроса с условием
+        # storage_path IS NOT NULL. Без индекса каждый — полный скан таблицы на
+        # 133 МБ ради 52 подходящих строк; на холодном кэше это 2.9 сек на запрос
+        # (замер прода 2026-08-02 по жалобе «бот тормозит» — тормозила админка).
+        # Индекс ЧАСТИЧНЫЙ: 30 тысяч NULL-ов индексировать незачем, нужны только
+        # треки с реально существующим архивом. Остальные колонки в индексе —
+        # чтобы count() и sum(file_size) считались, не заглядывая в таблицу.
+        Index(
+            "ix_tracks_archived",
+            "storage_path",
+            "tg_file_id",
+            "meta_synced",
+            "file_size",
+            sqlite_where=text("storage_path IS NOT NULL"),
+            postgresql_where=text("storage_path IS NOT NULL"),
+        ),
+    )
 
 
 class Artist(Base):
