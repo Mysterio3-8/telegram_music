@@ -168,7 +168,7 @@ def attempt_plan() -> list[bool]:
     return [True, False]
 
 
-def list_soundcloud_entries(url: str) -> list[SoundcloudEntry]:
+def list_soundcloud_entries(url: str, sleep_requests: int = 1) -> list[SoundcloudEntry]:
     """Трек → один элемент; профиль/сет → список треков (без скачивания).
     Нормализуем URL и здесь — чинит уже сохранённые источники с вкладкой-суффиксом.
     Ошибка попытки — переходим к следующей, последняя всегда без прокси."""
@@ -176,7 +176,7 @@ def list_soundcloud_entries(url: str) -> list[SoundcloudEntry]:
     answered = False
     for attempt, use_proxy in enumerate(attempt_plan(), start=1):
         opts = {
-            **_base_opts(impersonate=True, use_proxy=use_proxy),
+            **_base_opts(impersonate=True, use_proxy=use_proxy, sleep_requests=sleep_requests),
             "extract_flat": "in_playlist",
             "skip_download": True,
         }
@@ -292,12 +292,17 @@ def _download_soundcloud_once(
         if not files:
             return None
         data, file_format = _read_supported(files[0])
+        uploader = (info.get("uploader") or info.get("artist") or "").strip()
         audio = DownloadedAudio(
             data=data,
             file_format=file_format,
             duration=int(info.get("duration") or 0),
             video_title=info.get("title") or url,
+            # uploader ОБЯЗАН лежать и внутри объекта, а не только в кортеже: у SoundCloud
+            # название часто без автора («Секс»), и исполнитель берётся отсюда. Пока его
+            # тут не было, поисковый парсер подписывал такие треки «Исполнитель — Секс».
+            uploader=uploader,
             thumbnail_url=upscale_soundcloud_artwork(str(info.get("thumbnail") or "")),
             album=str(info.get("album") or "").strip(),
         )
-        return audio, (info.get("uploader") or "").strip()
+        return audio, uploader

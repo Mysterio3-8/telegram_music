@@ -52,7 +52,13 @@ def search_fetch_candidate(self, candidate: dict, telegram_id: int, chat_id: int
                 await bot.send_message(chat_id, f"❌ {exc}")
                 return
             caption = f"✅ {track.artist} — {track.title}"
-            if track.tg_file_id:
+            if chat_id == settings.effective_archive_chat_id:
+                # Минт file_id — это реальная отправка файла в архивный чат. Если он
+                # не задан, архивом становится чат первого админа, и владелец получал
+                # трек дважды: копию минта и нашу. Настоящее лечение — завести
+                # TELEGRAM_ARCHIVE_CHAT_ID отдельным каналом; до тех пор не дублируем.
+                await bot.send_message(chat_id, f"{caption} — добавлен в библиотеку.")
+            elif track.tg_file_id:
                 await bot.send_audio(chat_id, track.tg_file_id, caption=caption)
             else:
                 await bot.send_message(chat_id, f"{caption} — добавлен в библиотеку.")

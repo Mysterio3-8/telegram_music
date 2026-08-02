@@ -5,6 +5,7 @@ SoundCloud отдаёт чистое аудио как есть, YouTube — с 
 """
 import asyncio
 import logging
+from dataclasses import replace
 
 from aiogram import Bot
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -62,6 +63,14 @@ async def import_candidate(
         raise UserImportRejected(
             "Не получилось скачать этот трек — попробуйте соседний вариант из списка."
         )
+    # Выдача поиска знает автора и обложку; при скачивании источник их иногда не
+    # отдаёт. Подставляем известное, иначе трек уходит человеку без обложки и
+    # подписанный «Исполнитель».
+    audio = replace(
+        audio,
+        uploader=audio.uploader or (candidate.artist or ""),
+        thumbnail_url=audio.thumbnail_url or (candidate.cover_url or ""),
+    )
     track, created = await import_downloaded_audio(session, bot, audio, telegram_id)
     logger.info(
         "Импорт кандидата источник=%s user=%s → track=%s (created=%s)",

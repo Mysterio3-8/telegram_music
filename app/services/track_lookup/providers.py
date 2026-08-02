@@ -20,7 +20,9 @@ _WATCH_URL = "https://www.youtube.com/watch?v={video_id}"
 def search_soundcloud(query: str, limit: int = 5) -> list[Candidate]:
     """Кандидаты SoundCloud. Длительность приходит прямо из выдачи (extract_flat) —
     мусор по времени отсеивается ДО скачивания, поэтому поиск укладывается в секунды."""
-    entries = list_soundcloud_entries(f"scsearch{max(1, limit)}:{query}")
+    # sleep_requests=0: ответа ждёт живой человек, а обходим одну поисковую выдачу,
+    # а не весь профиль артиста — пауза между запросами здесь только тормозит
+    entries = list_soundcloud_entries(f"scsearch{max(1, limit)}:{query}", sleep_requests=0)
     return [
         Candidate(
             source=SOURCE_SOUNDCLOUD,
@@ -53,7 +55,7 @@ def search_youtube(query: str, limit: int = 5) -> list[Candidate]:
             duration=entry.duration,
             cover_url=entry.cover_url or None,
         )
-        for entry in search_videos(query, limit=limit)
+        for entry in search_videos(query, limit=limit, sleep_requests=0)
     ]
 
 

@@ -75,7 +75,9 @@ def _impersonate_target():
         return None
 
 
-def _base_opts(impersonate: bool = False, use_proxy: bool = False) -> dict:
+def _base_opts(
+    impersonate: bool = False, use_proxy: bool = False, sleep_requests: int = 1
+) -> dict:
     """impersonate=True — Chrome-маскировка (curl_cffi), нужна SoundCloud (иначе 404
     на частых запросах). YouTube её не просит и на импersonation иногда отвечает
     403 (собственная система защиты реагирует на чужой TLS-отпечаток) — там она
@@ -88,8 +90,10 @@ def _base_opts(impersonate: bool = False, use_proxy: bool = False) -> dict:
         "quiet": True,
         "no_warnings": True,
         "ignoreerrors": True,
-        # Анти-бан: пауза между HTTP-запросами при обходе профиля/плейлиста
-        "sleep_interval_requests": 1,
+        # Анти-бан: пауза между HTTP-запросами при обходе профиля/плейлиста.
+        # sleep_requests=0 — для живого поиска: там ответа ждёт человек, а обход
+        # идёт по одной поисковой выдаче, а не по всему профилю артиста.
+        "sleep_interval_requests": sleep_requests,
     }
     if impersonate:
         target = _impersonate_target()
@@ -192,9 +196,13 @@ def _read_supported(path: Path) -> tuple[bytes, str]:
     return converted.read_bytes(), "m4a"
 
 
-def search_videos(query: str, limit: int = 1) -> list[VideoEntry]:
+def search_videos(query: str, limit: int = 1, sleep_requests: int = 1) -> list[VideoEntry]:
     """Результаты поиска YouTube по свободному запросу, до limit штук."""
-    opts = {**_base_opts(), "extract_flat": "in_playlist", "skip_download": True}
+    opts = {
+        **_base_opts(sleep_requests=sleep_requests),
+        "extract_flat": "in_playlist",
+        "skip_download": True,
+    }
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(f"ytsearch{max(1, limit)}:{query}", download=False)
     return _collect_entries(info)
