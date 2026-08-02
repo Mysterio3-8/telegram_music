@@ -4,6 +4,7 @@
 выдача) не должен ронять поиск целиком — берём то, что ответило.
 """
 import logging
+import re
 
 from app.services.soundcloud import list_soundcloud_entries
 from app.services.track_lookup.ranking import Candidate
@@ -46,8 +47,11 @@ def _to_seconds(value) -> int:
     return number // 1000 if number > 20_000 else number
 
 
-_TOPIC_CHANNEL_SUFFIX = " - Topic"
-_ARTIST_TITLE_SEPARATORS = (" - ", " – ", " — ", " -- ")
+_TOPIC_CHANNEL_SUFFIX = "- Topic"
+# Тире у людей какое угодно: минус, длинное, короткое, неразрывное. Приводим всё
+# к обычному дефису, иначе «Fake ID – kizaru» не опознаётся как трек.
+_DASHES = "‐‑‒–—―−─-"
+_DASH_RE = re.compile(f"[{_DASHES}]")
 
 
 def looks_like_music(candidate: Candidate) -> bool:
@@ -63,9 +67,9 @@ def looks_like_music(candidate: Candidate) -> bool:
     Всё остальное с YouTube не берём. Он у нас фолбэк, а не источник каталога:
     лучше не показать сомнительное, чем показать не-музыку.
     """
-    if (candidate.uploader or "").endswith(_TOPIC_CHANNEL_SUFFIX):
+    if (candidate.uploader or "").strip().endswith(_TOPIC_CHANNEL_SUFFIX):
         return True
-    return any(sep in candidate.title for sep in _ARTIST_TITLE_SEPARATORS)
+    return " - " in _DASH_RE.sub("-", candidate.title)
 
 
 def search_youtube(query: str, limit: int = 5) -> list[Candidate]:

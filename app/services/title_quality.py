@@ -43,6 +43,17 @@ _JUNK_MARKERS = (
     r"что\s+такое",
     r"почему",
     r"топ[-\s]?\d+",
+    # Кино и сериалы: «Sex/Life — Official Teaser» проходил фильтр формы,
+    # потому что тире в названии есть, а музыкой он не является
+    r"teaser",
+    r"тизер",
+    r"sneak\s+peek",
+    r"season\s*\d*",
+    r"сезон",
+    r"seri[ea]s",
+    r"эпизод",
+    r"episode",
+    r"s\d+e\d+",
 )
 
 _JUNK_RE = re.compile(r"(?:^|[\s\(\[\|/–—-])(?:" + "|".join(_JUNK_MARKERS) + r")(?:$|[\s\)\]\|/–—-])", re.IGNORECASE)

@@ -96,6 +96,25 @@ def test_youtube_track_with_artist_dash_title_is_kept():
     assert looks_like_music(candidate("Kizaru - Fake ID", YT))
 
 
+def test_series_teaser_is_rejected_despite_the_dash():
+    """«Sex/Life: Season 2 — Official Teaser» проходил фильтр формы: тире есть,
+    а музыки нет."""
+    teaser = Candidate(
+        source=YT, url="u", title="Sex/Life: Season 2 — Official Teaser", duration=90,
+        uploader="Kinoman",
+    )
+    assert _visible_candidates("секс", [teaser]) == []
+
+
+def test_any_dash_counts_as_artist_separator():
+    """Тире у людей какое угодно: «Fake ID – kizaru» это трек, а не ролик."""
+    from app.services.track_lookup.providers import looks_like_music
+
+    for dash in ("-", "–", "—", "‒"):
+        item = Candidate(source=YT, url="u", title=f"Fake ID {dash} kizaru", duration=170)
+        assert looks_like_music(item), dash
+
+
 def test_youtube_topic_channel_is_kept():
     """«Исполнитель - Topic» — автоматический музыкальный канал YouTube."""
     from app.services.track_lookup.providers import looks_like_music
