@@ -5,6 +5,11 @@
 и выбираем лучшее совпадение. Вызовы блокирующие (yt-dlp) — оборачивать
 в asyncio.to_thread на стороне вызывающего.
 """
+import asyncio
+import logging
+
+from app.config import settings
+from app.services.track_lookup.merge import dedup_key, merge_candidates
 from app.services.track_lookup.providers import (
     PROVIDERS,
     SOURCE_SOUNDCLOUD,
@@ -26,6 +31,8 @@ from app.services.track_lookup.ranking import (
 
 # Порог уверенного совпадения понижен: владелец хочет выдачу даже по слабому
 # запросу. best_match вызываем с ним; ниже порога — фолбэк на топ (см. find_track).
+logger = logging.getLogger(__name__)
+
 CONFIDENT_MATCH = 0.3
 
 
@@ -33,6 +40,9 @@ def _safe_search(provider, query: str, limit: int) -> list[Candidate]:
     try:
         return provider(query, limit)
     except Exception:  # noqa: BLE001 — источник отвалился, не роняем поиск
+        # Логируем громко: молчаливый отказ SoundCloud незаметно оставляет выдачу
+        # на одном YouTube, и «поиск стал хуже» превращается в загадку.
+        logger.warning("Живой поиск: источник %s не ответил", provider.__name__, exc_info=True)
         return []
 
 
@@ -66,6 +76,38 @@ def find_track(query: str, limit: int = 4) -> Candidate | None:
     return None
 
 
+def _visible_candidates(query: str, candidates: list[Candidate]) -> list[Candidate]:
+    """Кандидаты в порядке для показа. Ранжирование отбрасывает мусор и промахи,
+    но если оно отбросило ВСЁ (запрос из одной буквы, экзотическое название) —
+    отдаём то, что вернул источник: охват важнее чистоты (решение владельца)."""
+    ranked = rank_candidates(query, candidates)
+    if ranked:
+        return ranked
+    return [
+        item
+        for item in candidates
+        if not is_probably_junk(item.title) and is_track_duration(item.duration)
+    ]
+
+
+async def search_candidates(query: str, limit: int | None = None) -> list[Candidate]:
+    """Список найденных треков по свободному запросу — из источников, не из базы.
+
+    SoundCloud и YouTube опрашиваются параллельно: время ответа равно медленному
+    из двух, а не их сумме. SoundCloud идёт целиком и первым; YouTube добавляет
+    только те треки, которых в SoundCloud не нашлось (решение владельца).
+    """
+    per_source = limit or settings.live_search_limit
+    soundcloud, youtube = await asyncio.gather(
+        asyncio.to_thread(_safe_search, search_soundcloud, query, per_source),
+        asyncio.to_thread(_safe_search, search_youtube, query, per_source),
+    )
+    return merge_candidates(
+        _visible_candidates(query, soundcloud),
+        _visible_candidates(query, youtube),
+    )
+
+
 __all__ = [
     "Candidate",
     "PROVIDERS",
@@ -73,7 +115,10 @@ __all__ = [
     "SOURCE_YOUTUBE",
     "best_match",
     "collect_candidates",
+    "dedup_key",
     "find_track",
+    "merge_candidates",
+    "search_candidates",
     "is_track_duration",
     "match_score",
     "normalize_query",

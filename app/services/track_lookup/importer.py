@@ -38,6 +38,38 @@ def download_candidate(candidate: Candidate) -> DownloadedAudio | None:
     return download_audio(video_id, as_mp3=True) if video_id else None
 
 
+def candidate_metadata(candidate: Candidate) -> tuple[str, str]:
+    """(исполнитель, название) кандидата — теми же правилами, что и при импорте.
+
+    Нужна ДО скачивания: по этой паре смотрим, не залит ли трек уже, и экономим
+    целую загрузку. После скачивания метаданные пересчитываются по факту файла.
+    """
+    from app.services.title_parser import parse_title
+
+    fallback = (candidate.artist or "").removesuffix(" - Topic").strip() or "Исполнитель"
+    return parse_title(candidate.title, fallback)
+
+
+async def import_candidate(
+    session: AsyncSession, bot: Bot, candidate: Candidate, telegram_id: int
+) -> tuple[Track, bool]:
+    """Загружает выбранного пользователем кандидата и добавляет ему в библиотеку.
+
+    Отличие от import_by_query: кандидат уже выбран человеком, поиск не повторяем
+    и по длительности не придираемся — раз выбрал, значит именно это и хотел."""
+    audio = await asyncio.to_thread(download_candidate, candidate)
+    if audio is None:
+        raise UserImportRejected(
+            "Не получилось скачать этот трек — попробуйте соседний вариант из списка."
+        )
+    track, created = await import_downloaded_audio(session, bot, audio, telegram_id)
+    logger.info(
+        "Импорт кандидата источник=%s user=%s → track=%s (created=%s)",
+        candidate.source, telegram_id, track.id, created,
+    )
+    return track, created
+
+
 async def import_by_query(
     session: AsyncSession, bot: Bot, query: str, telegram_id: int
 ) -> tuple[Track, bool]:

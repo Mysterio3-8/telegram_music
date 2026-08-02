@@ -130,6 +130,22 @@ export function fetchFromWeb(query) {
   return request("/search/fetch", { method: "POST", body: JSON.stringify({ query }) });
 }
 
+// Живой поиск: выдача идёт прямо из источников, каталог для этого не нужен.
+export function liveSearch(query) {
+  return request(`/search/live?q=${encodeURIComponent(query)}`);
+}
+
+// Фоновая закачка выбранного трека: играет он уже потоком, а это — чтобы в
+// следующий раз играл мгновенно по file_id и остался в библиотеке.
+export function queueLiveFetch(ref) {
+  return request(`/search/live/${encodeURIComponent(ref)}/fetch`, { method: "POST" });
+}
+
+// Поток кандидата: <audio> идёт сюда, сервер проксирует источник с поддержкой Range
+export function liveStreamUrl(ref) {
+  return `/stream/${encodeURIComponent(ref)}`;
+}
+
 export function getProfile() {
   return request("/profile");
 }

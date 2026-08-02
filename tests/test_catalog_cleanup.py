@@ -6,8 +6,11 @@ from app.db.models import Lyrics, Playlist, PlaylistTrack, Track, TrackEvent, Up
 from app.services.catalog_cleanup import (
     count_clip_tracks,
     count_junk_tracks,
+    count_stale_tracks,
     delete_clip_tracks,
     delete_junk_tracks,
+    delete_stale_tracks,
+    drop_fingerprints,
     list_junk_tracks,
 )
 
@@ -51,6 +54,54 @@ async def test_clip_cleanup_removes_video_junk(session):
     # нормальный трек не тронут
     remaining = list((await session.scalars(select(Track))).all())
     assert [t.title for t in remaining] == ["Big Baby Tape — Gimme the Loot"]
+
+
+async def _covered(session, title, duration, cover="http://cover") -> Track:
+    track = Track(title=title, artist="A", duration=duration, cover_url=cover)
+    session.add(track)
+    await session.commit()
+    return track
+
+
+async def test_stale_cleanup_counts_by_reason(session):
+    await _covered(session, "Нормальный", 200)
+    await _covered(session, "Подкаст", 4000)
+    await _covered(session, "Без обложки", 200, cover=None)
+    await _covered(session, "Премьера клипа: Мияги", 200)
+
+    stats = await count_stale_tracks(session)
+    assert stats["clips"] == 1
+    assert stats["too_long"] == 1
+    assert stats["no_cover"] == 1
+    assert stats["total"] == 3
+
+
+async def test_stale_cleanup_keeps_short_tracks(session):
+    """Нижний порог поиска снят ради андеграунда — удалять короткие треки из базы
+    было бы противоречием: поиск теперь считает их валидными."""
+    await _covered(session, "Скит на 40 секунд", 40)
+    assert (await count_stale_tracks(session))["total"] == 0
+    assert await delete_stale_tracks(session, FakeStorage()) == 0
+
+
+async def test_stale_cleanup_deletes_and_keeps_the_rest(session):
+    await _covered(session, "Нормальный", 200)
+    await _covered(session, "Без обложки", 200, cover=None)
+
+    assert await delete_stale_tracks(session, FakeStorage()) == 1
+    remaining = list((await session.scalars(select(Track))).all())
+    assert [t.title for t in remaining] == ["Нормальный"]
+
+
+async def test_drop_fingerprints_clears_only_fingerprints(session):
+    track = Track(title="T", artist="A", duration=200, fingerprint="AQADtMkU", cover_url="c")
+    session.add(track)
+    await session.commit()
+
+    assert await drop_fingerprints(session) == 1
+    await session.refresh(track)
+    assert track.fingerprint is None
+    assert track.title == "T"  # остальное на месте
 
 
 async def test_no_junk_when_limits_disabled(session):

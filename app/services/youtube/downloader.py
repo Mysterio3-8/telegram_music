@@ -23,6 +23,10 @@ _VIDEO_ID_LENGTH = 11
 class VideoEntry:
     video_id: str
     title: str
+    # Длительность и обложка из выдачи поиска (extract_flat отдаёт их для YouTube).
+    # Живой поиск рисует карточки до скачивания и отсекает часовые миксы сразу.
+    duration: int = 0
+    cover_url: str = ""
 
 
 @dataclass(frozen=True)
@@ -128,10 +132,26 @@ def _collect_entries(info: dict | None) -> list[VideoEntry]:
         video_id = node.get("id")
         if video_id and len(video_id) == _VIDEO_ID_LENGTH and video_id not in seen:
             seen.add(video_id)
-            entries.append(VideoEntry(video_id, node.get("title") or video_id))
+            entries.append(
+                VideoEntry(
+                    video_id,
+                    node.get("title") or video_id,
+                    duration=int(node.get("duration") or 0),
+                    cover_url=_entry_thumbnail(node),
+                )
+            )
 
     walk(info)
     return entries
+
+
+def _entry_thumbnail(node: dict) -> str:
+    """Обложка элемента выдачи: полем или последним (крупнейшим) из вариантов."""
+    thumb = node.get("thumbnail")
+    if not thumb:
+        variants = node.get("thumbnails") or []
+        thumb = variants[-1].get("url") if variants else ""
+    return str(thumb or "")
 
 
 def fetch_video_info(video_id: str) -> VideoInfo | None:

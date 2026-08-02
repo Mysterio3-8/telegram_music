@@ -17,6 +17,9 @@ import {
   getMyArtists,
   addTrackToPlaylist,
   searchAll,
+  liveSearch,
+  liveStreamUrl,
+  queueLiveFetch,
   getInstrumentals,
   getLyrics,
   getPlaylists,
@@ -622,7 +625,7 @@ function scheduleSearch(query) {
   clearTimeout(searchTimer);
   const seq = ++searchSeq;
   if (!query.trim()) {
-    mutateSearch({ searchResults: [], searchTotal: 0, searchStatus: "idle" });
+    mutateSearch({ searchResults: [], liveResults: [], searchTotal: 0, searchStatus: "idle" });
     return;
   }
   mutateSearch({ searchStatus: "loading" });
@@ -638,19 +641,53 @@ function scheduleSearch(query) {
         });
         return;
       }
-      const sections = await searchAll(query.trim());
+      // Треки берём живьём из источников, артистов/альбомы/плейлисты — из базы.
+      // Оба запроса параллельно: живой поиск не должен ждать локальные секции.
+      const [sections, live] = await Promise.all([
+        searchAll(query.trim()).catch(() => null),
+        liveSearch(query.trim()).catch(() => ({ items: [] })),
+      ]);
       if (seq !== searchSeq) return; // пришёл более свежий запрос
       mutateSearch({
         searchSections: sections,
-        searchResults: sections.tracks,
-        searchTotal: sections.tracks.length,
+        liveResults: live.items,
+        searchResults: live.items,
+        searchTotal: live.items.length,
         searchStatus: "done",
       });
     } catch {
       if (seq !== searchSeq) return;
-      mutateSearch({ searchResults: [], searchSections: null, searchTotal: 0, searchStatus: "done" });
+      mutateSearch({
+        searchResults: [], liveResults: [], searchSections: null,
+        searchTotal: 0, searchStatus: "done",
+      });
     }
   }, 300);
+}
+
+// Кандидат живого поиска в вид, понятный плееру. Уже залитый трек играем по его
+// id обычной подписанной ссылкой; новый — потоком, а в фон ставим закачку, чтобы
+// со следующего раза он играл мгновенно у всех и лежал в библиотеке.
+function liveTrack(item) {
+  if (item.track_id) {
+    return {
+      id: item.track_id,
+      title: item.title,
+      artist: item.artist,
+      duration: item.duration,
+      cover_url: item.cover_url,
+      live_ref: item.ref,
+    };
+  }
+  return {
+    id: `live:${item.ref}`,
+    title: item.title,
+    artist: item.artist,
+    duration: item.duration,
+    cover_url: item.cover_url,
+    audio_url: liveStreamUrl(item.ref),
+    live_ref: item.ref,
+  };
 }
 
 // Поиск обновляет только контейнер результатов — без полного рендера.
@@ -1423,6 +1460,18 @@ root.addEventListener("click", (event) => {
       const track = findTrack(id);
       if (!track) return;
       playTrack(track, contextTracks(el.dataset.context));
+      openPlayer();
+      break;
+    }
+    case "play-live": {
+      const items = getState().liveResults || [];
+      const index = Number(el.dataset.index);
+      const chosen = items[index];
+      if (!chosen) break;
+      // Закачку ставим только выбранному: очередь из 30 кандидатов не должна
+      // превратиться в 30 фоновых загрузок на боксе 961 МБ
+      if (!chosen.track_id) queueLiveFetch(chosen.ref).catch(() => {});
+      playTrack(liveTrack(chosen), items.map(liveTrack));
       openPlayer();
       break;
     }

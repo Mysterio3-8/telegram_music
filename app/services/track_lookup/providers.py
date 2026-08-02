@@ -30,6 +30,7 @@ def search_soundcloud(query: str, limit: int = 5) -> list[Candidate]:
             # Автор идёт в сопоставление (full_title): официальный аплоад артиста
             # обгоняет чужой реаплоад с похожим названием
             artist=entry.uploader or None,
+            cover_url=entry.cover_url or None,
         )
         for entry in entries
     ]
@@ -49,7 +50,8 @@ def search_youtube(query: str, limit: int = 5) -> list[Candidate]:
             source=SOURCE_YOUTUBE,
             url=_WATCH_URL.format(video_id=entry.video_id),
             title=entry.title,
-            duration=0,
+            duration=entry.duration,
+            cover_url=entry.cover_url or None,
         )
         for entry in search_videos(query, limit=limit)
     ]

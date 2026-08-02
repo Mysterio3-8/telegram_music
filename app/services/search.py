@@ -33,6 +33,27 @@ def _track_filter(query: str):
     return and_(or_(*conditions), Track.moderation_status == "approved")
 
 
+async def find_track_by_metadata(
+    session: AsyncSession, artist: str, title: str
+) -> Track | None:
+    """Трек, уже залитый под тем же «исполнитель — название». None — такого нет.
+
+    Живой поиск спрашивает это ДО скачивания: если трек уже минтили, он уходит
+    пользователю мгновенно по file_id, и качать его повторно незачем. Сравниваем
+    по search_index — единственному полю, где регистр и транслит уже приведены
+    (SQLite lower() кириллицу не понижает).
+    """
+    from app.services.search_index import build_search_index
+
+    index = build_search_index(artist, title)
+    if not index:
+        return None
+    stmt = select(Track).where(
+        Track.search_index == index, Track.moderation_status == "approved"
+    )
+    return (await session.scalars(stmt.limit(1))).first()
+
+
 async def search_tracks(
     session: AsyncSession, query: str, page: int, page_size: int | None = None
 ) -> tuple[list[Track], int]:

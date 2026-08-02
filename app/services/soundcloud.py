@@ -64,6 +64,8 @@ class SoundcloudEntry:
     # Автор загрузки: отличает официальный аплоад артиста от чужого реаплоада —
     # поиск «kizaru …» не должен отдавать кавер от «кизяка».
     uploader: str = ""
+    # Обложка из выдачи: живой поиск рисует карточки до скачивания
+    cover_url: str = ""
 
 
 def is_soundcloud_link(text: str) -> bool:
@@ -172,6 +174,16 @@ def list_soundcloud_entries(url: str) -> list[SoundcloudEntry]:
     raise last_error if last_error else RuntimeError(f"SoundCloud: список не получен {url}")
 
 
+def entry_thumbnail(node: dict) -> str:
+    """Обложка элемента выдачи. extract_flat отдаёт её то полем, то списком
+    вариантов — берём последний (самый крупный) и апскейлим до t500x500."""
+    thumb = node.get("thumbnail")
+    if not thumb:
+        variants = node.get("thumbnails") or []
+        thumb = variants[-1].get("url") if variants else ""
+    return upscale_soundcloud_artwork(str(thumb or ""))
+
+
 def collect_soundcloud_entries(info: dict) -> list[SoundcloudEntry]:
     """Чистый разбор ответа yt-dlp (отделён от сети для тестов)."""
     entries: list[SoundcloudEntry] = []
@@ -193,6 +205,7 @@ def collect_soundcloud_entries(info: dict) -> list[SoundcloudEntry]:
                     node.get("title") or entry_url,
                     duration=int(node.get("duration") or 0),
                     uploader=str(node.get("uploader") or node.get("channel") or "").strip(),
+                    cover_url=entry_thumbnail(node),
                 )
             )
 

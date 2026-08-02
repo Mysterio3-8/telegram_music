@@ -17,8 +17,17 @@ const VARIANTS = [
 ];
 
 function pick(track) {
-  // Math.abs: у минусов id отрицательный, а -1 % 6 === -1 в JS → undefined
-  return VARIANTS[Math.abs(track.id) % VARIANTS.length];
+  // Math.abs: у минусов id отрицательный, а -1 % 6 === -1 в JS → undefined.
+  // У кандидатов живого поиска id строковый («live:<ref>») — там считаем по строке,
+  // иначе Math.abs даёт NaN и заглушка падает вместо того, чтобы просто отрисоваться.
+  const id = track.id;
+  if (typeof id === "number" && Number.isFinite(id)) {
+    return VARIANTS[Math.abs(id) % VARIANTS.length];
+  }
+  const text = String(id == null ? "" : id);
+  let sum = 0;
+  for (let i = 0; i < text.length; i += 1) sum += text.charCodeAt(i);
+  return VARIANTS[sum % VARIANTS.length];
 }
 
 export function coverStyle(track) {

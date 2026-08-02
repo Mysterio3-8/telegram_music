@@ -46,6 +46,60 @@ def _clip_condition():
     return _or(*[Track.title.ilike(p) for p in _CLIP_MARKERS])
 
 
+# Профиль чистки под живой поиск (решение владельца 2026-08-02). Каталог мы больше
+# не копим, поэтому из него уходит то, что заведомо не музыка или бесполезно:
+#   клипы — мусор ушедшего YouTube-парсера;
+#   длиннее 15 минут — подкасты и часовые миксы;
+#   без обложки — наследие массовой закачки: в Mini App такой трек выглядит пустым,
+#   а перезалить его живым поиском дешевле, чем восстанавливать обложку.
+# Короткие треки СПЕЦИАЛЬНО не трогаем: нижний порог поиска снят ради андеграунда,
+# и удалять из базы то, что поиск теперь считает валидным, было бы противоречиво.
+STALE_MAX_SECONDS = 900
+
+
+def _stale_condition():
+    return or_(
+        _clip_condition(),
+        Track.duration > STALE_MAX_SECONDS,
+        Track.cover_url.is_(None),
+        Track.cover_url == "",
+    )
+
+
+async def count_stale_tracks(session: AsyncSession) -> dict[str, int]:
+    """Сколько треков попадёт под чистку, с разбивкой по причинам. Считается ДО
+    удаления: операция необратимая, владелец должен видеть числа заранее."""
+    from sqlalchemy import func
+
+    async def total(condition) -> int:
+        return await session.scalar(
+            select(func.count()).select_from(Track).where(condition)
+        ) or 0
+
+    return {
+        "clips": await total(_clip_condition()),
+        "too_long": await total(Track.duration > STALE_MAX_SECONDS),
+        "no_cover": await total(or_(Track.cover_url.is_(None), Track.cover_url == "")),
+        "total": await total(_stale_condition()),
+    }
+
+
+async def delete_stale_tracks(session: AsyncSession, storage: StorageBackend) -> int:
+    """Удаляет шлак целиком: файл + связи + запись. Возвращает число удалённых."""
+    tracks = list((await session.scalars(select(Track).where(_stale_condition()))).all())
+    return await _delete_tracks(session, storage, tracks)
+
+
+async def drop_fingerprints(session: AsyncSession) -> int:
+    """Стирает отпечатки: они нужны были массовому парсеру для дедупа, а живому
+    поиску не нужны — при этом их индекс весит 128 МБ, почти как вся таблица."""
+    result = await session.execute(
+        update(Track).where(Track.fingerprint.is_not(None)).values(fingerprint=None)
+    )
+    await session.commit()
+    return result.rowcount or 0
+
+
 @dataclass(frozen=True)
 class JunkStats:
     count: int

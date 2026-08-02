@@ -1,16 +1,16 @@
-"""Быстрый поиск в боте (запрос владельца): пользователь пишет боту любой текст —
-название и/или исполнителя — и получает СПИСОК найденных треков кнопками
-(формат по скринам: «2:19 kizaru - AFK» + пагинация). Тап по кнопке — трек
+"""Живой поиск в боте: пользователь пишет боту любой текст — название и/или
+исполнителя — и получает СПИСОК найденных треков кнопками. Тап по кнопке — трек
 приходит аудиосообщением.
 
-Нашли в базе → показываем список. Не нашли → скрытый поисковый парсер тихо
-ищет в сети, трек приходит следом.
+Ищем сразу в источниках (SoundCloud, затем YouTube тем, чего в SC нет), а не по
+локальной базе: каталог мы больше не копим, и именно поиск по базе прятал
+андеграунд за пятью похожими совпадениями.
 
 Регистрируется последним: перехватывает только свободный текст без активного FSM
 (мастера загрузки/поиска/админки со своими состояниями срабатывают раньше).
 """
 import logging
-import math
+from dataclasses import asdict
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
@@ -19,36 +19,34 @@ from aiogram.types import CallbackQuery, Message
 from app.db.base import session_factory
 from app.handlers.common import ensure_user
 from app.handlers.delivery import send_track_audio
-from app.keyboards.quick_search import PAGE_SIZE, quick_search_keyboard
-from app.services.library import get_track
-from app.services.search import search_tracks
+from app.keyboards.quick_search import quick_search_keyboard, total_pages
+from app.services.search import find_track_by_metadata
+from app.services.search_cache import search_with_cache
+from app.services.track_lookup.importer import candidate_metadata
+from app.services.track_lookup.ranking import Candidate
 
 logger = logging.getLogger(__name__)
 
 router = Router()
 
-_QUERY_KEY = "qs_query"  # запрос живёт в FSM: в callback_data он не помещается
+_QUERY_KEY = "qs_query"  # запрос и кандидаты живут в FSM: в callback_data они не помещаются
+_ITEMS_KEY = "qs_items"
+
+_NOTHING_FOUND = (
+    "Ничего не нашли. Попробуйте иначе — например «Kizaru Фейк Айди»: "
+    "исполнитель и название вместе находятся точнее всего."
+)
+_EXPIRED = "Список устарел — повторите поиск."
 
 
 def _results_title(query: str) -> str:
-    return f'🎵 Треки по запросу «{query}»'
+    return f"🎵 Треки по запросу «{query}»"
 
 
-async def _show_page(message: Message, query: str, page: int, edit: bool) -> bool:
-    """Рисует страницу выдачи. False — в базе ничего нет."""
-    async with session_factory() as session:
-        tracks, total = await search_tracks(session, query, page=page, page_size=PAGE_SIZE)
-    if not tracks:
-        return False
-
-    total_pages = max(1, math.ceil(total / PAGE_SIZE))
-    markup = quick_search_keyboard(tracks, page, total_pages)
-    text = _results_title(query)
-    if edit:
-        await message.edit_text(text, reply_markup=markup)
-    else:
-        await message.answer(text, reply_markup=markup)
-    return True
+async def _stored_candidates(state: FSMContext) -> tuple[str, list[Candidate]]:
+    data = await state.get_data()
+    rows = data.get(_ITEMS_KEY) or []
+    return data.get(_QUERY_KEY, ""), [Candidate(**row) for row in rows]
 
 
 @router.message(F.text & ~F.text.startswith("/"))
@@ -59,42 +57,69 @@ async def quick_search(message: Message, state: FSMContext) -> None:
     async with session_factory() as session:
         await ensure_user(session, message.from_user)
 
-    await state.update_data(**{_QUERY_KEY: query})
-    if await _show_page(message, query, page=1, edit=False):
+    status = await message.answer("🔎 Ищу…")
+    candidates = await search_with_cache(query)
+    if not candidates:
+        await status.edit_text(_NOTHING_FOUND)
         return
 
-    # В базе нет — прячем факт парсера, просто «ищу»
-    try:
-        from app.tasks.search_fetch import search_fetch
-
-        search_fetch.delay(query=query, telegram_id=message.chat.id, chat_id=message.chat.id)
-        await message.answer("🔎 Ищу трек — пришлю через минуту.")
-    except Exception:  # noqa: BLE001 — брокер недоступен
-        await message.answer("Пока не нашёл. Попробуйте уточнить название и исполнителя.")
+    await state.update_data(
+        **{_QUERY_KEY: query, _ITEMS_KEY: [asdict(item) for item in candidates]}
+    )
+    await status.edit_text(
+        _results_title(query), reply_markup=quick_search_keyboard(candidates, page=1)
+    )
 
 
 @router.callback_query(F.data.startswith("qs:p:"))
 async def quick_search_page(callback: CallbackQuery, state: FSMContext) -> None:
     page = int(callback.data.split(":")[2])
-    query = (await state.get_data()).get(_QUERY_KEY, "")
-    if not query:
-        await callback.answer("Повторите поиск", show_alert=True)
+    query, candidates = await _stored_candidates(state)
+    if not candidates:
+        await callback.answer(_EXPIRED, show_alert=True)
         return
-    await _show_page(callback.message, query, page=page, edit=True)
+    page = max(1, min(page, total_pages(candidates)))
+    await callback.message.edit_text(
+        _results_title(query), reply_markup=quick_search_keyboard(candidates, page)
+    )
     await callback.answer()
 
 
-@router.callback_query(F.data.startswith("qs:t:"))
-async def quick_search_send(callback: CallbackQuery) -> None:
-    track_id = int(callback.data.split(":")[2])
+@router.callback_query(F.data.startswith("qs:c:"))
+async def quick_search_send(callback: CallbackQuery, state: FSMContext) -> None:
+    index = int(callback.data.split(":")[2])
+    _, candidates = await _stored_candidates(state)
+    if index >= len(candidates):
+        await callback.answer(_EXPIRED, show_alert=True)
+        return
+    candidate = candidates[index]
+
+    artist, title = candidate_metadata(candidate)
     async with session_factory() as session:
         user = await ensure_user(session, callback.from_user)
-        track = await get_track(session, track_id)
-        if track is None:
-            await callback.answer("Трек не найден", show_alert=True)
+        existing = await find_track_by_metadata(session, artist, title)
+        if existing is not None:
+            # Уже минтили — отдаём мгновенно по file_id, скачивать нечего
+            await callback.answer("Отправляю…")
+            await send_track_audio(
+                callback.bot, callback.message.chat.id, session, user, existing
+            )
             return
-        await callback.answer("Отправляю…")
-        await send_track_audio(callback.bot, callback.message.chat.id, session, user, track)
+
+    # Скачивание уходит в воркер: ffmpeg на боксе 961 МБ дважды ронял прод по OOM
+    try:
+        from app.tasks.search_fetch import search_fetch_candidate
+
+        search_fetch_candidate.delay(
+            candidate=asdict(candidate),
+            telegram_id=callback.from_user.id,
+            chat_id=callback.message.chat.id,
+        )
+    except Exception:  # noqa: BLE001 — брокер недоступен, честно об этом говорим
+        logger.warning("Живой поиск: очередь недоступна", exc_info=True)
+        await callback.answer("Сервис загрузки занят, попробуйте через минуту", show_alert=True)
+        return
+    await callback.answer("Загружаю трек — пришлю сюда")
 
 
 @router.callback_query(F.data == "qs:noop")

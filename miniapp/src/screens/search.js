@@ -1,5 +1,7 @@
 import { icon } from "../components/icons.js";
 import { renderTrackList, escapeHtml } from "../components/trackRow.js";
+import { renderCover } from "../components/cover.js";
+import { formatDuration } from "../api.js";
 import { getRecentSearches, getRecentTracks } from "../prefs.js";
 
 // Поиск (ТЗ §11 + скрины VK в копи/): сверху «История прослушивания» (недавние
@@ -134,14 +136,33 @@ function renderSections(sections, state) {
     `);
   }
 
-  if (sections.tracks && sections.tracks.length) {
-    blocks.push(`
-      <div class="section-head"><span class="section-title">Треки</span></div>
-      <div class="card">${renderTrackList(sections.tracks, { context: "search", state })}</div>
-    `);
-  }
-
   return blocks.join("");
+}
+
+// Треки в поиске приходят живьём из источников, а не из каталога: строку в базе
+// заводим только когда трек реально послушали. Поэтому у ряда нет id — есть ref,
+// и действия ограничены воспроизведением.
+function renderLiveRow(item, index, state) {
+  const current = state.currentTrack;
+  const playing = Boolean(current && current.live_ref === item.ref);
+  return `
+    <div class="track-row${playing ? " is-playing" : ""}" data-action="play-live" data-index="${index}">
+      ${renderCover({ ...item, id: item.ref })}
+      <div class="track-info">
+        <div class="track-title">${escapeHtml(item.title)}</div>
+        <div class="track-artist">${escapeHtml(item.artist)} · ${formatDuration(item.duration)}</div>
+      </div>
+    </div>
+  `;
+}
+
+function renderLiveTracks(state) {
+  const items = state.liveResults || [];
+  if (!items.length) return "";
+  return `
+    <div class="section-head"><span class="section-title">Треки</span></div>
+    <div class="card">${items.map((item, i) => renderLiveRow(item, i, state)).join("")}</div>
+  `;
 }
 
 // Результаты живут в отдельном контейнере: ввод перерисовывает только его,
@@ -167,15 +188,15 @@ export function renderSearchResults(state) {
   }
 
   const sections = state.searchSections;
-  const hasAny =
-    sections &&
-    (sections.artists.length || sections.albums.length || sections.playlists.length || sections.tracks.length);
-  if (!hasAny) {
+  const liveTracks = renderLiveTracks(state);
+  const hasSections =
+    sections && (sections.artists.length || sections.albums.length || sections.playlists.length);
+  if (!liveTracks && !hasSections) {
     return `<div class="empty-state">Ничего не найдено по «${escapeHtml(query)}»
       <button class="btn btn--primary search-web-btn" data-action="search-web">Поискать ещё</button>
     </div>`;
   }
-  return renderSections(sections, state);
+  return `${hasSections ? renderSections(sections, state) : ""}${liveTracks}`;
 }
 
 export function renderSearch(state) {

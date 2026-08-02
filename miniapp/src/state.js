@@ -30,6 +30,7 @@ const state = {
   searchTotal: 0,
   searchQuery: "",
   searchStatus: "idle", // idle | loading | done
+  liveResults: [], // выдача живого поиска: кандидаты из источников, ещё не треки базы
   queue: [],
   queueIndex: -1,
   currentTrack: null,
