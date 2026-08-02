@@ -287,6 +287,7 @@ async def import_via_telegram_mint(
     cover: bytes = b"",
     cover_url: str | None = None,
     album: str | None = None,
+    thumbnail: bytes = b"",
 ) -> tuple[Track, bool]:
     """Дедуп; если трек новый — перетегирует, вшивает обложку, отправляет через
     бота (единственный способ заминтить file_id — реально отправить файл через
@@ -306,6 +307,10 @@ async def import_via_telegram_mint(
         title=title,
         performer=artist,
         duration=duration or None,
+        # Миниатюру Telegram надо отдать ОТДЕЛЬНО: вшитую в файл обложку плеер не
+        # показывает, если она крупная (у SoundCloud «original» — больше мегабайта).
+        # Именно поэтому трек выглядел без обложки, хотя внутри она была.
+        thumbnail=BufferedInputFile(thumbnail, filename="cover.jpg") if thumbnail else None,
     )
     track = await create_track_from_telegram(
         session,

@@ -28,13 +28,28 @@ _BROKEN_TABS = {"popular-tracks", "top-tracks"}
 
 # yt-dlp часто отдаёт превью SoundCloud в размере -large (100×100) — на пол-экрана
 # в плеере это мыло. Апскейлим к t500x500 (тот же CDN, просто другой суффикс).
-_SC_ARTWORK_SIZE_RE = re.compile(r"-(?:large|t\d+x\d+|small|tiny|badge|mini)(\.\w+)$")
+_SC_ARTWORK_SIZE_RE = re.compile(
+    r"-(?:large|t\d+x\d+|small|tiny|badge|mini|original)(\.\w+)$"
+)
 
 
 def upscale_soundcloud_artwork(url: str) -> str:
     if not url or "sndcdn.com" not in url:
         return url
     return _SC_ARTWORK_SIZE_RE.sub(r"-t500x500\1", url)
+
+
+def thumbnail_soundcloud_artwork(url: str) -> str:
+    """Тот же арт в 200×200 — под миниатюру Telegram.
+
+    Bot API требует у thumbnail JPEG не больше 200 КБ и стороны до 320 px.
+    Вшитая в файл обложка этим требованиям не отвечает (у SoundCloud «original»
+    весит больше мегабайта), и плеер Telegram её не показывает — трек выглядит
+    без обложки, хотя внутри файла она есть."""
+    if not url or "sndcdn.com" not in url:
+        return ""
+    thumb = _SC_ARTWORK_SIZE_RE.sub(r"-t200x200\1", url)
+    return thumb if thumb != url else ""
 
 
 def fetch_cover_url(query: str) -> str | None:

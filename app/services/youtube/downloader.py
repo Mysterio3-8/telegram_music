@@ -56,6 +56,23 @@ def fetch_thumbnail(url: str) -> bytes:
         return b""
 
 
+# Bot API: миниатюра — JPEG до 200 КБ, стороны до 320 px. Крупнее Telegram молча
+# игнорирует, и трек показывается без обложки, хотя внутри файла она вшита.
+TELEGRAM_THUMB_MAX_BYTES = 200 * 1024
+
+
+def fetch_telegram_thumbnail(cover_url: str) -> bytes:
+    """Маленькая копия обложки под миниатюру Telegram. Пусто — не нашли подходящей,
+    трек уйдёт со вшитой обложкой и без превью в плеере (не критично)."""
+    from app.services.soundcloud import thumbnail_soundcloud_artwork
+
+    small_url = thumbnail_soundcloud_artwork(cover_url)
+    if not small_url:
+        return b""
+    data = fetch_thumbnail(small_url)
+    return data if 0 < len(data) <= TELEGRAM_THUMB_MAX_BYTES else b""
+
+
 @dataclass(frozen=True)
 class VideoInfo:
     video_id: str

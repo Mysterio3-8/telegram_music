@@ -127,6 +127,32 @@ def test_last_soundcloud_attempt_is_always_direct(monkeypatch):
     assert any(plan[:-1])  # прокси всё ещё пробуем первыми
 
 
+def test_original_artwork_is_downscaled_for_the_player():
+    """«original» у SoundCloud — больше мегабайта; раньше регекс его не ловил,
+    и в Mini App грузилась исходная картинка."""
+    from app.services.soundcloud import upscale_soundcloud_artwork
+
+    url = "https://i1.sndcdn.com/artworks-abc-original.jpg"
+    assert upscale_soundcloud_artwork(url).endswith("-t500x500.jpg")
+
+
+def test_telegram_thumbnail_is_small_variant():
+    """Bot API берёт миниатюру до 320 px; крупную вшитую обложку плеер игнорирует
+    и трек выглядит без картинки — ровно то, что увидел владелец."""
+    from app.services.soundcloud import thumbnail_soundcloud_artwork
+
+    assert thumbnail_soundcloud_artwork(
+        "https://i1.sndcdn.com/artworks-abc-original.jpg"
+    ).endswith("-t200x200.jpg")
+
+
+def test_no_telegram_thumbnail_for_foreign_hosts():
+    """У YouTube нет такой схемы размеров — молча уходим без миниатюры."""
+    from app.services.soundcloud import thumbnail_soundcloud_artwork
+
+    assert thumbnail_soundcloud_artwork("https://img.youtube.com/vi/x/hq.jpg") == ""
+
+
 def test_without_proxies_there_is_a_single_direct_attempt(monkeypatch):
     from app.config import settings
     from app.services.soundcloud import attempt_plan
