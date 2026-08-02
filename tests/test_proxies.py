@@ -26,12 +26,12 @@ def test_cycle_resets_on_config_change(monkeypatch):
 
 
 def test_download_retries_with_next_proxy(monkeypatch):
-    """Ошибка через прокси → повтор; число попыток ограничено списком прокси."""
+    """Ошибка через прокси → повтор через следующий, последняя попытка — прямая."""
     monkeypatch.setattr(settings, "proxy_list", "http://a:1,http://b:2")
     calls = []
 
-    def failing_download(url, as_mp3=False):
-        calls.append(url)
+    def failing_download(url, as_mp3=False, use_proxy=True):
+        calls.append(use_proxy)
         raise RuntimeError("proxy connection refused")
 
     monkeypatch.setattr(soundcloud, "_download_soundcloud_once", failing_download)
@@ -42,15 +42,33 @@ def test_download_retries_with_next_proxy(monkeypatch):
     except RuntimeError:
         pass
 
-    assert len(calls) == 2  # по попытке на каждый прокси
+    assert calls == [True, True, False]  # по попытке на прокси, затем напрямую
+
+
+def test_dead_proxies_do_not_disable_soundcloud(monkeypatch):
+    """Мёртвый пул прокси не должен выключать источник: прод 2026-08-02, все семь
+    прокси Connection refused → SoundCloud молча отдавал ноль."""
+    monkeypatch.setattr(settings, "proxy_list", "http://dead:1,http://dead:2")
+
+    def download(url, as_mp3=False, use_proxy=True):
+        if use_proxy:
+            raise RuntimeError("proxy connection refused")
+        return ("audio", "uploader")
+
+    monkeypatch.setattr(soundcloud, "_download_soundcloud_once", download)
+
+    assert soundcloud.download_soundcloud_audio("https://soundcloud.com/x/y") == (
+        "audio",
+        "uploader",
+    )
 
 
 def test_download_single_attempt_without_proxies(monkeypatch):
     monkeypatch.setattr(settings, "proxy_list", "")
     calls = []
 
-    def failing_download(url, as_mp3=False):
-        calls.append(url)
+    def failing_download(url, as_mp3=False, use_proxy=True):
+        calls.append(use_proxy)
         raise RuntimeError("network down")
 
     monkeypatch.setattr(soundcloud, "_download_soundcloud_once", failing_download)
@@ -61,4 +79,4 @@ def test_download_single_attempt_without_proxies(monkeypatch):
     except RuntimeError:
         pass
 
-    assert len(calls) == 1
+    assert calls == [False]

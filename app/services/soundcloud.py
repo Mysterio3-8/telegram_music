@@ -150,26 +150,44 @@ def _proxy_attempts() -> int:
     return max(1, min(len(settings.proxy_list_items), 3))
 
 
+def attempt_plan() -> list[bool]:
+    """Порядок попыток: сначала прокси (ротация в _base_opts), в конце —
+    ОБЯЗАТЕЛЬНО прямое соединение.
+
+    Прямая попытка добавлена после прода 2026-08-02: все семь прокси в пуле
+    отвечали Connection refused, и SoundCloud — приоритетный источник поиска —
+    молча отдавал ноль результатов месяцами. Мёртвый пул прокси не должен
+    выключать источник целиком; напрямую SoundCloud отвечает нормально.
+    """
+    if not settings.proxy_list_items:
+        return [False]
+    return [True] * _proxy_attempts() + [False]
+
+
 def list_soundcloud_entries(url: str) -> list[SoundcloudEntry]:
     """Трек → один элемент; профиль/сет → список треков (без скачивания).
     Нормализуем URL и здесь — чинит уже сохранённые источники с вкладкой-суффиксом.
-    При ошибке через прокси — повтор через следующий (ротация в _base_opts)."""
+    Ошибка попытки — переходим к следующей, последняя всегда без прокси."""
     last_error: Exception | None = None
-    for attempt in range(_proxy_attempts()):
+    for attempt, use_proxy in enumerate(attempt_plan(), start=1):
         opts = {
-            **_base_opts(impersonate=True, use_proxy=True),
+            **_base_opts(impersonate=True, use_proxy=use_proxy),
             "extract_flat": "in_playlist",
             "skip_download": True,
         }
         try:
             with yt_dlp.YoutubeDL(opts) as ydl:
                 info = ydl.extract_info(normalize_soundcloud_url(url), download=False)
-        except Exception as exc:  # noqa: BLE001 — сеть/прокси, пробуем следующий
+        except Exception as exc:  # noqa: BLE001 — сеть/прокси, пробуем следующую попытку
             last_error = exc
-            logger.warning("SoundCloud: список не получен (попытка %s): %s", attempt + 1, exc)
+            logger.warning("SoundCloud: список не получен (попытка %s): %s", attempt, exc)
             continue
         if info is None:
-            return []
+            # yt-dlp гасит ошибку сам и отдаёт None — это отказ, а не пустая выдача.
+            # Раньше здесь стоял return [], и мёртвый прокси выглядел как «ничего
+            # не найдено»: ротация не срабатывала вообще.
+            logger.warning("SoundCloud: пустой ответ (попытка %s)", attempt)
+            continue
         return collect_soundcloud_entries(info)
     raise last_error if last_error else RuntimeError(f"SoundCloud: список не получен {url}")
 
@@ -225,19 +243,27 @@ def download_soundcloud_audio(url: str, as_mp3: bool = False) -> tuple[Downloade
     if not enough_free_disk():
         return None  # диск почти полон — 24/7-парсер не забивает диск (бережём бота)
     last_error: Exception | None = None
-    for attempt in range(_proxy_attempts()):
+    for attempt, use_proxy in enumerate(attempt_plan(), start=1):
         try:
-            return _download_soundcloud_once(url, as_mp3=as_mp3)
-        except Exception as exc:  # noqa: BLE001 — сеть/прокси, пробуем следующий
+            result = _download_soundcloud_once(url, as_mp3=as_mp3, use_proxy=use_proxy)
+        except Exception as exc:  # noqa: BLE001 — сеть/прокси, пробуем следующую попытку
             last_error = exc
-            logger.warning("SoundCloud: скачивание %s (попытка %s): %s", url, attempt + 1, exc)
-    raise last_error if last_error else RuntimeError(f"SoundCloud: не скачался {url}")
+            logger.warning("SoundCloud: скачивание %s (попытка %s): %s", url, attempt, exc)
+            continue
+        if result is not None:
+            return result
+        logger.warning("SoundCloud: пустой ответ на скачивании (попытка %s)", attempt)
+    if last_error:
+        raise last_error
+    return None  # источник ответил, но трека нет — это не сбой сети
 
 
-def _download_soundcloud_once(url: str, as_mp3: bool = False) -> tuple[DownloadedAudio, str] | None:
+def _download_soundcloud_once(
+    url: str, as_mp3: bool = False, use_proxy: bool = True
+) -> tuple[DownloadedAudio, str] | None:
     with tempfile.TemporaryDirectory() as tmp:
         opts = {
-            **_base_opts(impersonate=True, use_proxy=True),
+            **_base_opts(impersonate=True, use_proxy=use_proxy),
             # mp3 предпочтительнее «на входе»: если источник уже отдаёт mp3,
             # перекодирование не понадобится вовсе (быстрее и без потери качества)
             "format": "bestaudio[ext=mp3]/bestaudio/best",

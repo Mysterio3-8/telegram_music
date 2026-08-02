@@ -113,3 +113,23 @@ def test_shelf_drops_duplicates_between_seeds():
 
 def test_empty_shelf_does_not_crash():
     assert interleave([]) == []
+
+
+def test_last_soundcloud_attempt_is_always_direct(monkeypatch):
+    """Прод 2026-08-02: все семь прокси отвечали Connection refused, и SoundCloud —
+    приоритетный источник — молча отдавал ноль. Прямая попытка обязана быть всегда."""
+    from app.config import settings
+    from app.services.soundcloud import attempt_plan
+
+    monkeypatch.setattr(settings, "proxy_list", "http://a:1,http://b:2")
+    plan = attempt_plan()
+    assert plan[-1] is False
+    assert any(plan[:-1])  # прокси всё ещё пробуем первыми
+
+
+def test_without_proxies_there_is_a_single_direct_attempt(monkeypatch):
+    from app.config import settings
+    from app.services.soundcloud import attempt_plan
+
+    monkeypatch.setattr(settings, "proxy_list", "")
+    assert attempt_plan() == [False]
