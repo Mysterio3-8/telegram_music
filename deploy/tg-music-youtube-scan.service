@@ -1,6 +1,9 @@
 [Unit]
 Description=Telegram Music Bot — periodic YouTube re-scan (доп. ТЗ §11)
 After=network-online.target redis-server.service
+# Часть массового парсера — поднимается только вместе с ним.
+# Включить осознанно: touch /etc/tg-music-mass-parser-on
+ConditionPathExists=/etc/tg-music-mass-parser-on
 
 [Service]
 Type=oneshot

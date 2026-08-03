@@ -6,6 +6,11 @@ Requires=redis-server.service
 # Предохранитель от рестарт-шторма — см. tg-music-worker.service (инцидент 2026-08-01).
 StartLimitIntervalSec=300
 StartLimitBurst=5
+# Массовый парсер выключен решением владельца: бокс 961 МБ его не тянет. `disable`
+# не защищает от ручного `systemctl start` — 2026-08-03 его так и подняли: память
+# ушла в ноль, поиск встал, а в Redis набилась очередь на 177 тысяч задач (176 МБ).
+# Включить осознанно: touch /etc/tg-music-mass-parser-on
+ConditionPathExists=/etc/tg-music-mass-parser-on
 
 [Service]
 WorkingDirectory=/opt/tg-music-bot
