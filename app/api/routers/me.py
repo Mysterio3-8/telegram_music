@@ -8,6 +8,7 @@ from app.api.schemas import (
     AlbumOut,
     ArtistOut,
     LeaderRowOut,
+    MilestoneOut,
     LyricsIn,
     LyricsOut,
     Page,
@@ -35,6 +36,8 @@ from app.importers.base import ImportItem
 from app.services.audio import duration_from_bytes
 from app.services.catalog_import import import_user_track
 from app.services.gamification import (
+    REFERRAL_MILESTONES,
+    _scaled_reward,
     build_achievements,
     collect_user_stats,
     grant_achievement_rewards,
@@ -563,6 +566,10 @@ async def profile(
             to_next=progress.to_next,
             to_next_reward=to_next_reward,
             next_reward_days=next_reward_days,
+            milestones=[
+                MilestoneOut(friends=friends, days=_scaled_reward(days))
+                for friends, days in REFERRAL_MILESTONES
+            ],
         ),
         stats=UserStatsOut(
             listens=stats.listens,

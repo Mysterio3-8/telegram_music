@@ -38,6 +38,15 @@ _BENEFITS = (
 )
 
 
+def plan_label(months: int) -> str:
+    """«месяц» / «3 месяца» / «год» — срок словами, для текста платежа."""
+    if months == 12:
+        return "год"
+    if months == 1:
+        return "месяц"
+    return f"{months} месяца" if months < 5 else f"{months} месяцев"
+
+
 def _premium_text(active: bool, premium_until: datetime | None) -> str:
     if active and premium_until is not None:
         return (
@@ -97,25 +106,27 @@ async def cb_pay_yookassa(callback: CallbackQuery) -> None:
     from app.services.premium import plan_price_rub, plan_valid
 
     parts = callback.data.split(":")
+
     months = int(parts[2]) if len(parts) > 2 and parts[2].isdigit() else 1
     if not plan_valid(months):
         months = 1
+    price = plan_price_rub(months)
     url = await create_premium_payment(
-        callback.from_user.id,
-        settings.bot_username,
-        price_rub=plan_price_rub(months),
-        months=months,
+        callback.from_user.id, settings.bot_username, price_rub=price, months=months
     )
     if url is None:
         await callback.answer("Не удалось создать платёж — попробуйте позже", show_alert=True)
         return
+    # Сумма и срок — из ВЫБРАННОГО тарифа. Раньше здесь стояли значения месячного
+    # тарифа из настроек: за год списывалось 348 ₽, а в тексте стояло
+    # «29 ₽ — Premium на 30 дней».
     await callback.message.answer(
-        f"💳 Оплата {settings.premium_price_rub} ₽ — Premium на {settings.premium_duration_days} дней.\n\n"
+        f"💳 Оплата {price} ₽ — Premium на {plan_label(months)}.\n\n"
         "Нажмите кнопку, оплатите любым удобным способом и вернитесь в бот — "
         "Premium включится автоматически в течение минуты.",
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[
-                [InlineKeyboardButton(text=f"Оплатить {settings.premium_price_rub} ₽", url=url)],
+                [InlineKeyboardButton(text=f"Оплатить {price} ₽", url=url)],
                 [InlineKeyboardButton(text="◀️ В меню", callback_data="menu:main")],
             ]
         ),
@@ -131,17 +142,26 @@ async def cb_pay_card(callback: CallbackQuery) -> None:
     Сбербанк и др.) — без изменения кода. Payload различает тарифы, что оставляет
     задел под новые виды подписок.
     """
+    from app.services.premium import plan_price_rub, plan_valid
+
     if not settings.payment_provider_token:
         await callback.answer("Оплата картой пока недоступна", show_alert=True)
         return
+    parts = callback.data.split(":")
+    months = int(parts[2]) if len(parts) > 2 and parts[2].isdigit() else 1
+    if not plan_valid(months):
+        months = 1
+    price = plan_price_rub(months)
     try:
         await callback.message.answer_invoice(
-            title=f"Premium на {settings.premium_duration_days} дней",
+            title=f"Premium на {plan_label(months)}",
             description="Отключение рекламы, безлимит плейлистов, увеличенный лимит загрузок.",
-            payload=PAYLOAD_CARD,
+            # Срок едет в payload: без него оплата года включала месяц —
+            # успешный платёж не знал, за какой тариф заплатили
+            payload=f"{PAYLOAD_CARD}:{months}",
             provider_token=settings.payment_provider_token,
             currency="RUB",
-            prices=[LabeledPrice(label="Premium", amount=settings.premium_price_rub * 100)],
+            prices=[LabeledPrice(label="Premium", amount=price * 100)],
         )
     except TelegramBadRequest:
         # Типовые причины: неверный/тестовый токен провайдера, сумма ниже минимальной
@@ -155,7 +175,8 @@ async def cb_pay_card(callback: CallbackQuery) -> None:
 
 @router.pre_checkout_query()
 async def cb_pre_checkout(pre_checkout_query: PreCheckoutQuery) -> None:
-    ok = pre_checkout_query.invoice_payload in (PAYLOAD_STARS, PAYLOAD_CARD)
+    payload = pre_checkout_query.invoice_payload or ""
+    ok = payload == PAYLOAD_STARS or payload.split(":")[0] == PAYLOAD_CARD
     if not ok:
         logger.warning(
             "Отклонён pre_checkout user=%s payload=%r",
@@ -171,10 +192,14 @@ async def cb_pre_checkout(pre_checkout_query: PreCheckoutQuery) -> None:
 async def cb_successful_payment(message: Message) -> None:
     payment = message.successful_payment
     payment_type = "stars" if payment.currency == "XTR" else "card"
+    # Срок оплаченного тарифа лежит в payload («premium_card:12»); без него
+    # оплата года включала бы месяц
+    payload_parts = (payment.invoice_payload or "").split(":")
+    months = int(payload_parts[1]) if len(payload_parts) > 1 and payload_parts[1].isdigit() else 1
     async with session_factory() as session:
         user = await ensure_user(session, message.from_user)
         updated = await activate_premium(
-            session, user.id, payment_type, payment.telegram_payment_charge_id
+            session, user.id, payment_type, payment.telegram_payment_charge_id, months=months
         )
         until = updated.premium_until
         # Лог выручки (блок E): карта в рублях (total_amount в копейках), Stars — 0 ₽

@@ -5,22 +5,9 @@ import { dayWord } from "./achievements.js";
 // Реферальная программа (ТЗ §23): описание, принцип работы, награды, прогресс.
 // Пороги наград зеркалят REFERRAL_MILESTONES бэкенда (services/gamification.py).
 
-// Зеркалят REFERRAL_MILESTONES бэкенда (services/gamification.py)
-const REWARDS = [
-  { friends: 1, label: "7 дней Premium" },
-  { friends: 2, label: "+7 дней" },
-  { friends: 3, label: "+14 дней" },
-  { friends: 5, label: "+30 дней" },
-  { friends: 10, label: "+60 дней" },
-  { friends: 25, label: "+120 дней" },
-  { friends: 50, label: "+180 дней" },
-  { friends: 100, label: "+год Premium" },
-  { friends: 250, label: "+год Premium" },
-  { friends: 500, label: "+2 года" },
-  { friends: 1000, label: "+3 года" },
-  { friends: 2500, label: "+5 лет" },
-  { friends: 5000, label: "Premium навсегда" },
-];
+// Пороги приходят с сервера (profile.referral.milestones) — своей копии здесь
+// больше нет. Раньше список был захардкожен неурезанными днями, а баннер
+// ближайшей награды показывал урезанные: приложение и бот расходились в цифрах.
 
 const STEPS = [
   "Поделитесь личной ссылкой с другом",
@@ -28,17 +15,33 @@ const STEPS = [
   "Награда начисляется автоматически",
 ];
 
-function rewardsList(invited) {
-  return REWARDS.map((r) => {
-    const done = invited >= r.friends;
-    return `
+// Заголовок считаем из первого настоящего порога, а не пишем словами: награды
+// урезаны множителем, и «неделя Premium» была неправдой.
+function introTitle(profile) {
+  const first =
+    profile && profile.referral.milestones && profile.referral.milestones.length
+      ? profile.referral.milestones[0]
+      : null;
+  if (!first) return "Приглашайте друзей — получайте Premium";
+  const friends = first.friends === 1 ? "друг" : first.friends < 5 ? "друга" : "друзей";
+  return `${first.friends} ${friends} — ${first.days} ${dayWord(first.days)} Premium`;
+}
+
+function rewardsList(profile) {
+  const milestones = profile && profile.referral.milestones ? profile.referral.milestones : [];
+  const invited = profile ? profile.referral.invited : 0;
+  return milestones
+    .map((r) => {
+      const done = invited >= r.friends;
+      return `
       <div class="ref-reward${done ? " is-done" : ""}">
         <span class="ref-reward__check">${icon(done ? "check" : "gift")}</span>
         <span class="ref-reward__friends">${r.friends} ${r.friends === 1 ? "друг" : r.friends < 5 ? "друга" : "друзей"}</span>
-        <span class="ref-reward__prize">${r.label}</span>
+        <span class="ref-reward__prize">${r.days} ${dayWord(r.days)} Premium</span>
       </div>
     `;
-  }).join("");
+    })
+    .join("");
 }
 
 function progressCard(profile) {
@@ -125,8 +128,8 @@ export function renderReferral(state) {
 
     <div class="ref-intro">
       <div class="ref-intro__emoji">🎁</div>
-      <div class="ref-intro__title">Один друг — неделя Premium</div>
-      <div class="ref-intro__text">Первая награда приходит сразу за первого приглашённого. Дальше больше — вплоть до Premium навсегда за 5000 друзей. А когда друг оплачивает подписку, вам падает скидка 50% на следующую покупку.</div>
+      <div class="ref-intro__title">${introTitle(profile)}</div>
+      <div class="ref-intro__text">Первая награда приходит сразу за первого приглашённого. Дальше больше — вплоть до Premium навсегда. А когда друг оплачивает подписку, вам падает скидка 50% на следующую покупку.</div>
     </div>
 
     ${nextRewardBanner(profile)}
@@ -137,7 +140,7 @@ export function renderReferral(state) {
     <div class="card card--rows ref-steps">${steps}</div>
 
     <div class="rec-section-label">Награды</div>
-    <div class="card ref-rewards">${rewardsList(profile ? profile.referral.invited : 0)}</div>
+    <div class="card ref-rewards">${rewardsList(profile)}</div>
 
     <div class="rec-actions" style="margin-top:16px">
       ${link ? `<button class="btn btn--ghost" data-action="copy-referral" data-link="${escapeHtml(link)}">${icon("copy")} Скопировать</button>` : ""}

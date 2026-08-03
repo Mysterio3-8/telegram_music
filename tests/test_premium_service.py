@@ -125,9 +125,23 @@ async def test_activate_premium_months_multiplier(session):
     expected_min = _utcnow() + timedelta(days=settings.premium_duration_days * 12 - 1)
     assert updated.premium_until > expected_min
     assert PREMIUM_PLAN_MONTHS == (1, 3, 6, 12)
-    assert plan_price_rub(1) == settings.premium_price_rub
-    assert plan_price_rub(12) == settings.premium_price_rub * 12
-    assert plan_price_rub(12, discount_pct=50) == settings.premium_price_rub * 12 // 2
+    assert plan_price_rub(1) == settings.premium_price_rub  # месяц без скидки
+
+
+def test_longer_plans_are_cheaper_per_month():
+    """Скидка за срок (решение владельца): год должен выходить дешевле в месяц,
+    иначе длинный тариф — это просто «дороже», и его никто не берёт."""
+    from app.services.premium import PREMIUM_PLAN_MONTHS, plan_price_rub
+
+    per_month = [plan_price_rub(m) / m for m in PREMIUM_PLAN_MONTHS]
+    assert per_month == sorted(per_month, reverse=True)  # чем дольше, тем дешевле месяц
+    assert plan_price_rub(12) < settings.premium_price_rub * 12
+
+
+def test_personal_discount_stacks_on_top_of_plan_discount():
+    from app.services.premium import plan_price_rub
+
+    assert plan_price_rub(12, discount_pct=50) < plan_price_rub(12)
 
 
 def test_forever_plan_pricing(monkeypatch):

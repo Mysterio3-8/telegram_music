@@ -28,7 +28,7 @@ class UploadTrack(StatesGroup):
 
 def _cancel_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text="❌ Отмена", callback_data="up:cancel")]]
+        inline_keyboard=[[InlineKeyboardButton(text="◀️ Назад в меню", callback_data="up:cancel")]]
     )
 
 
@@ -36,7 +36,7 @@ def _confirm_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="✅ Загрузить", callback_data="up:confirm")],
-            [InlineKeyboardButton(text="❌ Отмена", callback_data="up:cancel")],
+            [InlineKeyboardButton(text="◀️ Назад в меню", callback_data="up:cancel")],
         ]
     )
 
@@ -346,6 +346,10 @@ async def cb_upload_confirm(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(F.data == "up:cancel")
 async def cb_upload_cancel(callback: CallbackQuery, state: FSMContext) -> None:
+    """Выход из мастера сразу в меню (решение владельца): промежуточный экран
+    «Загрузка отменена» требовал лишнего тапа и ничего не сообщал."""
+    from app.handlers.start import render_main_menu
+
     await state.clear()
-    await callback.message.edit_text("Загрузка отменена.", reply_markup=_menu_keyboard())
+    await render_main_menu(callback)
     await callback.answer()

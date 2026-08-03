@@ -8,10 +8,15 @@ from app.services.uploads import count_user_uploads
 from app.services.users import count_playlists
 
 
-# Тарифы Premium (ТЗ §24): месяцы → множитель цены. Цена = premium_price_rub * месяцы.
+# Тарифы Premium (ТЗ §24): месяцы → множитель цены.
 PREMIUM_PLAN_MONTHS: tuple[int, ...] = (1, 3, 6, 12)
 # «Навсегда»: ~100 лет по механике продления = вечная подписка. Цена — фиксированная.
 FOREVER_MONTHS = 1200
+
+# Скидка за длинный срок, % (решение владельца: «чем больше месяцев — чуть-чуть
+# дешевле»). Небольшая сознательно: подписка и так стоит как две поездки в метро,
+# а глубокая скидка на годовом тарифе съедает выручку, которая нужна на сервер.
+PREMIUM_PLAN_DISCOUNTS: dict[int, int] = {1: 0, 3: 10, 6: 15, 12: 20}
 
 
 def is_forever(months: int) -> bool:
@@ -22,13 +27,19 @@ def plan_valid(months: int) -> bool:
     return months in PREMIUM_PLAN_MONTHS or is_forever(months)
 
 
+def plan_discount_pct(months: int) -> int:
+    """Скидка тарифа за срок. «Навсегда» не скидываем — цена и так фиксированная."""
+    return 0 if is_forever(months) else PREMIUM_PLAN_DISCOUNTS.get(months, 0)
+
+
 def plan_price_rub(months: int, discount_pct: int = 0) -> int:
-    """Цена тарифа в рублях с учётом персональной скидки.
-    Тариф «навсегда» — фиксированная цена без скидки."""
+    """Цена тарифа в рублях: скидка за срок плюс персональная (реферальная).
+    Тариф «навсегда» — фиксированная цена без скидок."""
     if is_forever(months):
         return settings.premium_forever_price_rub
     base = settings.premium_price_rub * months
-    return base * (100 - discount_pct) // 100 if discount_pct else base
+    total_discount = min(90, plan_discount_pct(months) + discount_pct)
+    return base * (100 - total_discount) // 100 if total_discount else base
 
 
 def _utcnow() -> datetime:

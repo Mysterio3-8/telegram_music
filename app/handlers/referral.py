@@ -15,6 +15,7 @@ from app.handlers.common import ensure_user
 from app.keyboards.referral import referral_keyboard
 from app.services.gamification import (
     REFERRAL_MILESTONES,
+    _scaled_reward,
     count_referrals,
     grant_referral_milestones,
     next_referral_reward,
@@ -43,18 +44,27 @@ def _days_word(days: int) -> str:
     return "дней"
 
 
+def _reward_days(base_days: int) -> int:
+    """Сколько дней ДЕЙСТВИТЕЛЬНО начислят за порог.
+
+    Награды урезаны множителем premium_reward_factor, и показывать надо именно
+    урезанное число. Иначе бот обещает неделю, приходит день, а в Mini App в
+    баннере ближайшей награды стоит третье значение — ровно это владелец и
+    заметил как «в приложении другие цифры»."""
+    return _scaled_reward(base_days)
+
+
 def _rewards_block(invited: int) -> str:
     """Ближайшие пороги: достигнутые с галочкой, остальные с подарком."""
     upcoming = [row for row in REFERRAL_MILESTONES if row[0] > invited][:_VISIBLE_MILESTONES]
     reached = [row for row in REFERRAL_MILESTONES if row[0] <= invited][-2:]
-    lines = [
-        f"✅ {threshold} {_friends_word(threshold)} — {days} {_days_word(days)}"
-        for threshold, days in reached
-    ]
-    lines += [
-        f"🎁 {threshold} {_friends_word(threshold)} — {days} {_days_word(days)}"
-        for threshold, days in upcoming
-    ]
+
+    def line(mark: str, threshold: int, base_days: int) -> str:
+        days = _reward_days(base_days)
+        return f"{mark} {threshold} {_friends_word(threshold)} — {days} {_days_word(days)} Premium"
+
+    lines = [line("✅", threshold, days) for threshold, days in reached]
+    lines += [line("🎁", threshold, days) for threshold, days in upcoming]
     return "\n".join(lines)
 
 
@@ -82,9 +92,15 @@ async def build_referral_text(session: AsyncSession, user: User) -> str:
             f"и {next_reward_days} {_days_word(next_reward_days)} Premium\n"
         )
 
+    # Обещание считаем из настоящего первого порога, а не пишем словами:
+    # награды урезаны множителем, и «неделя Premium» была неправдой
+    first_friends, first_base = REFERRAL_MILESTONES[0]
+    first_days = _scaled_reward(first_base)
+
     return (
         "🎁 <b>Реферальная программа</b>\n\n"
-        "<b>Один друг — неделя Premium.</b> Награда приходит автоматически, "
+        f"<b>{first_friends} {_friends_word(first_friends)} — {first_days} "
+        f"{_days_word(first_days)} Premium.</b> Награда приходит автоматически, "
         "как только друг откроет бота по вашей ссылке.\n\n"
         f"👥 Приглашено: <b>{invited}</b>\n"
         f"{rank_line}"
@@ -102,8 +118,13 @@ async def _show(callback: CallbackQuery) -> None:
         user = await ensure_user(session, callback.from_user)
         text = await build_referral_text(session, user)
         link = referral_link(user.telegram_id, settings.bot_username)
+    # parse_mode обязателен: глобального дефолта у бота нет, без него теги
+    # приезжают пользователю текстом («</b>» прямо в сообщении)
     await callback.message.edit_text(
-        text, reply_markup=referral_keyboard(link), disable_web_page_preview=True
+        text,
+        parse_mode="HTML",
+        reply_markup=referral_keyboard(link),
+        disable_web_page_preview=True,
     )
 
 

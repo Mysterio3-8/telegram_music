@@ -6,7 +6,7 @@ from app.config import settings
 def premium_keyboard(card_available: bool, yookassa_available: bool = False) -> InlineKeyboardMarkup:
     """Тарифы 1/3/6/12 месяцев, оплата только деньгами (Stars скрыты по решению
     владельца — оставлены в коде для приёма платежей, но из интерфейса убраны)."""
-    from app.services.premium import PREMIUM_PLAN_MONTHS, plan_price_rub
+    from app.services.premium import PREMIUM_PLAN_MONTHS, plan_discount_pct, plan_price_rub
 
     rows: list[list[InlineKeyboardButton]] = []
     if yookassa_available or card_available:
@@ -15,7 +15,12 @@ def premium_keyboard(card_available: bool, yookassa_available: bool = False) -> 
             price = plan_price_rub(months)
             label = "месяц" if months == 1 else f"{months} мес"
             per_month = price // months
+            # Выгоду показываем на самой кнопке: без цены месяца и размера скидки
+            # длинный тариф выглядит просто как «дороже»
             suffix = "" if months == 1 else f" · {per_month} ₽/мес"
+            discount = plan_discount_pct(months)
+            if discount:
+                suffix += f" · −{discount}%"
             rows.append(
                 [
                     InlineKeyboardButton(

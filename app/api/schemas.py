@@ -180,6 +180,11 @@ class RankOut(BaseModel):
     emoji: str
 
 
+class MilestoneOut(BaseModel):
+    friends: int
+    days: int  # дней Premium — уже с урезающим множителем, ровно как их начислят
+
+
 class ReferralOut(BaseModel):
     link: str
     invited: int
@@ -188,6 +193,10 @@ class ReferralOut(BaseModel):
     to_next: int
     next_reward_days: int = 0  # сколько дней Premium даст следующий порог
     to_next_reward: int = 0  # сколько друзей до него
+    # Пороги приходят с сервера, а не зашиты в Mini App. Раньше экран рисовал свою
+    # копию списка (неурезанные дни), а баннер ближайшей награды — урезанные:
+    # приложение и бот показывали разные цифры за одно и то же.
+    milestones: list[MilestoneOut] = []
 
 
 class AchievementOut(BaseModel):
