@@ -11,6 +11,7 @@
 - Домен: **keybest.cc — жив, HTTPS выпущен** (Let's Encrypt, автопродление certbot, истекает 2026-10-10). nginx-сайт `/etc/nginx/sites-enabled/keybest.cc` (источник — [deploy/nginx-keybest.conf](deploy/nginx-keybest.conf)): статика Mini App на `/`, `/api/` → uvicorn :8010, `/webhook/` → uvicorn :8010
 - Сервисы: `tg-music-bot` (polling), `tg-music-worker` (Celery, обогащение загрузок + очередь `telegram_channel`), `tg-music-youtube-user` (Celery, очередь `youtube_user` — **поисковый парсер**, сейчас приоритет), `tg-music-api` (uvicorn :8010 — API Mini App + webhook ЮKassa), `tg-music-support`. ⚠️ **Массовый парсер 24/7 (`tg-music-soundcloud`, `tg-music-youtube`, `tg-music-youtube-scan.timer`) ВЫКЛЮЧЕН** (27.07, решение владельца — сервер маленький, см. NEXT_SESSION.md). Отдельного юнита `tg-music-telegram-channel` больше нет — очередь разбирает основной воркер. Юниты — в [deploy/](deploy/), nginx-сайт — [deploy/nginx-keybest.conf](deploy/nginx-keybest.conf). `systemctl {status,restart} <сервис>`, логи: `journalctl -u <сервис> -f`
 - ⚠️ **Юниты не доезжают обычным деплоем.** `git pull` обновляет `deploy/*.service`, а systemd читает `/etc/systemd/system` — сервер молча живёт со старой конфигурацией. После правки любого юнита на сервере от root: `cd /opt/tg-music-bot && bash deploy/install-units.sh` (идемпотентен: юниты, logrotate, лимиты journald, fail2ban)
+- ⚠️ **nginx-конфиг тоже не доезжает.** Живой файл — `/etc/nginx/sites-available/keybest.cc`, его правит certbot, поэтому он не копия `deploy/nginx-keybest.conf`. Правки переносить руками, затем `nginx -t && systemctl reload nginx`. Бэкапы — в `/root/nginx-backups`
 - Redis (`redis-server`) — FSM + брокер Celery. ffmpeg + libchromaprint-tools (fpcalc) — отпечатки. yt-dlp (pip) — загрузка с YouTube
 - Repo: git@github.com:Mysterio3-8/telegram_music.git (пуш только по SSH — https-креды на машине от другого аккаунта)
 - Деплой: `/deploy` (push → pull → pip install → `alembic upgrade head` → restart bot+worker)
@@ -124,12 +125,53 @@ $env:DATABASE_URL="sqlite+aiosqlite:///_tmp.db"; .\.venv\Scripts\python.exe -m a
 
 ## Известные грабли
 
-- 🔴 **keybest.cc: «Deceptive Website Warning» на iOS — НЕ РЕШЕНО, воспроизводится у ВСЕХ пользователей** (подтверждено владельцем 21.07). iOS-аудитория отрезана от Mini App. При этом обе базы Google чисты: Search Console «No issues detected», Transparency Report «Не найдено небезопасного контента» (обновлено 26.06.2026); владение подтверждено TXT-записью через Dynadot (NS `dyna-ns.net`); аудит кода чист — единственный внешний скрипт `telegram.org/js/telegram-web-app.js`. Версия «локальный кэш устройства» **отпала** (проблема массовая). Вероятная причина: Apple кэширует свою копию списка отдельно от Google, либо зона `.cc` под агрессивной эвристикой, либо остаточная репутация домена от прошлого владельца. **Полный план решения (апелляция → диагностика Safari vs Telegram → переезд на `.ru`/`.com`/`.app` с чек-листом) — в [NEXT_SESSION.md](NEXT_SESSION.md), ПРИОРИТЕТ №0.** Живой статус: `https://transparencyreport.google.com/safe-browsing/search?url=keybest.cc`
+- 🔴 **keybest.cc: «Deceptive Website Warning» на iOS** (подтверждено владельцем 21.07, у ВСЕХ пользователей — iOS-аудитория отрезана от Mini App). 04.08 устранён найденный профиль фишингового сайта, **результат ждёт проверки на живом iPhone**. Чисты: Search Console, Transparency Report, Spamhaus DBL/SURBL/URIBL по домену, Spamhaus ZEN/SpamCop по IP. Версии «локальный кэш устройства» и «остаточная репутация от прошлого владельца» **закрыты** (проблема массовая; домен создан 27.04.2026, владелец первый — whois). ⚠️ **Главный урок: искать надо было не в контенте Mini App, а в поведении веб-сервера.** `try_files $uri /index.html` отдавал 200 и HTML на ЛЮБОЙ путь — в логах **2014 уникальных путей с 200**: `/apple-id/verify`, `/paypal`, `/.env`, `/.git/config`, `/actuator/heapdump`, полторы тысячи вебшеллов. Плюс пустой `<div id="app">` без JS при бренде Telegram = профиль клоакинга. Исправлено (коммит `e7b0ed7`): несуществующий путь → 404, в `#app` реальное описание сервиса, robots.txt/security.txt/nosniff. **План дальше (диагностика Safari vs Telegram → апелляция → переезд) — в [NEXT_SESSION.md](NEXT_SESSION.md), ПРИОРИТЕТ №0**; переезд одной командой: `bash deploy/migrate-domain.sh <домен>`. Живой статус: `https://transparencyreport.google.com/safe-browsing/search?url=keybest.cc`
 
 - SQLite `ilike` нечувствителен к регистру только для ASCII — кириллический поиск станет регистронезависимым на PostgreSQL (`ILIKE`); на dev-SQLite это ожидаемое ограничение
 - Схема БД — через Alembic. При адаптации существующей БД без `alembic_version`: `alembic stamp <ревизия-соответствующая-текущей-схеме>`, затем `upgrade head` (так приняли прод: stamp d01cfc648f91 → upgrade добавил tg_file_id)
 - Обогащение (отпечаток+архив) — асинхронно в воркере: сразу после загрузки трека `storage_path` ещё пуст, появляется через секунды. Если воркер лежит — трек работает по `tg_file_id`, отпечаток не считается
 - Windows-консоль: путь проекта с кириллицей, в PowerShell возможны артефакты кодировки в выводе — на работу не влияет
+
+## Checkpoint (2026-08-04) — iOS Safe Browsing: сайт больше не похож на фишинг-кит (420 тестов)
+
+Владелец подтвердил, что из старой спеки осталась одна незакрытая тема —
+предупреждение Safari на iOS. Взялись за неё, спека переписана заново
+([NEXT_SESSION.md](NEXT_SESSION.md)).
+
+**Две прошлые сессии искали не там.** Проверяли контент Mini App и базы Google —
+обе чистые, и расследование на этом вставало. Похож на фишинг-кит был не
+контент, а **поведение веб-сервера**: `try_files $uri /index.html` отдавал
+**200 OK и HTML на любой путь**. В ротации логов — **2014 уникальных путей,
+получивших 200**: `/apple-id/verify`, `/paypal`, `/bank/secure`, `/.env`,
+`/.git-credentials`, `/actuator/heapdump`, `/terraform.tfstate` и ~1500 вебшеллов
+вида `/9WOLF.php`. Показателен `/crusader-404-probe` — сканер специально
+проверяет, умеет ли хост отдавать 404, и получал 200.
+
+Плюс сопутствующее: страница без JS отдавала **пустой `<div id="app">`** при
+заголовке «TG Music» и скрипте `telegram.org` — новый домен в зоне `.cc`,
+мимикрирующий под бренд и показывающий краулеру пустоту (признак клоакинга).
+
+Исправлено (`e7b0ed7`, задеплоено): несуществующий путь → 404 (клиентского
+роутера у Mini App нет, фолбэк был не нужен), в `#app` описание сервиса + ссылки
++ дисклеймер о непринадлежности к Telegram (перезаписывается первым `render()`),
+robots.txt, security.txt, nosniff, Referrer-Policy, meta/OG.
+
+**Регрессия проверена на реальном трафике:** все 2014 исторических путей с 200
+прогнаны через новый конфиг — сломанных живых путей ноль, 404 получили только
+сканерные пробы. Отдельно 200 подтверждены `/`, весь граф импортов `/src/**`,
+`/assets/**`, `/api/*`, `/webhook/*`.
+
+Попутно закрыты две версии: домен создан **27.04.2026** (whois) — «остаточная
+репутация от прошлого владельца» невозможна, владелец первый. Spamhaus DBL,
+SURBL, URIBL по домену и Spamhaus ZEN, SpamCop по IP — чисто.
+
+⚠️ **Причинно-следственной связи это не доказывает** — как классифицируют Apple и
+Google, снаружи не видно. Сделано то, что доказуемо выглядело плохо. Решающая
+проверка за владельцем: открыть `https://keybest.cc` на iPhone в Safari напрямую
+и через бота (таблица трактовок — в NEXT_SESSION.md). Если предупреждение живо —
+переезд одной командой: `bash deploy/migrate-domain.sh <новый-домен>`
+([deploy/migrate-domain.sh](deploy/migrate-domain.sh): A-запись → nginx →
+certbot → `.env` → 301 со старого → рестарт → проверки).
 
 ## Checkpoint (2026-08-02, вечер) — ЖИВОЙ ПОИСК ВМЕСТО КАТАЛОГА (394 теста)
 
