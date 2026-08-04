@@ -4,14 +4,71 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
     <meta name="theme-color" content="#0f0f10" />
-    <title>TG Music</title>
+    <title>TG Music — музыкальный плеер</title>
+    <meta
+      name="description"
+      content="TG Music — музыкальный сервис: поиск треков, личная библиотека, плейлисты и плеер. Работает как приложение внутри Telegram."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="TG Music" />
+    <meta property="og:title" content="TG Music — музыкальный плеер" />
+    <meta
+      property="og:description"
+      content="Поиск треков, личная библиотека, плейлисты и плеер внутри Telegram."
+    />
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <link rel="stylesheet" href="/src/styles/base.css" />
     <link rel="stylesheet" href="/src/styles/components.css" />
     <link rel="stylesheet" href="/src/styles/screens.css" />
   </head>
   <body>
-    <div id="app"></div>
+    <!--
+      Содержимое #app — то, что видит посетитель без JS: поисковые и
+      антифишинговые сканеры, боты соцсетей, человек с отвалившимся модулем.
+      Пустая страница у нового домена в зоне .cc — сама по себе повод для
+      эвристики «клоакинг»; см. NEXT_SESSION.md, приоритет №0.
+      Первый же render() в main.js перезаписывает этот блок целиком.
+    -->
+    <div id="app">
+      <main
+        style="
+          max-width: 640px;
+          margin: 0 auto;
+          padding: 40px 20px;
+          color: #e9e9ec;
+          font: 16px/1.6 system-ui, sans-serif;
+        "
+      >
+        <h1 style="font-size: 28px; margin: 0 0 12px">TG Music</h1>
+        <p style="margin: 0 0 20px; color: #a0a0a8">
+          Музыкальный сервис: поиск треков, личная библиотека, плейлисты и плеер.
+          Приложение работает внутри Telegram — открывается кнопкой в боте.
+        </p>
+        <p style="margin: 0 0 20px">
+          <a href="https://t.me/tgram_music_bot" style="color: #3b7bfe"
+            >Открыть @tgram_music_bot</a
+          >
+        </p>
+        <h2 style="font-size: 18px; margin: 28px 0 8px">Что умеет</h2>
+        <ul style="margin: 0 0 20px; padding-left: 20px; color: #a0a0a8">
+          <li>Поиск музыки и мгновенная выдача трека в чат</li>
+          <li>Личная библиотека и плейлисты</li>
+          <li>Плеер с очередью, миксами и текстами песен</li>
+          <li>Подписка Premium — расширенные лимиты и офлайн-режим</li>
+        </ul>
+        <h2 style="font-size: 18px; margin: 28px 0 8px">Поддержка</h2>
+        <p style="margin: 0 0 20px; color: #a0a0a8">
+          Вопросы, жалобы и предложения —
+          <a href="https://t.me/suptgmusic_bot" style="color: #3b7bfe"
+            >@suptgmusic_bot</a
+          >.
+        </p>
+        <p style="margin: 0; color: #6b6b73; font-size: 14px">
+          Сервис не связан с Telegram Messenger Inc. и не является его продуктом.
+          «Telegram» — товарный знак его правообладателя.
+        </p>
+      </main>
+    </div>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>
