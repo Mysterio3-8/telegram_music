@@ -5,7 +5,10 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     bot_token: str = ""
-    bot_username: str = "tgram_music_bot"  # для return_url ЮKassa и ссылок «поделиться»
+    bot_username: str = "muz_damn_bot"  # для return_url ЮKassa и ссылок «поделиться»
+    # Токен старого бота: он живёт только как указатель «мы переехали» (app/moved_bot.py).
+    # Пусто — старый бот не запускается.
+    moved_bot_token: str = ""
     database_url: str = "sqlite+aiosqlite:///music_bot.db"
     page_size: int = 5
     library_search_limit: int = 10

@@ -1,0 +1,16 @@
+[Unit]
+Description=Telegram Music — старый бот @tgram_music_bot, отвечает «мы переехали»
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/tg-music-bot
+ExecStart=/opt/tg-music-bot/.venv/bin/python -m app.moved_bot
+Restart=always
+RestartSec=5
+# Указатель, а не сервис: при нехватке памяти его не жалко
+OOMScoreAdjust=200
+MemoryHigh=80M
+
+[Install]
+WantedBy=multi-user.target

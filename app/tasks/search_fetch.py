@@ -97,6 +97,46 @@ def search_fetch_candidate(
         raise self.retry(exc=exc, countdown=30)
 
 
+@celery_app.task(name="search.repair_track", bind=True, max_retries=1, queue="youtube_user")
+def repair_track(self, track_id: int, chat_id: int | None = None) -> None:
+    """Перевыдаёт file_id треку, чей файл больше не принадлежит текущему боту.
+
+    Скачивание живёт в воркере по той же причине, что и поисковая закачка:
+    ffmpeg в процессе бота дважды ронял прод по OOM.
+    """
+    from app.db.models import Track
+    from app.services.track_repair import repair_track_file_id
+
+    async def _run(session):
+        track = await session.get(Track, track_id)
+        if track is None or track.tg_file_id:
+            return  # уже восстановлен параллельной задачей
+        bot = Bot(token=settings.bot_token)
+        try:
+            if not await repair_track_file_id(session, bot, track):
+                if chat_id is not None:
+                    await bot.send_message(
+                        chat_id, f"❌ Не удалось восстановить «{track.artist} — {track.title}»."
+                    )
+                return
+            if chat_id is not None:
+                await bot.send_audio(
+                    chat_id,
+                    track.tg_file_id,
+                    caption=f"✅ {track.artist} — {track.title}",
+                )
+        finally:
+            await bot.session.close()
+
+    try:
+        asyncio.run(_with_session(_run))
+    except Exception as exc:  # noqa: BLE001 — одна попытка повтора, дальше сдаёмся
+        if self.request.retries >= self.max_retries:
+            logger.warning("Восстановление track=%s не удалось: %s", track_id, exc)
+            return
+        raise self.retry(exc=exc, countdown=30)
+
+
 @celery_app.task(name="search.fetch", bind=True, max_retries=2, queue="youtube_user")
 def search_fetch(self, query: str, telegram_id: int, chat_id: int, quiet: bool = False) -> None:
     """Ищет трек по запросу отовсюду, минтит и присылает в чат. quiet — без

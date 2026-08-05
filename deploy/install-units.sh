@@ -58,7 +58,7 @@ systemctl daemon-reload
 # выключен решением владельца 27.07 — поднимать его здесь значило бы тихо
 # отменять это решение и занимать 180 МБ из 961 МБ на боксе.
 for unit in tg-music-bot tg-music-api tg-music-worker tg-music-youtube-user \
-            tg-music-soundcloud tg-music-youtube tg-music-support; do
+            tg-music-soundcloud tg-music-youtube tg-music-support tg-music-moved; do
     if [ "$(systemctl is-enabled "$unit" 2>/dev/null)" = "enabled" ]; then
         systemctl restart "$unit"
         echo "    перезапущен $unit"

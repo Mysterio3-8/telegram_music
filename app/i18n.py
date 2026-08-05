@@ -80,6 +80,13 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "gate.not_subscribed": "Не вижу подписку на все каналы. Подпишитесь и попробуйте снова.",
         "gate.confirmed": "✅ Подписка подтверждена",
         "gate.subscribe_first": "Сначала подпишитесь на каналы",
+        "moved.text": (
+            "🎧 <b>Мы переехали</b>\n\n"
+            "Этот бот больше не работает. Вся музыка, ваша библиотека и плейлисты "
+            "ждут вас в новом боте — @{username}.\n\n"
+            "Просто откройте его и нажмите «Начать»."
+        ),
+        "moved.button": "🎧 Перейти в новый бот",
         "tracks.one": "трек",
         "tracks.few": "трека",
         "tracks.many": "треков",
@@ -117,6 +124,13 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "gate.not_subscribed": "I don't see you in all the channels. Subscribe and try again.",
         "gate.confirmed": "✅ Subscription confirmed",
         "gate.subscribe_first": "Please subscribe to the channels first",
+        "moved.text": (
+            "🎧 <b>We've moved</b>\n\n"
+            "This bot is no longer active. All the music, your library and playlists "
+            "are waiting in the new bot — @{username}.\n\n"
+            "Just open it and tap «Start»."
+        ),
+        "moved.button": "🎧 Open the new bot",
         "tracks.one": "track",
         "tracks.few": "tracks",
         "tracks.many": "tracks",

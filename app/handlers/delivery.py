@@ -10,6 +10,7 @@ import io
 import logging
 
 from aiogram import Bot
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import BufferedInputFile, InlineKeyboardMarkup, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,6 +19,20 @@ from app.services.stats import record_event
 from app.services.track_meta import build_filename, retag_audio
 
 logger = logging.getLogger(__name__)
+
+
+async def _schedule_repair(session: AsyncSession, track: Track, chat_id: int) -> None:
+    """Помечает file_id мёртвым и ставит восстановление трека в очередь."""
+    logger.warning("Мёртвый file_id у track=%s — ставлю восстановление", track.id)
+    track.tg_file_id = None
+    track.meta_synced = False
+    await session.commit()
+    try:
+        from app.tasks.search_fetch import repair_track
+
+        repair_track.delay(track_id=track.id, chat_id=chat_id)
+    except Exception:  # noqa: BLE001 — брокер недоступен, восстановим при следующей попытке
+        logger.warning("Очередь недоступна, восстановление track=%s отложено", track.id)
 
 
 async def _load_original_bytes(bot: Bot, track: Track) -> bytes | None:
@@ -53,9 +68,17 @@ async def send_track_audio(
     message: Message | None = None
 
     if track.tg_file_id and track.meta_synced:
-        message = await bot.send_audio(
-            chat_id, track.tg_file_id, caption=caption, reply_markup=reply_markup
-        )
+        try:
+            message = await bot.send_audio(
+                chat_id, track.tg_file_id, caption=caption, reply_markup=reply_markup
+            )
+        except TelegramBadRequest:
+            # file_id принадлежит боту, который загрузил файл. После переезда на
+            # нового бота все старые идентификаторы чужие, и Telegram отвечает
+            # «wrong file identifier». Гасим мёртвый id и ставим восстановление
+            # из источника — трек придёт следом, отдельным сообщением.
+            await _schedule_repair(session, track, chat_id)
+            return None
     else:
         data = await _load_original_bytes(bot, track)
         if data is not None:
