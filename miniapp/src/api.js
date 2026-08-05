@@ -255,6 +255,18 @@ export function recordListen(trackId) {
   return request(`/tracks/${trackId}/listen`, { method: "POST" }).catch(() => {});
 }
 
+export function getLanguages() {
+  return request("/languages");
+}
+
+// Язык интерфейса общий с ботом — хранится на сервере в users.ui_language
+export function saveLanguage(code) {
+  return request("/language", {
+    method: "POST",
+    body: JSON.stringify({ code }),
+  });
+}
+
 export function getLyrics(trackId) {
   return request(`/tracks/${trackId}/lyrics`);
 }

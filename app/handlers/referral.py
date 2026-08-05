@@ -14,8 +14,8 @@ from app.db.models import User
 from app.handlers.common import ensure_user
 from app.keyboards.referral import referral_keyboard
 from app.services.gamification import (
+    LIFETIME_DAYS,
     REFERRAL_MILESTONES,
-    _scaled_reward,
     count_referrals,
     grant_referral_milestones,
     next_referral_reward,
@@ -44,14 +44,12 @@ def _days_word(days: int) -> str:
     return "дней"
 
 
-def _reward_days(base_days: int) -> int:
-    """Сколько дней ДЕЙСТВИТЕЛЬНО начислят за порог.
-
-    Награды урезаны множителем premium_reward_factor, и показывать надо именно
-    урезанное число. Иначе бот обещает неделю, приходит день, а в Mini App в
-    баннере ближайшей награды стоит третье значение — ровно это владелец и
-    заметил как «в приложении другие цифры»."""
-    return _scaled_reward(base_days)
+def _reward_text(days: int) -> str:
+    """Награда словами. Пороги теперь заданы владельцем дословно и не урезаются
+    множителем, поэтому показываем ровно то, что начислим."""
+    if days >= LIFETIME_DAYS:
+        return "Premium навсегда"
+    return f"{days} {_days_word(days)} Premium"
 
 
 def _rewards_block(invited: int) -> str:
@@ -59,9 +57,8 @@ def _rewards_block(invited: int) -> str:
     upcoming = [row for row in REFERRAL_MILESTONES if row[0] > invited][:_VISIBLE_MILESTONES]
     reached = [row for row in REFERRAL_MILESTONES if row[0] <= invited][-2:]
 
-    def line(mark: str, threshold: int, base_days: int) -> str:
-        days = _reward_days(base_days)
-        return f"{mark} {threshold} {_friends_word(threshold)} — {days} {_days_word(days)} Premium"
+    def line(mark: str, threshold: int, days: int) -> str:
+        return f"{mark} {threshold} {_friends_word(threshold)} — {_reward_text(days)}"
 
     lines = [line("✅", threshold, days) for threshold, days in reached]
     lines += [line("🎁", threshold, days) for threshold, days in upcoming]
@@ -89,19 +86,17 @@ async def build_referral_text(session: AsyncSession, user: User) -> str:
     if to_next_reward and next_reward_days:
         next_line = (
             f"\n🔥 Ещё {to_next_reward} {_friends_word(to_next_reward)} — "
-            f"и {next_reward_days} {_days_word(next_reward_days)} Premium\n"
+            f"и {_reward_text(next_reward_days)}\n"
         )
 
-    # Обещание считаем из настоящего первого порога, а не пишем словами:
-    # награды урезаны множителем, и «неделя Premium» была неправдой
-    first_friends, first_base = REFERRAL_MILESTONES[0]
-    first_days = _scaled_reward(first_base)
+    # Обещание считаем из настоящего первого порога, а не пишем словами
+    first_friends, first_days = REFERRAL_MILESTONES[0]
 
     return (
         "🎁 <b>Реферальная программа</b>\n\n"
-        f"<b>{first_friends} {_friends_word(first_friends)} — {first_days} "
-        f"{_days_word(first_days)} Premium.</b> Награда приходит автоматически, "
-        "как только друг откроет бота по вашей ссылке.\n\n"
+        f"<b>{first_friends} {_friends_word(first_friends)} — "
+        f"{_reward_text(first_days)}.</b> Награда приходит автоматически, "
+        "как только друг начнёт слушать музыку по вашей ссылке.\n\n"
         f"👥 Приглашено: <b>{invited}</b>\n"
         f"{rank_line}"
         f"{next_line}\n"

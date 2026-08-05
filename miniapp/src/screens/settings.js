@@ -1,4 +1,5 @@
 import { icon } from "../components/icons.js";
+import { t } from "../i18n.js";
 
 // Настройки по референсу VK Music (ТЗ §16, §21): секции строк, «Поддержка
 // Telegram» вместо «Написать боту», версия — внутри «О приложении».
@@ -26,9 +27,10 @@ export function renderSettings(state) {
       ${navRow("Эквалайзер", "sliders", "open-equalizer")}
     </div>
 
-    <div class="rec-section-label">Приложение</div>
+    <div class="rec-section-label">${t("settings.section.app")}</div>
     <div class="card card--rows">
       ${navRow("Перенос из других сервисов", "import", "open-transfer")}
+      ${navRow(t("settings.language"), "globe", "open-language")}
       ${navRow("Интерфейс", "palette", "open-interface")}
       ${navRow("Память устройства", "database", "open-storage")}
     </div>

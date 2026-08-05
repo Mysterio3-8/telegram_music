@@ -15,6 +15,7 @@ from app.handlers import (
     contests,
     errors,
     inline,
+    language,
     library,
     news,
     player,
@@ -71,6 +72,7 @@ async def main() -> None:
         errors.router,  # глобальный обработчик — ловит исключения из любого хендлера ниже
         start.router,
         subscription.router,
+        language.router,
         library.router,
         playlists.router,
         search.router,

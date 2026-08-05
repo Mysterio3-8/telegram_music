@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.db.models import Playlist, User, UserLibrary
+from app.i18n import normalize_language
 
 
 @dataclass(frozen=True)
@@ -46,6 +47,19 @@ async def get_or_create_user(session: AsyncSession, profile: TelegramProfile) ->
 
 async def get_user_by_telegram_id(session: AsyncSession, telegram_id: int) -> User | None:
     return await session.scalar(select(User).where(User.telegram_id == telegram_id))
+
+
+def user_language(user: User) -> str:
+    """Язык интерфейса: выбранный человеком важнее кода из профиля Telegram."""
+    return normalize_language(user.ui_language or user.language)
+
+
+async def set_user_language(session: AsyncSession, user: User, code: str) -> str:
+    """Запоминает выбранный язык. Возвращает то, что реально сохранили."""
+    resolved = normalize_language(code)
+    user.ui_language = resolved
+    await session.commit()
+    return resolved
 
 
 def is_admin(telegram_id: int) -> bool:

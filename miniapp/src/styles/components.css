@@ -401,6 +401,19 @@
   gap: 12px;
 }
 
+/* Пояснение под названием языка: «перевод ещё готовится» */
+.settings-row__hint {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.lang-flag {
+  font-size: 18px;
+  line-height: 1;
+}
+
 .settings-row__label svg {
   width: 17px;
   height: 17px;

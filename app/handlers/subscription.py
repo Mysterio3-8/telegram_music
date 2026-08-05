@@ -7,6 +7,7 @@ from app.handlers.common import ensure_user
 from app.handlers.start import build_cabinet_text
 from app.keyboards.main_menu import main_menu_keyboard
 from app.services.subscription import is_fully_subscribed
+from app.services.users import user_language
 
 router = Router()
 
@@ -24,5 +25,8 @@ async def cb_subscription_check(callback: CallbackQuery) -> None:
             await callback.answer(NOT_SUBSCRIBED_ALERT, show_alert=True)
             return
         text = await build_cabinet_text(session, user)
-    await callback.message.edit_text(text, reply_markup=main_menu_keyboard())
+        lang = user_language(user)
+    await callback.message.edit_text(
+        text, reply_markup=main_menu_keyboard(lang), parse_mode="HTML"
+    )
     await callback.answer("✅ Подписка подтверждена")

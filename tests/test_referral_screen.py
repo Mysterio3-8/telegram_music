@@ -3,9 +3,15 @@
 """
 from app.config import settings
 from app.db.models import User
-from app.handlers.referral import _days_word, _friends_word, _rewards_block, build_referral_text
+from app.handlers.referral import (
+    _days_word,
+    _friends_word,
+    _reward_text,
+    _rewards_block,
+    build_referral_text,
+)
 from app.keyboards.referral import referral_keyboard, share_url
-from app.services.gamification import REFERRAL_MILESTONES
+from app.services.gamification import LIFETIME_DAYS, REFERRAL_MILESTONES
 
 
 def test_friends_word_matches_russian_counting():
@@ -25,8 +31,8 @@ def test_days_word_matches_russian_counting():
 def test_rewards_show_reached_and_upcoming():
     block = _rewards_block(invited=3)
     assert "✅" in block and "🎁" in block
-    # достигнутый порог 3 отмечен галочкой, ближайший непройденный 5 — подарком
-    assert "✅ 3 друга" in block
+    # достигнутый порог 1 отмечен галочкой, ближайший непройденный 5 — подарком
+    assert "✅ 1 друг" in block
     assert "🎁 5 друзей" in block
 
 
@@ -34,9 +40,15 @@ def test_rewards_for_newcomer_have_no_checkmarks():
     assert "✅" not in _rewards_block(invited=0)
 
 
-def test_first_milestone_is_a_week():
-    """«Один друг — неделя Premium» из текста должно совпадать с настоящим порогом."""
-    assert REFERRAL_MILESTONES[0] == (1, 7)
+def test_first_milestone_is_one_day():
+    """«Один друг — один день Premium» из текста должно совпадать с порогом."""
+    assert REFERRAL_MILESTONES[0] == (1, 1)
+
+
+def test_lifetime_milestone_reads_as_forever():
+    """36500 дней человеку показывать нельзя — верхний порог пишется словом."""
+    assert _reward_text(LIFETIME_DAYS) == "Premium навсегда"
+    assert REFERRAL_MILESTONES[-1] == (5000, LIFETIME_DAYS)
 
 
 async def test_referral_text_contains_link_and_counters(session):

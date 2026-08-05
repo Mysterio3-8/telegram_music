@@ -6,11 +6,12 @@
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import (
     Playlist,
+    SearchQuery,
     Track,
     TrackEvent,
     Upload,
@@ -24,21 +25,20 @@ REFERRER_DISCOUNT_PCT = 50
 TRIAL_DAYS = 1  # пробный доступ к Mini App, один раз на аккаунт (решение владельца)
 
 # (порог приглашённых, дней Premium в награду) — по возрастанию.
-# Первые пороги низкие: награда должна прийти быстро, иначе никто не зовёт друзей.
-# «Навсегда» вынесено на 5000 друзей (решение владельца) — за 100 было слишком дёшево.
+# Числа заданы владельцем дословно: 1 друг = 1 день, 50 = месяц, 5000 = навсегда.
+# Поэтому урезающий множитель premium_reward_factor тут НЕ применяется — с ним
+# первые пороги давали бы 0 дней. Множитель остался только у достижений.
 REFERRAL_MILESTONES: list[tuple[int, int]] = [
-    (1, 7),
-    (2, 7),
-    (3, 14),
-    (5, 30),
-    (10, 60),
-    (25, 120),
-    (50, 180),
-    (100, 365),
-    (250, 365),
-    (500, 730),
-    (1000, 1095),
-    (2500, 1825),
+    (1, 1),
+    (5, 5),
+    (10, 10),
+    (25, 25),
+    (50, 30),
+    (100, 60),
+    (250, 90),
+    (500, 120),
+    (1000, 180),
+    (2500, 365),
     (5000, LIFETIME_DAYS),
 ]
 
@@ -99,12 +99,20 @@ def referral_rank(invited: int) -> RankProgress:
 
 
 async def count_referrals(session: AsyncSession, telegram_id: int) -> int:
-    """Антинакрутка (блок E): засчитываем только «живых» приглашённых — тех, кто
-    реально слушал музыку и не заблокировал бота. Фейк-аккаунты, которые сделали
-    /start ради накрутки и ушли, в счётчик наград не попадают. referred_by
-    write-once (register_referral) не даёт переприсвоить друзей второму аккаунту."""
-    listeners = (
-        select(TrackEvent.user_id).where(TrackEvent.event == "listen").distinct().subquery()
+    """Антинакрутка (блок E): засчитываем только приглашённых, которые реально
+    пользовались сервисом и не заблокировали бота. Аккаунты, сделавшие /start
+    ради накрутки и ушедшие, в счётчик наград не попадают. referred_by
+    write-once (register_referral) не даёт переприсвоить друзей второму аккаунту.
+
+    «Пользовался» — любое из трёх: событие статистики, трек в библиотеке,
+    поисковый запрос. Раньше требовалось строго событие listen, и счётчик стоял
+    на нуле у всех: главный путь выдачи трека — поисковый парсер в воркере —
+    статистику вообще не писал. На проде это дало 9 привязок и 0 засчитанных,
+    включая друга с семью треками в библиотеке."""
+    used_service = or_(
+        exists().where(TrackEvent.user_id == User.id),
+        exists().where(UserLibrary.user_id == User.id),
+        exists().where(SearchQuery.user_id == User.id),
     )
     count = await session.scalar(
         select(func.count())
@@ -112,7 +120,7 @@ async def count_referrals(session: AsyncSession, telegram_id: int) -> int:
         .where(
             User.referred_by == telegram_id,
             User.bot_blocked.is_(False),
-            User.id.in_(select(listeners.c.user_id)),
+            used_service,
         )
     )
     return count or 0
@@ -154,7 +162,7 @@ async def grant_referral_milestones(session: AsyncSession, referrer: User) -> in
         threshold, days = REFERRAL_MILESTONES[referrer.referral_milestones_claimed]
         if invited < threshold:
             break
-        _extend_premium(referrer, _scaled_reward(days))
+        _extend_premium(referrer, days)
         referrer.referral_milestones_claimed += 1
         granted += 1
     if granted:
@@ -180,7 +188,7 @@ def next_referral_reward(invited: int) -> tuple[int, int]:
     (0, 0) — все пороги пройдены."""
     for threshold, days in REFERRAL_MILESTONES:
         if invited < threshold:
-            return threshold - invited, _scaled_reward(days)
+            return threshold - invited, days
     return 0, 0
 
 

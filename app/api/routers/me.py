@@ -20,6 +20,7 @@ from app.api.schemas import (
     ProfileTopOut,
     RankOut,
     AutorenewIn,
+    LanguageIn,
     ReferralOut,
     SearchFetchIn,
     SearchLogIn,
@@ -32,12 +33,12 @@ from app.api.schemas import (
 from app.api.security import build_instrumental_audio_url
 from app.config import settings
 from app.db.models import Playlist, Track, User
+from app.i18n import LANGUAGES, is_translated
 from app.importers.base import ImportItem
 from app.services.audio import duration_from_bytes
 from app.services.catalog_import import import_user_track
 from app.services.gamification import (
     REFERRAL_MILESTONES,
-    _scaled_reward,
     build_achievements,
     collect_user_stats,
     grant_achievement_rewards,
@@ -78,7 +79,7 @@ from app.services.search_log import log_search_query, popular_queries
 from app.services.stats import record_event
 from app.services.telegram_send import send_audio_by_file_id
 from app.services.uploads import detect_format
-from app.services.users import count_library_tracks
+from app.services.users import count_library_tracks, set_user_language, user_language
 from app.storage import get_storage
 
 router = APIRouter(tags=["me"])
@@ -187,14 +188,22 @@ async def fetch_from_web(
     user: User = Depends(get_current_user),
 ) -> dict:
     """Поисковый парсер (скрытый): нет в базе — ищем в открытых источниках,
-    трек придёт в чат бота и в библиотеку. Возвращаем сразу, работа — в Celery."""
+    трек падает в библиотеку. Возвращаем сразу, работа — в Celery.
+
+    quiet=True: запрос пришёл из Mini App, там человек и заберёт результат.
+    Копию трека в чат бота владелец просил не слать — он её не запрашивал."""
     query = payload.query.strip()
     if not query:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Пустой запрос")
     try:
         from app.tasks.search_fetch import search_fetch
 
-        search_fetch.delay(query=query, telegram_id=user.telegram_id, chat_id=user.telegram_id)
+        search_fetch.delay(
+            query=query,
+            telegram_id=user.telegram_id,
+            chat_id=user.telegram_id,
+            quiet=True,
+        )
     except Exception as exc:  # noqa: BLE001 — брокер недоступен
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Поиск в сети недоступен") from exc
     return {"queued": True}
@@ -211,6 +220,35 @@ async def set_autorenew(
     db_user = await session.get(User, user.id)
     db_user.autorenew = payload.enabled
     await session.commit()
+
+
+@router.get("/languages")
+async def available_languages(user: User = Depends(get_current_user)) -> dict:
+    """Список языков для переключателя + текущий выбор. Переведённые языки
+    помечены: у остальных пока показывается английский."""
+    return {
+        "current": user_language(user),
+        "items": [
+            {
+                "code": item.code,
+                "title": item.title,
+                "flag": item.flag,
+                "translated": is_translated(item.code),
+            }
+            for item in LANGUAGES
+        ],
+    }
+
+
+@router.post("/language", status_code=status.HTTP_204_NO_CONTENT)
+async def choose_language(
+    payload: LanguageIn,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+) -> None:
+    """Выбор языка общий с ботом: пишем в ту же users.ui_language."""
+    db_user = await session.get(User, user.id)
+    await set_user_language(session, db_user, payload.code)
 
 
 @router.get("/playlists", response_model=list[PlaylistSummaryOut])
@@ -567,7 +605,7 @@ async def profile(
             to_next_reward=to_next_reward,
             next_reward_days=next_reward_days,
             milestones=[
-                MilestoneOut(friends=friends, days=_scaled_reward(days))
+                MilestoneOut(friends=friends, days=days)
                 for friends, days in REFERRAL_MILESTONES
             ],
         ),

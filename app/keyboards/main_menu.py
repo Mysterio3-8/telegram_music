@@ -1,23 +1,25 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
 from app.config import settings
+from app.i18n import DEFAULT_LANGUAGE, t
 
 
-def main_menu_keyboard() -> InlineKeyboardMarkup:
+def main_menu_keyboard(lang: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
     rows = [
-        [InlineKeyboardButton(text="⬆️ Загрузить трек", callback_data="menu:upload")],
+        [InlineKeyboardButton(text=t("menu.upload", lang), callback_data="menu:upload")],
         # Перенос плейлистов живёт в Mini App (решение владельца): в боте кнопка
         # лишняя. Команда /transfer и обработчик menu:transfer оставлены рабочими.
         [
             InlineKeyboardButton(
-                text=f"💎 Открыть плеер — {settings.premium_price_rub} ₽/мес",
+                text=t("menu.premium", lang, price=settings.premium_price_rub),
                 callback_data="menu:premium",
             )
         ],
-        [InlineKeyboardButton(text="🎁 Реферальная программа", callback_data="menu:referral")],
+        [InlineKeyboardButton(text=t("menu.referral", lang), callback_data="menu:referral")],
+        [InlineKeyboardButton(text=t("menu.language", lang), callback_data="menu:lang")],
         [
             InlineKeyboardButton(
-                text="🆘 Поддержка / жалобы / идеи",
+                text=t("menu.support", lang),
                 url=f"https://t.me/{settings.support_bot_username}",
             )
         ],
@@ -27,10 +29,26 @@ def main_menu_keyboard() -> InlineKeyboardMarkup:
             0,
             [
                 InlineKeyboardButton(
-                    text="🎧 Открыть плеер",
+                    text=t("menu.player", lang),
                     web_app=WebAppInfo(url=settings.public_base_url),
                 )
             ],
         )
     # menu:miniapp в stubs.py оставлен, чтобы кнопка в старых сообщениях не была мёртвой
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def language_keyboard(current: str) -> InlineKeyboardMarkup:
+    """Выбор языка по два в ряд; текущий отмечен галочкой."""
+    from app.i18n import LANGUAGES
+
+    buttons = [
+        InlineKeyboardButton(
+            text=f"{item.flag} {item.title}" + (" ✅" if item.code == current else ""),
+            callback_data=f"lang:set:{item.code}",
+        )
+        for item in LANGUAGES
+    ]
+    rows = [buttons[i : i + 2] for i in range(0, len(buttons), 2)]
+    rows.append([InlineKeyboardButton(text=t("lang.back", current), callback_data="menu:main")])
     return InlineKeyboardMarkup(inline_keyboard=rows)

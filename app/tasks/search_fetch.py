@@ -29,13 +29,32 @@ async def _with_session(coro):
         await engine.dispose()
 
 
+async def _record_listen(session, telegram_id: int, track_id: int) -> None:
+    """Пишет событие прослушивания за пользователя, получившего трек.
+
+    Раньше эти задачи статистику не писали вообще, хотя именно они — главный путь
+    выдачи треков. Из-за этого у приглашённых друзей не было ни одного события, и
+    подсчёт рефералов (он требовал «живого» пользователя) стоял на нуле."""
+    from app.services.stats import record_event
+    from app.services.users import get_user_by_telegram_id
+
+    user = await get_user_by_telegram_id(session, telegram_id)
+    if user is not None:
+        await record_event(session, user.id, track_id, "listen")
+
+
 @celery_app.task(name="search.fetch_candidate", bind=True, max_retries=2, queue="youtube_user")
-def search_fetch_candidate(self, candidate: dict, telegram_id: int, chat_id: int) -> None:
+def search_fetch_candidate(
+    self, candidate: dict, telegram_id: int, chat_id: int | None = None
+) -> None:
     """Качает КОНКРЕТНОГО кандидата, выбранного человеком в выдаче живого поиска.
 
     Скачивание живёт в воркере, а не в боте, сознательно: mp3 плюс перекодирование
     ffmpeg — это десятки мегабайт пиковой памяти, а бокс на 961 МБ уже дважды
     ронял прод по OOM. Бот остаётся отзывчивым, тяжёлое уходит в очередь.
+
+    chat_id=None — «импортировать молча»: так зовёт Mini App, где человек уже
+    слушает поток и присылать ему тот же трек в чат бота не за чем.
     """
     from app.services.track_lookup.importer import import_candidate
     from app.services.track_lookup.ranking import Candidate
@@ -49,7 +68,11 @@ def search_fetch_candidate(self, candidate: dict, telegram_id: int, chat_id: int
                     session, bot, Candidate(**candidate), telegram_id
                 )
             except UserImportRejected as exc:
-                await bot.send_message(chat_id, f"❌ {exc}")
+                if chat_id is not None:
+                    await bot.send_message(chat_id, f"❌ {exc}")
+                return
+            await _record_listen(session, telegram_id, track.id)
+            if chat_id is None:
                 return
             caption = f"✅ {track.artist} — {track.title}"
             if chat_id == settings.effective_archive_chat_id:
@@ -90,6 +113,7 @@ def search_fetch(self, query: str, telegram_id: int, chat_id: int, quiet: bool =
                 if not quiet:
                     await bot.send_message(chat_id, f"❌ Не нашли «{query}». Попробуйте иначе.")
                 return
+            await _record_listen(session, telegram_id, track.id)
             if quiet:
                 return
             if track.tg_file_id:

@@ -14,6 +14,9 @@ class User(Base):
     username: Mapped[str | None] = mapped_column(String(64))
     first_name: Mapped[str | None] = mapped_column(String(128))
     language: Mapped[str | None] = mapped_column(String(8))
+    # Осознанный выбор языка интерфейса. Отдельно от language: тот приезжает из
+    # профиля Telegram и перезаписывается на каждом /start — выбор бы затирался.
+    ui_language: Mapped[str | None] = mapped_column(String(8))
     premium: Mapped[bool] = mapped_column(default=False)
     premium_until: Mapped[datetime | None]
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())

@@ -102,7 +102,11 @@ async def personal_mix(
 @router.post("/search/live/{ref}/fetch")
 async def queue_fetch(ref: str, user: User = Depends(get_current_user)) -> dict:
     """Ставит фоновую закачку выбранного трека: со второго раза он играет
-    мгновенно по file_id и попадает в библиотеку пользователя."""
+    мгновенно по file_id и попадает в библиотеку пользователя.
+
+    chat_id не передаём: человек уже слушает поток в плеере, и копия того же
+    трека в чате бота ему не нужна — приходила как «бот присылает, хотя я не
+    просил». Трек всё равно минтится в архивный чат и падает в библиотеку."""
     candidate = decode_ref(ref)
     if candidate is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Ссылка устарела — повторите поиск")
@@ -112,7 +116,6 @@ async def queue_fetch(ref: str, user: User = Depends(get_current_user)) -> dict:
         search_fetch_candidate.delay(
             candidate=asdict(candidate),
             telegram_id=user.telegram_id,
-            chat_id=user.telegram_id,
         )
     except Exception:  # noqa: BLE001 — брокер недоступен: поток всё равно играет
         logger.warning("Живой поиск: очередь недоступна", exc_info=True)

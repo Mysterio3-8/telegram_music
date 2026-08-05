@@ -10,11 +10,12 @@ from app.handlers.cards import show_track_card
 from app.handlers.common import ensure_user
 from app.keyboards.main_menu import main_menu_keyboard
 from app.keyboards.subscription import subscription_gate_keyboard
+from app.i18n import t, tracks_word
 from app.services.gamification import register_referral
 from app.services.library import get_track
 from app.services.premium import is_premium_active
 from app.services.subscription import is_fully_subscribed
-from app.services.users import count_library_tracks, get_user_by_telegram_id
+from app.services.users import count_library_tracks, get_user_by_telegram_id, user_language
 
 router = Router()
 
@@ -24,33 +25,35 @@ SUBSCRIPTION_GATE_TEXT = (
 )
 
 
-def _tracks_word(count: int) -> str:
-    if count % 10 == 1 and count % 100 != 11:
-        return "трек"
-    if count % 10 in (2, 3, 4) and count % 100 not in (12, 13, 14):
-        return "трека"
-    return "треков"
-
-
 async def build_cabinet_text(session: AsyncSession, user: User) -> str:
     library_count = await count_library_tracks(session, user.id)
+    lang = user_language(user)
     if is_premium_active(user) and user.premium_until is not None:
-        subscription = f"💎 Premium до {user.premium_until.strftime('%d.%m.%Y')}"
+        subscription = t(
+            "cabinet.premium_until", lang, date=user.premium_until.strftime("%d.%m.%Y")
+        )
     else:
-        subscription = "Бесплатный тариф"
+        subscription = t("cabinet.free_plan", lang)
     from app.config import settings
 
     name = (user.first_name or "").strip() or "друг"
     return (
-        f"👋 Привет, <b>{name}</b> · ID: <code>{user.telegram_id}</code>\n\n"
+        t("cabinet.greeting", lang, name=name, telegram_id=user.telegram_id) + "\n\n"
         f"{subscription}\n\n"
-        f"🎵 В библиотеке: {library_count} {_tracks_word(library_count)}\n\n"
-        "Просто отправьте название песни, исполнителя или строчку из текста — "
-        "я моментально найду нужный трек.\n\n"
-        "🎧 <b>Открыть плеер</b>\n"
-        "Полноценный музыкальный сервис как VK или Apple Music: миксы, плейлисты, "
-        "тексты песен, эквалайзер и офлайн-режим. Удобнее и лучше чем другие сервисы.\n\n"
-        f"💎 {settings.premium_price_rub} ₽/месяц • Первый день бесплатно"
+        + t(
+            "cabinet.library",
+            lang,
+            count=library_count,
+            tracks_word=tracks_word(library_count, lang),
+        )
+        + "\n\n"
+        + t("cabinet.hint", lang)
+        + "\n\n"
+        + t("cabinet.player_title", lang)
+        + "\n"
+        + t("cabinet.player_pitch", lang)
+        + "\n\n"
+        + t("cabinet.price", lang, price=settings.premium_price_rub)
     )
 
 
@@ -94,7 +97,7 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
     if command.args and command.args.startswith("track_"):
         if await _show_shared_track(message, user, command.args):
             return
-    await message.answer(text, reply_markup=main_menu_keyboard(), parse_mode="HTML")
+    await message.answer(text, reply_markup=main_menu_keyboard(user_language(user)), parse_mode="HTML")
 
 
 async def render_main_menu(callback: CallbackQuery) -> None:
@@ -102,7 +105,7 @@ async def render_main_menu(callback: CallbackQuery) -> None:
     async with session_factory() as session:
         user = await ensure_user(session, callback.from_user)
         text = await build_cabinet_text(session, user)
-    await callback.message.edit_text(text, reply_markup=main_menu_keyboard(), parse_mode="HTML")
+    await callback.message.edit_text(text, reply_markup=main_menu_keyboard(user_language(user)), parse_mode="HTML")
 
 
 @router.callback_query(F.data == "menu:main")

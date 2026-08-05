@@ -247,6 +247,10 @@ class AutorenewIn(BaseModel):
     enabled: bool
 
 
+class LanguageIn(BaseModel):
+    code: str
+
+
 class SubChannelOut(BaseModel):
     id: int
     label: str

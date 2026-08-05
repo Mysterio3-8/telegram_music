@@ -37,7 +37,9 @@ import {
   createPlaylist,
   submitLyrics,
   removeFromLibrary,
+  getLanguages,
   resolveAudioUrl,
+  saveLanguage,
   sendTrackToChat,
   telegramUser,
 } from "./api.js";
@@ -83,6 +85,8 @@ import { renderLibrary } from "./screens/library.js";
 import { renderMyTracks, renderMyTracksBody, myTracksList } from "./screens/mytracks.js";
 import { renderProfile } from "./screens/profile.js";
 import { renderSettings } from "./screens/settings.js";
+import { renderLanguage } from "./screens/language.js";
+import { getLanguage, setLanguage } from "./i18n.js";
 import { renderRecommendations } from "./screens/recommendations.js";
 import { renderRecent } from "./screens/recent.js";
 import { renderArtists } from "./screens/artists.js";
@@ -170,6 +174,7 @@ const SCREENS = {
   mytracks: renderMyTracks,
   profile: renderProfile,
   settings: renderSettings,
+  language: renderLanguage,
   recommendations: renderRecommendations,
   equalizer: renderEqualizer,
   interface: renderInterface,
@@ -329,6 +334,10 @@ const CATALOG_PAGE_SIZE = 100;
 async function boot() {
   mutate({ bootStatus: "loading", bootError: "" });
   try {
+    // Язык — до первого рендера, иначе экран загрузки успевает мигнуть русским.
+    // Осознанный выбор приедет с сервера ниже и перекроет догадку по профилю.
+    const profile = telegramUser();
+    setLanguage(profile && profile.language_code);
     await login();
     // Главная показывается сразу после двух лёгких запросов: ей нужен только
     // статус Premium и счётчик библиотеки (= число id). Тяжёлые списки —
@@ -341,6 +350,16 @@ async function boot() {
       libraryTotal: libraryIds.length,
       premium,
     });
+    // Сохранённый выбор языка догоняет фоном: если человек уже выбирал язык в
+    // боте, приложение подхватит тот же, а не догадку по профилю Telegram.
+    getLanguages()
+      .then((data) => {
+        if (data && data.current && data.current !== getLanguage()) {
+          setLanguage(data.current);
+          render();
+        }
+      })
+      .catch(() => {});
     loadHeavyData();
     maybeStartOnboarding();
   } catch (error) {
@@ -1289,6 +1308,18 @@ root.addEventListener("click", (event) => {
     case "open-interface":
       navigateTo("interface");
       break;
+    case "open-language":
+      navigateTo("language");
+      break;
+    case "set-language": {
+      const code = el.dataset.code;
+      if (code) {
+        setLanguage(code);
+        saveLanguage(code).catch(() => {});
+        render();
+      }
+      break;
+    }
     case "open-storage":
       navigateTo("storage");
       break;

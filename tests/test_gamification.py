@@ -67,9 +67,29 @@ async def test_register_referral_binds_and_ignores_invalid(session):
     assert await count_referrals(session, 100) == 1
 
 
+async def test_referral_counts_friend_with_library_but_no_events(session):
+    """Регрессия: критерий «живого» требовал события listen, а главный путь выдачи
+    (поисковый парсер в воркере) их не писал. На проде это дало 9 привязок и 0
+    засчитанных — включая друга с семью треками в библиотеке."""
+    referrer = await _add_user(session, 1)
+    invitee = await _add_user(session, 10)
+    await register_referral(session, invitee, 1)
+
+    assert await count_referrals(session, 1) == 0  # пока ничего не делал
+
+    session.add(UserLibrary(user_id=invitee.id, track_id=1))
+    await session.commit()
+    assert await count_referrals(session, 1) == 1
+
+    invitee.bot_blocked = True  # заблокировавшие бота по-прежнему не в счёт
+    await session.commit()
+    assert await count_referrals(session, 1) == 0
+    assert referrer.telegram_id == 1
+
+
 async def test_referral_milestones_grant_premium_idempotently(session):
     referrer = await _add_user(session, 1)
-    # приглашаем 3 «живых» пользователей — закрываются пороги 1, 2 и 3
+    # приглашаем 3 «живых» пользователей — из порогов 1/5/10 закрывается только первый
     for tid in (10, 11, 12):
         invitee = await _add_user(session, tid)
         await register_referral(session, invitee, 1)
@@ -77,7 +97,7 @@ async def test_referral_milestones_grant_premium_idempotently(session):
     # активными стали после регистрации → пересчитываем вехи (как на открытии профиля)
     await grant_referral_milestones(session, referrer)
 
-    assert referrer.referral_milestones_claimed == 3  # пороги 1, 2, 3
+    assert referrer.referral_milestones_claimed == 1  # порог «1 друг»
     assert is_premium_active(referrer)
 
     # повторный вызов ничего не выдаёт
@@ -209,9 +229,9 @@ async def test_referral_leaderboard_sorted(session):
 def test_next_referral_reward():
     from app.services.gamification import next_referral_reward
 
-    # дни урезаны множителем premium_reward_factor (0.25): 7 → 1
+    # пороги владельца дословные, множитель premium_reward_factor к ним не применяется
     assert next_referral_reward(0) == (1, 1)
-    assert next_referral_reward(1) == (1, 1)  # до порога 2
+    assert next_referral_reward(1) == (4, 5)  # до порога «5 друзей — 5 дней»
     assert next_referral_reward(9000) == (0, 0)
 
 
