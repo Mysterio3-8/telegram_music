@@ -36,6 +36,13 @@ LANGUAGES: tuple[Language, ...] = (
 
 LANGUAGE_CODES: frozenset[str] = frozenset(item.code for item in LANGUAGES)
 
+# Языки, которых у нас нет, но для которых русский — куда более вероятный
+# родной, чем английский. Всё остальное незнакомое уходит на английский:
+# японцу или поляку русский интерфейс поможет меньше, чем международный.
+RUSSIAN_NEIGHBOUR_LOCALES: frozenset[str] = frozenset(
+    {"uk", "be", "kk", "uz", "ky", "tg", "tk", "az", "hy", "ka", "mn"}
+)
+
 # Языки без перевода: интерфейс на английском, пока словарь пуст
 TRANSLATIONS: dict[str, dict[str, str]] = {
     "ru": {
@@ -65,6 +72,14 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Перевод на этот язык ещё готовится — пока интерфейс будет на английском."
         ),
         "lang.back": "⬅️ Назад",
+        "gate.text": (
+            "🎵 Для использования ТГ Музыки подпишитесь на наши каналы.\n\n"
+            "После подписки нажмите «Проверить подписку»."
+        ),
+        "gate.check": "✅ Проверить подписку",
+        "gate.not_subscribed": "Не вижу подписку на все каналы. Подпишитесь и попробуйте снова.",
+        "gate.confirmed": "✅ Подписка подтверждена",
+        "gate.subscribe_first": "Сначала подпишитесь на каналы",
         "tracks.one": "трек",
         "tracks.few": "трека",
         "tracks.many": "треков",
@@ -94,6 +109,14 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "lang.saved": "Language saved",
         "lang.pending": "This language isn't translated yet — the interface stays in English.",
         "lang.back": "⬅️ Back",
+        "gate.text": (
+            "🎵 To use TG Music, please subscribe to our channels.\n\n"
+            "Once subscribed, tap «Check subscription»."
+        ),
+        "gate.check": "✅ Check subscription",
+        "gate.not_subscribed": "I don't see you in all the channels. Subscribe and try again.",
+        "gate.confirmed": "✅ Subscription confirmed",
+        "gate.subscribe_first": "Please subscribe to the channels first",
         "tracks.one": "track",
         "tracks.few": "tracks",
         "tracks.many": "tracks",
@@ -112,11 +135,20 @@ def is_translated(code: str) -> bool:
 
 
 def normalize_language(code: str | None) -> str:
-    """Код Telegram («en-US», «pt-BR») → поддерживаемый язык. Неизвестный → русский."""
+    """Код языка устройства («en-US», «pt-BR») → язык интерфейса.
+
+    Telegram присылает язык клиента в `language_code`, то есть по факту язык
+    телефона. Незнакомый язык уводим в английский, а соседние с русским — в
+    русский. Пустой код — это «Telegram ничего не сказал», тут вернее ставку на
+    ядро аудитории, а не на английский."""
     if not code:
         return DEFAULT_LANGUAGE
     base = code.split("-")[0].lower()
-    return base if base in LANGUAGE_CODES else DEFAULT_LANGUAGE
+    if base in LANGUAGE_CODES:
+        return base
+    if base in RUSSIAN_NEIGHBOUR_LOCALES:
+        return DEFAULT_LANGUAGE
+    return FALLBACK_LANGUAGE
 
 
 def t(key: str, lang: str = DEFAULT_LANGUAGE, **kwargs) -> str:

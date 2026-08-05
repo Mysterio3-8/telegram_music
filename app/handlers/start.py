@@ -19,11 +19,6 @@ from app.services.users import count_library_tracks, get_user_by_telegram_id, us
 
 router = Router()
 
-SUBSCRIPTION_GATE_TEXT = (
-    "🎵 Для использования ТГ Музыки подпишитесь на наши каналы.\n\n"
-    "После подписки нажмите «Проверить подписку»."
-)
-
 
 async def build_cabinet_text(session: AsyncSession, user: User) -> str:
     library_count = await count_library_tracks(session, user.id)
@@ -89,8 +84,10 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
             from app.services.required_channels import get_required_channels
 
             channels = await get_required_channels(session)
+            # Язык уже известен: ensure_user выше положил language_code устройства
+            lang = user_language(user)
             await message.answer(
-                SUBSCRIPTION_GATE_TEXT, reply_markup=subscription_gate_keyboard(channels)
+                t("gate.text", lang), reply_markup=subscription_gate_keyboard(channels, lang)
             )
             return
         text = await build_cabinet_text(session, user)

@@ -7,14 +7,10 @@ from aiogram import BaseMiddleware
 from aiogram.types import CallbackQuery, Message, TelegramObject
 
 from app.db.base import session_factory
+from app.i18n import t
 from app.keyboards.subscription import subscription_gate_keyboard
 from app.services.subscription import is_fully_subscribed
-from app.services.users import get_user_by_telegram_id
-
-GATE_TEXT = (
-    "🎵 Для использования ТГ Музыки подпишитесь на наши каналы.\n\n"
-    "После подписки нажмите «Проверить подписку»."
-)
+from app.services.users import get_user_by_telegram_id, user_language
 
 
 def _is_exempt(event: TelegramObject) -> bool:
@@ -49,12 +45,14 @@ class SubscriptionMiddleware(BaseMiddleware):
                 return await handler(event, data)
             from app.services.required_channels import get_required_channels
 
-            keyboard = subscription_gate_keyboard(await get_required_channels(session))
+            lang = user_language(db_user)
+            keyboard = subscription_gate_keyboard(await get_required_channels(session), lang)
 
+        text = t("gate.text", lang)
         if isinstance(event, CallbackQuery):
-            await event.answer("Сначала подпишитесь на каналы", show_alert=True)
+            await event.answer(t("gate.subscribe_first", lang), show_alert=True)
             if event.message is not None:
-                await event.message.answer(GATE_TEXT, reply_markup=keyboard)
+                await event.message.answer(text, reply_markup=keyboard)
         elif isinstance(event, Message):
-            await event.answer(GATE_TEXT, reply_markup=keyboard)
+            await event.answer(text, reply_markup=keyboard)
         return None

@@ -64,12 +64,20 @@ const TRANSLATIONS = {
 
 const SUPPORTED = new Set(LANGUAGES.map((item) => item.code));
 
+// Языки без своего перевода, для которых русский вероятнее английского.
+// Список обязан совпадать с RUSSIAN_NEIGHBOUR_LOCALES в app/i18n.py, иначе бот и
+// приложение определят язык по-разному.
+const RUSSIAN_NEIGHBOURS = new Set([
+  "uk", "be", "kk", "uz", "ky", "tg", "tk", "az", "hy", "ka", "mn",
+]);
+
 let current = DEFAULT_LANGUAGE;
 
 export function normalizeLanguage(code) {
   if (!code) return DEFAULT_LANGUAGE;
   const base = String(code).split("-")[0].toLowerCase();
-  return SUPPORTED.has(base) ? base : DEFAULT_LANGUAGE;
+  if (SUPPORTED.has(base)) return base;
+  return RUSSIAN_NEIGHBOURS.has(base) ? DEFAULT_LANGUAGE : FALLBACK_LANGUAGE;
 }
 
 export function isTranslated(code) {
