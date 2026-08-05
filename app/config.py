@@ -184,9 +184,11 @@ class Settings(BaseSettings):
     telegram_api_id: int = 0
     telegram_api_hash: str = ""
     telegram_session_path: str = "telegram_userbot.session"
-    # Приватный чат, куда бот перезаливает трек, чтобы получить свой tg_file_id
-    # (без него бот не может отправлять то, что скачал не сам userbot).
-    # Пусто → используется личка первого администратора (ADMIN_IDS).
+    # Чат, куда бот перезаливает трек, чтобы получить свой tg_file_id (без него
+    # бот не может отправлять то, что скачал не сам userbot). Держать здесь канал,
+    # а не человека: боту нужно быть его админом, но канал не заблокирует бота и
+    # не «потеряется» при смене токена, как личка (05.08 именно это и сломало минт).
+    # Пусто → личка первого администратора (ADMIN_IDS), это аварийный вариант.
     telegram_archive_chat_id: int = 0
     telegram_channel_check_interval_days: int = 1
     telegram_channel_max_retries: int = 3
