@@ -8,6 +8,7 @@ from aiogram import F, Router
 from aiogram.types import CallbackQuery
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.i18n import plural, t
 from app.config import settings
 from app.db.base import session_factory
 from app.db.models import User
@@ -29,27 +30,15 @@ _VISIBLE_MILESTONES = 5  # весь список из 13 порогов в со�
 
 
 def _friends_word(count: int) -> str:
-    if count % 10 == 1 and count % 100 != 11:
-        return "друг"
-    if count % 10 in (2, 3, 4) and count % 100 not in (12, 13, 14):
-        return "друга"
-    return "друзей"
-
-
-def _days_word(days: int) -> str:
-    if days % 10 == 1 and days % 100 != 11:
-        return "день"
-    if days % 10 in (2, 3, 4) and days % 100 not in (12, 13, 14):
-        return "дня"
-    return "дней"
+    return plural("word.friends", count)
 
 
 def _reward_text(days: int) -> str:
-    """Награда словами. Пороги теперь заданы владельцем дословно и не урезаются
+    """Награда словами. Пороги заданы владельцем дословно и не урезаются
     множителем, поэтому показываем ровно то, что начислим."""
     if days >= LIFETIME_DAYS:
-        return "Premium навсегда"
-    return f"{days} {_days_word(days)} Premium"
+        return t("referral.forever")
+    return t("referral.reward_days", days=days, days_word=plural("word.days", days))
 
 
 def _rewards_block(invited: int) -> str:
@@ -75,36 +64,50 @@ async def build_referral_text(session: AsyncSession, user: User) -> str:
 
     rank_line = ""
     if progress.current:
-        rank_line = f"{progress.current.emoji} Ранг: <b>{progress.current.title}</b>\n"
+        rank_line = (
+            t("referral.rank", emoji=progress.current.emoji, title=progress.current.title) + "\n"
+        )
     if progress.next:
         rank_line += (
-            f"До ранга {progress.next.emoji} {progress.next.title} — "
-            f"ещё {progress.to_next} {_friends_word(progress.to_next)}\n"
+            t(
+                "referral.to_next_rank",
+                emoji=progress.next.emoji,
+                title=progress.next.title,
+                count=progress.to_next,
+                friends_word=_friends_word(progress.to_next),
+            )
+            + "\n"
         )
 
     next_line = ""
     if to_next_reward and next_reward_days:
-        next_line = (
-            f"\n🔥 Ещё {to_next_reward} {_friends_word(to_next_reward)} — "
-            f"и {_reward_text(next_reward_days)}\n"
+        next_line = t(
+            "referral.next_reward",
+            count=to_next_reward,
+            friends_word=_friends_word(to_next_reward),
+            reward=_reward_text(next_reward_days),
         )
 
     # Обещание считаем из настоящего первого порога, а не пишем словами
     first_friends, first_days = REFERRAL_MILESTONES[0]
 
     return (
-        "🎁 <b>Реферальная программа</b>\n\n"
-        f"<b>{first_friends} {_friends_word(first_friends)} — "
-        f"{_reward_text(first_days)}.</b> Награда приходит автоматически, "
-        "как только друг начнёт слушать музыку по вашей ссылке.\n\n"
-        f"👥 Приглашено: <b>{invited}</b>\n"
-        f"{rank_line}"
-        f"{next_line}\n"
-        "<b>Ваша ссылка</b> (нажмите, чтобы скопировать):\n"
-        f"<code>{link}</code>\n\n"
-        "<b>Награды</b>\n"
-        f"{_rewards_block(invited)}\n\n"
-        "Когда друг оплачивает подписку, вам падает скидка 50% на следующую покупку."
+        t("referral.title") + "\n\n"
+        + t(
+            "referral.promise",
+            count=first_friends,
+            friends_word=_friends_word(first_friends),
+            reward=_reward_text(first_days),
+        )
+        + "\n\n"
+        + t("referral.invited", count=invited) + "\n"
+        + rank_line
+        + next_line + "\n"
+        + t("referral.your_link") + "\n"
+        + f"<code>{link}</code>\n\n"
+        + t("referral.rewards") + "\n"
+        + _rewards_block(invited) + "\n\n"
+        + t("referral.discount_note")
     )
 
 
@@ -134,6 +137,6 @@ async def refresh_referral(callback: CallbackQuery) -> None:
     try:
         await _show(callback)
     except Exception:  # noqa: BLE001 — Telegram отвергает edit с тем же текстом
-        await callback.answer("Пока без изменений")
+        await callback.answer(t("common.no_changes"))
         return
-    await callback.answer("Обновлено")
+    await callback.answer(t("common.updated"))

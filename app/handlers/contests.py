@@ -12,20 +12,21 @@ from app.handlers.common import ensure_user
 from app.keyboards.contests import contest_keyboard
 from app.services.contests import check_eligibility, get_contest, join_contest
 from app.services.subscription import is_channel_subscribed
+from app.i18n import t
 
 router = Router()
 
-ALREADY_JOINED = "Вы уже участвуете — ждём итогов 🍀"
-JOINED = "🎉 Вы в списке участников! Удачи в розыгрыше"
-CONTEST_CLOSED = "Конкурс завершён"
+ALREADY_JOINED = t("contest.already")
+JOINED = t("contest.joined")
+CONTEST_CLOSED = t("contest.finished")
 
 
 def _requirements_text(referrals: int, required: int, subscribed: bool) -> str:
-    lines = ["Условия ещё не выполнены:"]
+    lines = [t("contest.requirements")]
     if not subscribed:
-        lines.append("• подпишитесь на канал")
+        lines.append(t("contest.need_channel"))
     if referrals < required:
-        lines.append(f"• пригласите друзей: {referrals} из {required}")
+        lines.append(t("contest.need_referrals", referrals=referrals, required=required))
     return "\n".join(lines)
 
 

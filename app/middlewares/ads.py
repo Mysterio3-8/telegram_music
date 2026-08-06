@@ -8,11 +8,10 @@ from app.db.base import session_factory
 from app.keyboards.premium import ad_keyboard
 from app.services.premium import is_premium_active
 from app.services.users import get_user_by_telegram_id
+from app.i18n import t
 
 AD_TEXT = (
-    "📢 Реклама\n\n"
-    "Здесь могла быть ваша реклама.\n\n"
-    "Отключите рекламу и получите безлимит с 💎 Premium."
+    t("ads.text")
 )
 
 

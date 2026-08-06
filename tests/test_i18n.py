@@ -23,15 +23,29 @@ def test_every_language_has_a_dictionary():
         assert item.code in TRANSLATIONS
 
 
-def test_russian_and_english_are_translated():
-    assert is_translated("ru")
-    assert is_translated("en")
+def test_every_language_is_translated():
+    for item in LANGUAGES:
+        assert is_translated(item.code), f"{item.code} без перевода"
 
 
-def test_stub_languages_fall_back_to_english():
-    for code in ("es", "de", "fr", "pt", "tr"):
-        assert not is_translated(code)
-        assert t("menu.referral", code) == t("menu.referral", "en")
+def test_no_language_lost_keys():
+    """Ключи заводятся в русском; язык, отставший от него, молча покажет чужой текст."""
+    source = set(TRANSLATIONS["ru"])
+    for item in LANGUAGES:
+        if item.code == "ru":
+            continue
+        missing = source - set(TRANSLATIONS[item.code])
+        # формы множественного числа: русскому нужны три, остальным хватает двух
+        missing = {key for key in missing if not key.endswith(".few")}
+        assert not missing, f"{item.code}: не переведено {sorted(missing)}"
+
+
+def test_no_language_has_extra_keys():
+    """Лишний ключ — след переименования: строка мертва и никогда не покажется."""
+    source = set(TRANSLATIONS["ru"])
+    for item in LANGUAGES:
+        extra = set(TRANSLATIONS[item.code]) - source
+        assert not extra, f"{item.code}: ключей нет в русском — {sorted(extra)}"
 
 
 def test_unknown_key_returns_itself_instead_of_crashing():

@@ -8,21 +8,19 @@ from urllib.parse import quote
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-_SHARE_TEXT = (
-    "Держи бота, где можно найти и скачать любой трек бесплатно — "
-    "просто пишешь название, и он присылает музыку."
-)
+from app.i18n import t
 
 
 def share_url(link: str) -> str:
-    return f"https://t.me/share/url?url={quote(link, safe='')}&text={quote(_SHARE_TEXT)}"
+    """Текст шеринга — на языке приглашающего: он его и прочитает перед отправкой."""
+    return f"https://t.me/share/url?url={quote(link, safe='')}&text={quote(t('referral.share_text'))}"
 
 
 def referral_keyboard(link: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="📤 Пригласить друга", url=share_url(link))],
-            [InlineKeyboardButton(text="🔄 Обновить", callback_data="ref:refresh")],
-            [InlineKeyboardButton(text="⬅️ Назад", callback_data="menu:main")],
+            [InlineKeyboardButton(text=t("referral.invite_button"), url=share_url(link))],
+            [InlineKeyboardButton(text=t("referral.refresh"), callback_data="ref:refresh")],
+            [InlineKeyboardButton(text=t("common.back_arrow"), callback_data="menu:main")],
         ]
     )

@@ -23,6 +23,7 @@ from app.db.base import session_factory
 from app.db.models import Track
 from app.services.gamification import referral_link
 from app.services.search import search_instrumentals, search_tracks
+from app.i18n import t
 
 router = Router()
 
@@ -39,7 +40,7 @@ def _open_bot_keyboard(sender_telegram_id: int) -> InlineKeyboardMarkup | None:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="🎧 Слушать в TG Music",
+                    text=t("inline.listen"),
                     url=referral_link(sender_telegram_id, settings.bot_username),
                 )
             ]
@@ -89,7 +90,7 @@ async def inline_search(query: InlineQuery) -> None:
                 InlineQueryResultCachedAudio(
                     id=f"i{item.id}",
                     audio_file_id=item.tg_file_id,
-                    caption="🎼 Минус",
+                    caption=t("inline.instrumental"),
                     reply_markup=keyboard,
                 )
             )
@@ -99,5 +100,5 @@ async def inline_search(query: InlineQuery) -> None:
         cache_time=CACHE_SECONDS,
         # Выдача персональная: в кнопке — реф-ссылка отправителя, чужому её отдавать нельзя
         is_personal=True,
-        button=InlineQueryResultsButton(text="🎧 Открыть TG Music", start_parameter="inline"),
+        button=InlineQueryResultsButton(text=t("inline.open"), start_parameter="inline"),
     )

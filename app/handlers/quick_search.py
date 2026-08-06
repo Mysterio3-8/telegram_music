@@ -24,6 +24,7 @@ from app.services.search import find_track_by_metadata
 from app.services.search_cache import search_with_cache
 from app.services.track_lookup.importer import candidate_metadata
 from app.services.track_lookup.ranking import Candidate
+from app.i18n import t
 
 logger = logging.getLogger(__name__)
 
@@ -36,11 +37,11 @@ _NOTHING_FOUND = (
     "Ничего не нашли. Попробуйте иначе — например «Kizaru Фейк Айди»: "
     "исполнитель и название вместе находятся точнее всего."
 )
-_EXPIRED = "Список устарел — повторите поиск."
+_EXPIRED = t("quick.stale")
 
 
 def _results_title(query: str) -> str:
-    return f"🎵 Треки по запросу «{query}»"
+    return t("quick.results_title", query=query)
 
 
 async def _stored_candidates(state: FSMContext) -> tuple[str, list[Candidate]]:
@@ -57,7 +58,7 @@ async def quick_search(message: Message, state: FSMContext) -> None:
     async with session_factory() as session:
         await ensure_user(session, message.from_user)
 
-    status = await message.answer("🔎 Ищу…")
+    status = await message.answer(t("quick.searching"))
     candidates = await search_with_cache(query)
     if not candidates:
         await status.edit_text(_NOTHING_FOUND)
@@ -100,7 +101,7 @@ async def quick_search_send(callback: CallbackQuery, state: FSMContext) -> None:
         existing = await find_track_by_metadata(session, artist, title)
         if existing is not None:
             # Уже минтили — отдаём мгновенно по file_id, скачивать нечего
-            await callback.answer("Отправляю…")
+            await callback.answer(t("quick.sending"))
             await send_track_audio(
                 callback.bot, callback.message.chat.id, session, user, existing
             )
@@ -117,9 +118,9 @@ async def quick_search_send(callback: CallbackQuery, state: FSMContext) -> None:
         )
     except Exception:  # noqa: BLE001 — брокер недоступен, честно об этом говорим
         logger.warning("Живой поиск: очередь недоступна", exc_info=True)
-        await callback.answer("Сервис загрузки занят, попробуйте через минуту", show_alert=True)
+        await callback.answer(t("quick.busy"), show_alert=True)
         return
-    await callback.answer("Загружаю трек — пришлю сюда")
+    await callback.answer(t("quick.downloading"))
 
 
 @router.callback_query(F.data == "qs:noop")

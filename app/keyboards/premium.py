@@ -1,6 +1,7 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from app.config import settings
+from app.i18n import t
 
 
 def premium_keyboard(card_available: bool, yookassa_available: bool = False) -> InlineKeyboardMarkup:
@@ -24,19 +25,19 @@ def premium_keyboard(card_available: bool, yookassa_available: bool = False) -> 
             rows.append(
                 [
                     InlineKeyboardButton(
-                        text=f"💳 {label} — {price} ₽{suffix}",
+                        text=t("premium.plan_button", label=label, price=price, suffix=suffix),
                         callback_data=f"{target}:{months}",
                     )
                 ]
             )
-    rows.append([InlineKeyboardButton(text="◀️ Назад", callback_data="menu:main")])
+    rows.append([InlineKeyboardButton(text=t("common.back"), callback_data="menu:main")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def ad_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="💎 Отключить рекламу (Premium)", callback_data="menu:premium")],
-            [InlineKeyboardButton(text="Продолжить использование", callback_data="noop")],
+            [InlineKeyboardButton(text=t("premium.disable_ads"), callback_data="menu:premium")],
+            [InlineKeyboardButton(text=t("premium.continue"), callback_data="noop")],
         ]
     )

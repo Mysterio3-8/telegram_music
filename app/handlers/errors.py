@@ -11,12 +11,13 @@ import logging
 
 from aiogram import Router
 from aiogram.types import ErrorEvent
+from app.i18n import t
 
 logger = logging.getLogger(__name__)
 
 router = Router()
 
-FRIENDLY_TEXT = "⚠️ Что-то пошло не так. Уже разбираемся — попробуйте ещё раз через минуту."
+FRIENDLY_TEXT = t("common.error")
 
 
 @router.errors()

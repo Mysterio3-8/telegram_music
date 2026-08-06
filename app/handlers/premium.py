@@ -20,6 +20,7 @@ from app.keyboards.premium import premium_keyboard
 from app.services.premium import activate_premium, is_premium_active
 from app.services.revenue import record_payment
 from app.services.yookassa_payments import create_premium_payment, is_yookassa_configured
+from app.i18n import t
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -86,14 +87,14 @@ async def cb_pay_stars(callback: CallbackQuery) -> None:
     try:
         await callback.message.answer_invoice(
             title=f"Premium на {settings.premium_duration_days} дней",
-            description="Отключение рекламы, безлимит плейлистов, увеличенный лимит загрузок.",
+            description=t("premium.invoice_description"),
             payload=PAYLOAD_STARS,
             currency="XTR",
             prices=[LabeledPrice(label="Premium", amount=settings.premium_price_stars)],
         )
     except TelegramBadRequest:
         logger.exception("Не удалось выставить счёт Stars user=%s", callback.from_user.id)
-        await callback.answer("Не удалось выставить счёт — попробуйте позже", show_alert=True)
+        await callback.answer(t("premium.invoice_failed"), show_alert=True)
         return
     await callback.answer()
 
@@ -115,7 +116,7 @@ async def cb_pay_yookassa(callback: CallbackQuery) -> None:
         callback.from_user.id, settings.bot_username, price_rub=price, months=months
     )
     if url is None:
-        await callback.answer("Не удалось создать платёж — попробуйте позже", show_alert=True)
+        await callback.answer(t("premium.payment_failed"), show_alert=True)
         return
     # Сумма и срок — из ВЫБРАННОГО тарифа. Раньше здесь стояли значения месячного
     # тарифа из настроек: за год списывалось 348 ₽, а в тексте стояло
@@ -126,8 +127,8 @@ async def cb_pay_yookassa(callback: CallbackQuery) -> None:
         "Premium включится автоматически в течение минуты.",
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[
-                [InlineKeyboardButton(text=f"Оплатить {price} ₽", url=url)],
-                [InlineKeyboardButton(text="◀️ В меню", callback_data="menu:main")],
+                [InlineKeyboardButton(text=t("premium.pay_button", price=price), url=url)],
+                [InlineKeyboardButton(text=t("common.back_to_menu"), callback_data="menu:main")],
             ]
         ),
     )
@@ -145,7 +146,7 @@ async def cb_pay_card(callback: CallbackQuery) -> None:
     from app.services.premium import plan_price_rub, plan_valid
 
     if not settings.payment_provider_token:
-        await callback.answer("Оплата картой пока недоступна", show_alert=True)
+        await callback.answer(t("premium.card_unavailable"), show_alert=True)
         return
     parts = callback.data.split(":")
     months = int(parts[2]) if len(parts) > 2 and parts[2].isdigit() else 1
@@ -155,7 +156,7 @@ async def cb_pay_card(callback: CallbackQuery) -> None:
     try:
         await callback.message.answer_invoice(
             title=f"Premium на {plan_label(months)}",
-            description="Отключение рекламы, безлимит плейлистов, увеличенный лимит загрузок.",
+            description=t("premium.invoice_description"),
             # Срок едет в payload: без него оплата года включала месяц —
             # успешный платёж не знал, за какой тариф заплатили
             payload=f"{PAYLOAD_CARD}:{months}",
@@ -167,7 +168,7 @@ async def cb_pay_card(callback: CallbackQuery) -> None:
         # Типовые причины: неверный/тестовый токен провайдера, сумма ниже минимальной
         logger.exception("Не удалось выставить счёт (карта) user=%s", callback.from_user.id)
         await callback.answer(
-            "Не удалось выставить счёт — попробуйте позже или оплатите Stars", show_alert=True
+            t("premium.invoice_failed_card"), show_alert=True
         )
         return
     await callback.answer()
@@ -184,7 +185,7 @@ async def cb_pre_checkout(pre_checkout_query: PreCheckoutQuery) -> None:
             pre_checkout_query.invoice_payload,
         )
     await pre_checkout_query.answer(
-        ok=ok, error_message=None if ok else "Некорректный платёж — попробуйте оформить заново"
+        ok=ok, error_message=None if ok else t("premium.bad_payment")
     )
 
 
@@ -216,6 +217,6 @@ async def cb_successful_payment(message: Message) -> None:
     await message.answer(
         f"✅ Premium активирован до {until.strftime('%d.%m.%Y')}! Спасибо за поддержку 💛",
         reply_markup=InlineKeyboardMarkup(
-            inline_keyboard=[[InlineKeyboardButton(text="◀️ В меню", callback_data="menu:main")]]
+            inline_keyboard=[[InlineKeyboardButton(text=t("common.back_to_menu"), callback_data="menu:main")]]
         ),
     )

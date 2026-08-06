@@ -23,6 +23,7 @@ from app.services.playlists import (
 )
 from app.services.premium import can_create_playlist
 from app.services.users import count_playlists
+from app.i18n import t
 
 router = Router()
 
@@ -40,9 +41,9 @@ async def _render_playlists(message: Message, telegram_user, page: int, edit: bo
         total_pages = max(1, math.ceil(total / settings.page_size))
         page = min(max(page, 1), total_pages)
         playlists = await get_playlists_page(session, user.id, page)
-    text = f"📂 Плейлисты\n\nВсего: {total}"
+    text = t("playlists.title", total=total)
     if total == 0:
-        text += "\n\nПлейлистов пока нет — создайте первый."
+        text += t("playlists.empty_hint")
     keyboard = playlists_keyboard(playlists, page, total_pages)
     if edit:
         await message.edit_text(text, reply_markup=keyboard)
@@ -63,9 +64,9 @@ async def show_playlist_view(
         total_pages = max(1, math.ceil(total / settings.page_size))
         page = min(max(page, 1), total_pages)
         tracks = await get_playlist_tracks_page(session, playlist_id, page)
-    text = f"Название:\n{playlist.title}\n\nВсего треков:\n{total}"
+    text = t("playlists.view", title=playlist.title, total=total)
     if total == 0:
-        text += "\n\nПлейлист пуст — добавляйте треки из карточки трека."
+        text += t("playlists.view_empty_hint")
     keyboard = playlist_view_keyboard(tracks, playlist_id, page, total_pages)
     if as_new_message:
         await callback.message.answer(text, reply_markup=keyboard)
@@ -91,7 +92,7 @@ async def cb_playlists_page(callback: CallbackQuery) -> None:
 @router.callback_query(F.data == "pls:new")
 async def cb_playlist_new(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(PlaylistCreate.waiting_title)
-    await callback.message.answer("Введите название плейлиста")
+    await callback.message.answer(t("playlists.enter_title"))
     await callback.answer()
 
 
@@ -99,7 +100,7 @@ async def cb_playlist_new(callback: CallbackQuery, state: FSMContext) -> None:
 async def process_playlist_title(message: Message, state: FSMContext) -> None:
     title = message.text.strip()
     if not title or len(title) > MAX_PLAYLIST_TITLE_LENGTH:
-        await message.answer(f"Название должно быть от 1 до {MAX_PLAYLIST_TITLE_LENGTH} символов. Попробуйте ещё раз.")
+        await message.answer(t("playlists.title_length", limit=MAX_PLAYLIST_TITLE_LENGTH))
         return
     async with session_factory() as session:
         user = await ensure_user(session, message.from_user)
@@ -112,7 +113,7 @@ async def process_playlist_title(message: Message, state: FSMContext) -> None:
             return
         await create_playlist(session, user.id, title)
     await state.clear()
-    await message.answer(f"✅ Плейлист «{title}» создан.")
+    await message.answer(t("playlists.created", title=title))
     await _render_playlists(message, message.from_user, page=1, edit=False)
 
 
@@ -121,7 +122,7 @@ async def _open_playlist(callback: CallbackQuery) -> None:
     if await show_playlist_view(callback, int(playlist_id), int(page)):
         await callback.answer()
     else:
-        await callback.answer("Плейлист не найден", show_alert=True)
+        await callback.answer(t("playlists.not_found"), show_alert=True)
 
 
 @router.callback_query(F.data.startswith("pl:open:"))
@@ -141,7 +142,7 @@ async def cb_playlist_delete_ask(callback: CallbackQuery) -> None:
         user = await ensure_user(session, callback.from_user)
         playlist = await get_playlist(session, playlist_id)
         if playlist is None or playlist.user_id != user.id:
-            await callback.answer("Плейлист не найден", show_alert=True)
+            await callback.answer(t("playlists.not_found"), show_alert=True)
             return
     await callback.message.edit_text(
         f"Удалить плейлист «{playlist.title}»?\n\nТреки останутся в базе и вашей библиотеке.",
@@ -158,5 +159,5 @@ async def cb_playlist_delete(callback: CallbackQuery) -> None:
         playlist = await get_playlist(session, playlist_id)
         if playlist is not None and playlist.user_id == user.id:
             await delete_playlist(session, playlist_id)
-    await callback.answer("Плейлист удалён")
+    await callback.answer(t("playlists.deleted"))
     await _render_playlists(callback.message, callback.from_user, page=1, edit=True)

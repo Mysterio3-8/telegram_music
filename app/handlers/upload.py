@@ -13,6 +13,7 @@ from app.services.soundcloud import is_soundcloud_link, normalize_soundcloud_url
 from app.services.uploads import AudioMeta, create_uploaded_track, find_duplicate, validate_audio
 from app.services.youtube.user_import import duration_error, extract_video_id, is_playlist_link
 from app.tasks import enqueue_enrich, enqueue_soundcloud_user_import, enqueue_user_import
+from app.i18n import t
 
 router = Router()
 
@@ -28,22 +29,22 @@ class UploadTrack(StatesGroup):
 
 def _cancel_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text="◀️ Назад в меню", callback_data="up:cancel")]]
+        inline_keyboard=[[InlineKeyboardButton(text=t("common.back_menu_long"), callback_data="up:cancel")]]
     )
 
 
 def _confirm_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="✅ Загрузить", callback_data="up:confirm")],
-            [InlineKeyboardButton(text="◀️ Назад в меню", callback_data="up:cancel")],
+            [InlineKeyboardButton(text=t("upload.confirm_button"), callback_data="up:confirm")],
+            [InlineKeyboardButton(text=t("common.back_menu_long"), callback_data="up:cancel")],
         ]
     )
 
 
 def _menu_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text="◀️ В меню", callback_data="menu:main")]]
+        inline_keyboard=[[InlineKeyboardButton(text=t("common.back_to_menu"), callback_data="menu:main")]]
     )
 
 
@@ -87,13 +88,13 @@ async def process_audio(message: Message, state: FSMContext) -> None:
         duration=meta.duration,
     )
     await state.set_state(UploadTrack.waiting_title)
-    await message.answer("Введите название.", reply_markup=_cancel_keyboard())
+    await message.answer(t("upload.enter_title"), reply_markup=_cancel_keyboard())
 
 
 @router.message(UploadTrack.waiting_file, F.document)
 async def process_document(message: Message) -> None:
     await message.answer(
-        "Отправьте файл как аудио (музыку), а не как документ.",
+        t("upload.as_audio"),
         reply_markup=_cancel_keyboard(),
     )
 
@@ -117,7 +118,7 @@ async def _process_playlist_link(message: Message, state: FSMContext) -> None:
     if not await _require_premium_for_bulk(message):
         return
 
-    scanning = await message.answer("🔍 Читаю плейлист…")
+    scanning = await message.answer(t("upload.reading_playlist"))
     from app.services.youtube.downloader import list_videos
 
     try:
@@ -126,7 +127,7 @@ async def _process_playlist_link(message: Message, state: FSMContext) -> None:
         videos = []
     if not videos:
         await scanning.edit_text(
-            "Не удалось прочитать плейлист по ссылке. Проверьте её и попробуйте ещё раз.",
+            t("upload.playlist_failed"),
             reply_markup=_cancel_keyboard(),
         )
         return
@@ -138,7 +139,7 @@ async def _process_playlist_link(message: Message, state: FSMContext) -> None:
     )
     if queued == 0:
         await scanning.edit_text(
-            "Импорт сейчас недоступен — попробуйте позже.", reply_markup=_menu_keyboard()
+            t("upload.unavailable"), reply_markup=_menu_keyboard()
         )
         return
     await state.clear()
@@ -154,7 +155,7 @@ async def _process_soundcloud_bulk(message: Message, state: FSMContext, url: str
     if not await _require_premium_for_bulk(message):
         return
 
-    scanning = await message.answer("🔍 Читаю страницу SoundCloud…")
+    scanning = await message.answer(t("upload.reading_soundcloud"))
     from app.services.soundcloud import list_soundcloud_entries
 
     try:
@@ -163,7 +164,7 @@ async def _process_soundcloud_bulk(message: Message, state: FSMContext, url: str
         entries = []
     if not entries:
         await scanning.edit_text(
-            "Не удалось прочитать страницу SoundCloud. Проверьте ссылку и попробуйте ещё раз.",
+            t("upload.soundcloud_failed"),
             reply_markup=_cancel_keyboard(),
         )
         return
@@ -175,7 +176,7 @@ async def _process_soundcloud_bulk(message: Message, state: FSMContext, url: str
     )
     if queued == 0:
         await scanning.edit_text(
-            "Импорт сейчас недоступен — попробуйте позже.", reply_markup=_menu_keyboard()
+            t("upload.unavailable"), reply_markup=_menu_keyboard()
         )
         return
     await state.clear()
@@ -190,12 +191,12 @@ async def _process_soundcloud_track(message: Message, state: FSMContext, url: st
     """Один трек SoundCloud — бесплатно."""
     if not enqueue_soundcloud_user_import(normalize_soundcloud_url(url), message.from_user.id, message.chat.id):
         await message.answer(
-            "Импорт сейчас недоступен — попробуйте позже.", reply_markup=_menu_keyboard()
+            t("upload.unavailable"), reply_markup=_menu_keyboard()
         )
         return
     await state.clear()
     await message.answer(
-        "⏳ Принято! Скачаем трек с SoundCloud и пришлём сюда — обычно меньше минуты.",
+        t("upload.queued_one_soundcloud"),
         reply_markup=_menu_keyboard(),
     )
 
@@ -221,12 +222,12 @@ async def process_link(message: Message, state: FSMContext) -> None:
             await _process_playlist_link(message, state)
             return
         await message.answer(
-            "Жду аудиофайл или ссылку на трек — YouTube Music или SoundCloud 🎵",
+            t("upload.waiting_file"),
             reply_markup=_cancel_keyboard(),
         )
         return
 
-    checking = await message.answer("🔍 Проверяю ссылку…")
+    checking = await message.answer(t("upload.checking_link"))
     from app.services.youtube.downloader import fetch_video_info
 
     try:
@@ -235,13 +236,13 @@ async def process_link(message: Message, state: FSMContext) -> None:
         info = None
     if info is None:
         await checking.edit_text(
-            "Не удалось открыть видео по ссылке. Проверьте её и попробуйте ещё раз.",
+            t("upload.video_failed"),
             reply_markup=_cancel_keyboard(),
         )
         return
     if info.is_live:
         await checking.edit_text(
-            "Это прямой эфир — такие не принимаем.", reply_markup=_cancel_keyboard()
+            t("upload.live_stream"), reply_markup=_cancel_keyboard()
         )
         return
     error = duration_error(info.duration)
@@ -251,7 +252,7 @@ async def process_link(message: Message, state: FSMContext) -> None:
 
     if not enqueue_user_import(video_id, message.from_user.id, message.chat.id):
         await checking.edit_text(
-            "Импорт сейчас недоступен — попробуйте позже.", reply_markup=_menu_keyboard()
+            t("upload.unavailable"), reply_markup=_menu_keyboard()
         )
         return
     await state.clear()
@@ -265,7 +266,7 @@ async def process_link(message: Message, state: FSMContext) -> None:
 @router.message(UploadTrack.waiting_file)
 async def process_not_audio(message: Message) -> None:
     await message.answer(
-        "Жду аудиофайл или ссылку на трек — YouTube Music или SoundCloud 🎵",
+        t("upload.waiting_file"),
         reply_markup=_cancel_keyboard(),
     )
 
@@ -274,18 +275,18 @@ async def process_not_audio(message: Message) -> None:
 async def process_title(message: Message, state: FSMContext) -> None:
     title = message.text.strip()
     if not title or len(title) > MAX_TITLE_LENGTH:
-        await message.answer("Название от 1 до 256 символов. Попробуйте ещё раз.")
+        await message.answer(t("upload.title_length"))
         return
     await state.update_data(title=title)
     await state.set_state(UploadTrack.waiting_artist)
-    await message.answer("Введите исполнителя.", reply_markup=_cancel_keyboard())
+    await message.answer(t("upload.enter_artist"), reply_markup=_cancel_keyboard())
 
 
 @router.message(UploadTrack.waiting_artist, F.text)
 async def process_artist(message: Message, state: FSMContext) -> None:
     artist = message.text.strip()
     if not artist or len(artist) > MAX_TITLE_LENGTH:
-        await message.answer("Имя исполнителя от 1 до 256 символов. Попробуйте ещё раз.")
+        await message.answer(t("upload.artist_length"))
         return
     await state.update_data(artist=artist)
     await state.set_state(UploadTrack.waiting_confirm)

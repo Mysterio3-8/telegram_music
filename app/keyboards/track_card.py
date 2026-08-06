@@ -3,6 +3,7 @@ from urllib.parse import quote
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from app.db.models import Playlist, Track
+from app.i18n import t
 
 
 def share_url(track: Track, bot_username: str) -> str:
@@ -28,30 +29,30 @@ def track_card_keyboard(
 
     if in_library:
         rows.append(
-            [InlineKeyboardButton(text="🗑 Удалить из библиотеки", callback_data=f"ta:dellib:{track.id}:{ctx}")]
+            [InlineKeyboardButton(text=t("card.remove_library"), callback_data=f"ta:dellib:{track.id}:{ctx}")]
         )
     else:
         rows.append(
-            [InlineKeyboardButton(text="➕ Добавить в библиотеку", callback_data=f"ta:addlib:{track.id}:{ctx}")]
+            [InlineKeyboardButton(text=t("card.add_library"), callback_data=f"ta:addlib:{track.id}:{ctx}")]
         )
 
     rows.append(
-        [InlineKeyboardButton(text="📂 Добавить в плейлист", callback_data=f"ta:plmenu:{track.id}:{ctx}")]
+        [InlineKeyboardButton(text=t("card.add_playlist"), callback_data=f"ta:plmenu:{track.id}:{ctx}")]
     )
     if ctx.startswith("pl."):
         rows.append(
-            [InlineKeyboardButton(text="🗑 Удалить из плейлиста", callback_data=f"ta:delpl:{track.id}:{ctx}")]
+            [InlineKeyboardButton(text=t("card.remove_playlist"), callback_data=f"ta:delpl:{track.id}:{ctx}")]
         )
     if track.tg_file_id or track.storage_path:
         rows.append(
-            [InlineKeyboardButton(text="⬇️ Скачать", callback_data=f"ta:file:{track.id}:{ctx}")]
+            [InlineKeyboardButton(text=t("card.download"), callback_data=f"ta:file:{track.id}:{ctx}")]
         )
-    rows.append([InlineKeyboardButton(text="📤 Поделиться", url=share_url(track, bot_username))])
+    rows.append([InlineKeyboardButton(text=t("card.share"), url=share_url(track, bot_username))])
     if is_admin:
         rows.append(
-            [InlineKeyboardButton(text="✏️ Редактировать (админ)", callback_data=f"ta:edit:{track.id}:{ctx}")]
+            [InlineKeyboardButton(text=t("card.edit_admin"), callback_data=f"ta:edit:{track.id}:{ctx}")]
         )
-    rows.append([InlineKeyboardButton(text="◀️ Назад", callback_data="back:del")])
+    rows.append([InlineKeyboardButton(text=t("common.back"), callback_data="back:del")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -67,5 +68,5 @@ def pick_playlist_keyboard(
         ]
         for playlist in playlists
     ]
-    rows.append([InlineKeyboardButton(text="◀️ Назад", callback_data=f"ta:card:{track_id}:{ctx}")])
+    rows.append([InlineKeyboardButton(text=t("common.back"), callback_data=f"ta:card:{track_id}:{ctx}")])
     return InlineKeyboardMarkup(inline_keyboard=rows)

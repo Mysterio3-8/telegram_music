@@ -22,13 +22,14 @@ from aiogram import BaseMiddleware
 from aiogram.types import CallbackQuery, Message, TelegramObject
 
 from app.config import settings
+from app.i18n import t
 
 THROTTLE_SECONDS = 0.7  # минимальный интервал между действиями
 BURST_LIMIT = 12  # действий за окно
 BURST_WINDOW = 10.0  # секунд
 BLOCK_SECONDS = 20.0  # пауза после превышения
 
-WARNING_TEXT = "⏳ Слишком много запросов. Подождите пару секунд."
+WARNING_TEXT = t("common.throttled")
 
 
 class ThrottlingMiddleware(BaseMiddleware):

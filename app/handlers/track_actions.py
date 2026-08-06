@@ -3,6 +3,7 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 
+from app.i18n import t
 from app.db.base import session_factory
 from app.db.models import UserLibrary
 from app.handlers.cards import build_card_keyboard, show_track_card
@@ -44,7 +45,7 @@ async def cb_open_card(callback: CallbackQuery) -> None:
         user = await ensure_user(session, callback.from_user)
         track = await get_track(session, int(track_id))
         if track is None:
-            await callback.answer("Трек не найден", show_alert=True)
+            await callback.answer(t("card.not_found"), show_alert=True)
             return
         in_library = await _is_in_library(session, user.id, track.id)
         await show_track_card(callback.message, session, user, track, ctx, in_library)
@@ -59,18 +60,18 @@ async def cb_track_action(callback: CallbackQuery) -> None:
         user = await ensure_user(session, callback.from_user)
         track = await get_track(session, track_id)
         if track is None:
-            await callback.answer("Трек не найден", show_alert=True)
+            await callback.answer(t("card.not_found"), show_alert=True)
             return
 
         if action == "addlib":
             added = await add_to_library(session, user.id, track_id)
-            await callback.answer("Добавлено в библиотеку" if added else "Уже в библиотеке")
+            await callback.answer(t("card.added") if added else t("card.already"))
             await _refresh_card_keyboard(callback, track, ctx, in_library=True)
             return
 
         if action == "dellib":
             await remove_from_library(session, user.id, track_id)
-            await callback.answer("Удалено из библиотеки")
+            await callback.answer(t("card.removed"))
             await _refresh_card_keyboard(callback, track, ctx, in_library=False)
             return
 
@@ -84,7 +85,7 @@ async def cb_track_action(callback: CallbackQuery) -> None:
             playlists = await get_all_playlists(session, user.id)
             if not playlists:
                 await callback.answer(
-                    "У вас пока нет плейлистов — создайте в разделе 📂 Плейлисты",
+                    t("card.no_playlists"),
                     show_alert=True,
                 )
                 return
@@ -97,11 +98,11 @@ async def cb_track_action(callback: CallbackQuery) -> None:
         if action.startswith("pick_"):
             playlist = await get_playlist(session, int(action.removeprefix("pick_")))
             if playlist is None or playlist.user_id != user.id:
-                await callback.answer("Плейлист не найден", show_alert=True)
+                await callback.answer(t("playlists.not_found"), show_alert=True)
                 return
             added = await add_track_to_playlist(session, playlist.id, track_id)
             await callback.answer(
-                f"Добавлено в «{playlist.title}»" if added else "Трек уже в этом плейлисте"
+                t("card.added_to_playlist", title=playlist.title) if added else t("card.already_in_playlist")
             )
             in_library = await _is_in_library(session, user.id, track_id)
             await _refresh_card_keyboard(callback, track, ctx, in_library)
@@ -112,7 +113,7 @@ async def cb_track_action(callback: CallbackQuery) -> None:
             playlist = await get_playlist(session, playlist_id)
             if playlist is not None and playlist.user_id == user.id:
                 await remove_track_from_playlist(session, playlist_id, track_id)
-            await callback.answer("Удалено из плейлиста")
+            await callback.answer(t("card.removed_from_playlist"))
             try:
                 await callback.message.delete()
             except TelegramBadRequest:
@@ -141,7 +142,7 @@ async def cb_track_action(callback: CallbackQuery) -> None:
                 event="download",
             )
             if sent is None:
-                await callback.answer("Файл недоступен", show_alert=True)
+                await callback.answer(t("common.file_unavailable"), show_alert=True)
             else:
                 await callback.answer()
             return
@@ -177,7 +178,7 @@ async def cb_card_back(callback: CallbackQuery, state: FSMContext) -> None:
 
         _, playlist_id, page = ctx.split(".")
         if not await show_playlist_view(callback, int(playlist_id), int(page)):
-            await callback.answer("Плейлист не найден", show_alert=True)
+            await callback.answer(t("playlists.not_found"), show_alert=True)
             return
     else:  # srch — вернуться к результатам поиска
         from app.handlers.search import rerender_track_results

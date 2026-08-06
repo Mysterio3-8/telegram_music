@@ -4,12 +4,12 @@
 from app.config import settings
 from app.db.models import User
 from app.handlers.referral import (
-    _days_word,
     _friends_word,
     _reward_text,
     _rewards_block,
     build_referral_text,
 )
+from app.i18n import plural
 from app.keyboards.referral import referral_keyboard, share_url
 from app.services.gamification import LIFETIME_DAYS, REFERRAL_MILESTONES
 
@@ -23,9 +23,9 @@ def test_friends_word_matches_russian_counting():
 
 
 def test_days_word_matches_russian_counting():
-    assert _days_word(1) == "день"
-    assert _days_word(3) == "дня"
-    assert _days_word(14) == "дней"
+    assert plural("word.days", 1, "ru") == "день"
+    assert plural("word.days", 3, "ru") == "дня"
+    assert plural("word.days", 14, "ru") == "дней"
 
 
 def test_rewards_show_reached_and_upcoming():

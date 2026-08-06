@@ -1,10 +1,11 @@
 from aiogram import F, Router
 from aiogram.types import CallbackQuery
+from app.i18n import t
 
 router = Router()
 
 STUB_TEXTS = {
-    "menu:miniapp": "Mini App находится в разработке.",
+    "menu:miniapp": t("common.miniapp_soon"),
 }
 
 

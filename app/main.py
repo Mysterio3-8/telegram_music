@@ -32,6 +32,7 @@ from app.handlers import (
     upload,
 )
 from app.middlewares.ads import AdMiddleware
+from app.middlewares.i18n import I18nMiddleware
 from app.middlewares.subscription import SubscriptionMiddleware
 from app.middlewares.throttling import ThrottlingMiddleware
 from app.middlewares.timing import TimingMiddleware
@@ -59,6 +60,11 @@ async def main() -> None:
     throttling_middleware = ThrottlingMiddleware()
     dp.message.middleware(throttling_middleware)
     dp.callback_query.middleware(throttling_middleware)
+
+    # До гейта подписки: его экран — первое, что видит новичок, и он тоже переводится
+    i18n_middleware = I18nMiddleware()
+    dp.message.middleware(i18n_middleware)
+    dp.callback_query.middleware(i18n_middleware)
 
     subscription_middleware = SubscriptionMiddleware()
     dp.message.middleware(subscription_middleware)

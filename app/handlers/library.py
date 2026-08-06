@@ -12,6 +12,7 @@ from app.handlers.common import ensure_user
 from app.keyboards.library import library_keyboard, search_results_keyboard
 from app.services.library import get_library_page, search_library
 from app.services.users import count_library_tracks
+from app.i18n import t
 
 router = Router()
 
@@ -22,8 +23,8 @@ class LibrarySearch(StatesGroup):
 
 def _library_text(track_count: int) -> str:
     if track_count == 0:
-        return "🎵 Библиотека\n\nВсего треков: 0\n\nБиблиотека пуста — добавьте треки через поиск или загрузку."
-    return f"🎵 Библиотека\n\nВсего треков: {track_count}"
+        return t("library.empty")
+    return t("library.title", count=track_count)
 
 
 async def show_library_page(message: Message, tg_user: TelegramUser, page: int) -> None:
@@ -57,7 +58,7 @@ async def cb_library_page(callback: CallbackQuery, state: FSMContext) -> None:
 @router.callback_query(F.data == "lib:search")
 async def cb_library_search(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(LibrarySearch.waiting_query)
-    await callback.message.answer("Введите название")
+    await callback.message.answer(t("common.enter_title"))
     await callback.answer()
 
 
@@ -69,12 +70,12 @@ async def process_search_query(message: Message, state: FSMContext) -> None:
         tracks = await search_library(session, user.id, message.text)
     if not tracks:
         await message.answer(
-            "Ничего не найдено в вашей библиотеке.",
+            t("library.nothing_found"),
             reply_markup=search_results_keyboard([]),
         )
         return
     await message.answer(
-        f"Найдено в библиотеке: {len(tracks)}",
+        t("library.found", count=len(tracks)),
         reply_markup=search_results_keyboard(tracks),
     )
 

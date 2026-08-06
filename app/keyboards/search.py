@@ -2,13 +2,14 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from app.config import settings
 from app.db.models import Instrumental, Track
+from app.i18n import t
 
 
 def _nav_row(page: int, total_pages: int, prefix: str) -> list[InlineKeyboardButton]:
     nav: list[InlineKeyboardButton] = []
     if page > 1:
         nav.append(InlineKeyboardButton(text="⬅️", callback_data=f"{prefix}:page:{page - 1}"))
-    nav.append(InlineKeyboardButton(text=f"Страница {page} / {total_pages}", callback_data="noop"))
+    nav.append(InlineKeyboardButton(text=t("common.page", page=page, total_pages=total_pages), callback_data="noop"))
     if page < total_pages:
         nav.append(InlineKeyboardButton(text="➡️", callback_data=f"{prefix}:page:{page + 1}"))
     return nav
@@ -29,8 +30,8 @@ def track_results_keyboard(
     ]
     rows.append(_nav_row(page, total_pages, prefix="st"))
     if tracks:
-        rows.append([InlineKeyboardButton(text="▶️ Слушать всё", callback_data="q:srch:0")])
-    rows.append([InlineKeyboardButton(text="◀️ Назад", callback_data="menu:main")])
+        rows.append([InlineKeyboardButton(text=t("common.listen_all"), callback_data="q:srch:0")])
+    rows.append([InlineKeyboardButton(text=t("common.back"), callback_data="menu:main")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -48,14 +49,14 @@ def instrumental_results_keyboard(
         for number, item in enumerate(instrumentals, start=first_number)
     ]
     rows.append(_nav_row(page, total_pages, prefix="si"))
-    rows.append([InlineKeyboardButton(text="◀️ Назад", callback_data="menu:main")])
+    rows.append([InlineKeyboardButton(text=t("common.back"), callback_data="menu:main")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def instrumental_card_keyboard(instrumental_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="▶️ Слушать", callback_data=f"ins:play:{instrumental_id}")],
-            [InlineKeyboardButton(text="◀️ Назад", callback_data="si:back")],
+            [InlineKeyboardButton(text=t("common.listen"), callback_data=f"ins:play:{instrumental_id}")],
+            [InlineKeyboardButton(text=t("common.back"), callback_data="si:back")],
         ]
     )

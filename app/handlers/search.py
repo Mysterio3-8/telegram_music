@@ -15,6 +15,7 @@ from app.keyboards.search import (
     track_results_keyboard,
 )
 from app.services.search import get_instrumental, search_instrumentals, search_tracks
+from app.i18n import t
 
 router = Router()
 
@@ -29,8 +30,8 @@ class InstrumentalSearch(StatesGroup):
 
 def _results_text(query: str, total: int) -> str:
     if total == 0:
-        return f"По запросу «{query}» ничего не найдено."
-    return f"🔍 Результаты по запросу «{query}»\n\nНайдено: {total}"
+        return t("search.nothing", query=query)
+    return t("search.results", query=query, total=total)
 
 
 # --- Поиск треков ---
@@ -39,7 +40,7 @@ def _results_text(query: str, total: int) -> str:
 @router.callback_query(F.data == "menu:search")
 async def cb_search(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(TrackSearch.waiting_query)
-    await callback.message.answer("Введите название трека")
+    await callback.message.answer(t("search.enter_track"))
     await callback.answer()
 
 
@@ -76,7 +77,7 @@ async def process_track_query(message: Message, state: FSMContext) -> None:
     total = await _render_track_results(message, state, message.text, page=1, edit=False)
     if total == 0:
         _fetch_from_web(message.text, message.chat.id)
-        await message.answer("🔎 Ищу в сети — пришлю трек через минуту.")
+        await message.answer(t("search.searching_web"))
 
 
 async def _restart_search(callback: CallbackQuery, state: FSMContext, new_state, prompt: str) -> None:
@@ -92,7 +93,7 @@ async def cb_track_results_page(callback: CallbackQuery, state: FSMContext) -> N
     data = await state.get_data()
     query = data.get("track_query")
     if not query:
-        await _restart_search(callback, state, TrackSearch.waiting_query, "Введите название трека")
+        await _restart_search(callback, state, TrackSearch.waiting_query, t("search.enter_track"))
         return
     page = int(callback.data.split(":")[2])
     await _render_track_results(callback.message, state, query, page, edit=True)
@@ -117,7 +118,7 @@ async def rerender_track_results(callback: CallbackQuery, state: FSMContext) -> 
 @router.callback_query(F.data == "menu:instrumentals")
 async def cb_instrumentals(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(InstrumentalSearch.waiting_query)
-    await callback.message.answer("Введите название")
+    await callback.message.answer(t("common.enter_title"))
     await callback.answer()
 
 
@@ -147,7 +148,7 @@ async def cb_instrumental_results_page(callback: CallbackQuery, state: FSMContex
     data = await state.get_data()
     query = data.get("ins_query")
     if not query:
-        await _restart_search(callback, state, InstrumentalSearch.waiting_query, "Введите название")
+        await _restart_search(callback, state, InstrumentalSearch.waiting_query, t("common.enter_title"))
         return
     page = int(callback.data.split(":")[2])
     await _render_instrumental_results(callback.message, state, query, page, edit=True)
@@ -159,7 +160,7 @@ async def cb_instrumental_back(callback: CallbackQuery, state: FSMContext) -> No
     data = await state.get_data()
     query = data.get("ins_query")
     if not query:
-        await _restart_search(callback, state, InstrumentalSearch.waiting_query, "Введите название")
+        await _restart_search(callback, state, InstrumentalSearch.waiting_query, t("common.enter_title"))
         return
     await _render_instrumental_results(
         callback.message, state, query, data.get("ins_page", 1), edit=True
@@ -173,7 +174,7 @@ async def cb_instrumental_card(callback: CallbackQuery) -> None:
     async with session_factory() as session:
         instrumental = await get_instrumental(session, instrumental_id)
     if instrumental is None:
-        await callback.answer("Минус не найден", show_alert=True)
+        await callback.answer(t("search.instrumental_not_found"), show_alert=True)
         return
     await callback.message.edit_text(
         f"🎼 {instrumental.title} (Минус)\n\n"
@@ -191,10 +192,10 @@ async def cb_instrumental_play(callback: CallbackQuery) -> None:
         await ensure_user(session, callback.from_user)
         instrumental = await get_instrumental(session, instrumental_id)
         if instrumental is None:
-            await callback.answer("Минус не найден", show_alert=True)
+            await callback.answer(t("search.instrumental_not_found"), show_alert=True)
             return
         message = await send_instrumental_audio(callback.bot, callback.message.chat.id, session, instrumental)
     if message is None:
-        await callback.answer("Файл недоступен", show_alert=True)
+        await callback.answer(t("common.file_unavailable"), show_alert=True)
         return
     await callback.answer()

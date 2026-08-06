@@ -2,6 +2,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from app.config import settings
 from app.db.models import Playlist, Track
+from app.i18n import t
 
 
 def playlists_keyboard(
@@ -15,13 +16,13 @@ def playlists_keyboard(
     nav: list[InlineKeyboardButton] = []
     if page > 1:
         nav.append(InlineKeyboardButton(text="⬅️", callback_data=f"pls:page:{page - 1}"))
-    nav.append(InlineKeyboardButton(text=f"Страница {page} / {total_pages}", callback_data="noop"))
+    nav.append(InlineKeyboardButton(text=t("common.page", page=page, total_pages=total_pages), callback_data="noop"))
     if page < total_pages:
         nav.append(InlineKeyboardButton(text="➡️", callback_data=f"pls:page:{page + 1}"))
     rows.append(nav)
 
-    rows.append([InlineKeyboardButton(text="➕ Создать плейлист", callback_data="pls:new")])
-    rows.append([InlineKeyboardButton(text="◀️ Назад", callback_data="menu:main")])
+    rows.append([InlineKeyboardButton(text=t("playlists.create_button"), callback_data="pls:new")])
+    rows.append([InlineKeyboardButton(text=t("common.back"), callback_data="menu:main")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -44,7 +45,7 @@ def playlist_view_keyboard(
         nav.append(
             InlineKeyboardButton(text="⬅️", callback_data=f"pl:page:{playlist_id}:{page - 1}")
         )
-    nav.append(InlineKeyboardButton(text=f"Страница {page} / {total_pages}", callback_data="noop"))
+    nav.append(InlineKeyboardButton(text=t("common.page", page=page, total_pages=total_pages), callback_data="noop"))
     if page < total_pages:
         nav.append(
             InlineKeyboardButton(text="➡️", callback_data=f"pl:page:{playlist_id}:{page + 1}")
@@ -53,18 +54,18 @@ def playlist_view_keyboard(
 
     if tracks:
         rows.append(
-            [InlineKeyboardButton(text="▶️ Слушать всё", callback_data=f"q:pl:{playlist_id}:0")]
+            [InlineKeyboardButton(text=t("common.listen_all"), callback_data=f"q:pl:{playlist_id}:0")]
         )
     rows.append(
-        [InlineKeyboardButton(text="🗑 Удалить плейлист", callback_data=f"pl:delask:{playlist_id}")]
+        [InlineKeyboardButton(text=t("playlists.delete_button"), callback_data=f"pl:delask:{playlist_id}")]
     )
-    rows.append([InlineKeyboardButton(text="◀️ Назад", callback_data="menu:playlists")])
+    rows.append([InlineKeyboardButton(text=t("common.back"), callback_data="menu:playlists")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def confirm_delete_keyboard(playlist_id: int) -> InlineKeyboardMarkup:
     rows = [
-        [InlineKeyboardButton(text="🗑 Да, удалить", callback_data=f"pl:del:{playlist_id}")],
-        [InlineKeyboardButton(text="◀️ Отмена", callback_data=f"pl:open:{playlist_id}:1")],
+        [InlineKeyboardButton(text=t("playlists.delete_yes"), callback_data=f"pl:del:{playlist_id}")],
+        [InlineKeyboardButton(text=t("common.cancel"), callback_data=f"pl:open:{playlist_id}:1")],
     ]
     return InlineKeyboardMarkup(inline_keyboard=rows)

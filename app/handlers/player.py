@@ -11,6 +11,7 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
+from app.i18n import t
 from app.config import settings
 from app.db.base import session_factory
 from app.db.models import Track, User
@@ -36,7 +37,7 @@ async def _send_batch(
     user: User,
     tracks: list[Track],
     next_callback: str | None,
-    continue_label: str = "▶️ Дальше",
+    continue_label: str = t("player.next"),
 ) -> int:
     """Отправляет пачку аудио; кнопка продолжения — под последним. Возвращает число отправленных."""
     last_message: Message | None = None
@@ -68,12 +69,12 @@ async def _play_mix(callback: CallbackQuery, state: FSMContext) -> None:
         user = await ensure_user(session, callback.from_user)
         tracks = await get_mix_batch(session, user.id, recent)
         if not tracks:
-            await callback.answer("Библиотека пуста — добавьте треки", show_alert=True)
+            await callback.answer(t("player.library_empty_add"), show_alert=True)
             return
-        await callback.answer("🎶 Микс запущен")
+        await callback.answer(t("player.mix_started"))
         await _send_batch(
             callback, session, user, tracks, next_callback="q:mixn",
-            continue_label="🎲 Продолжить микс",
+            continue_label=t("player.mix_continue"),
         )
     recent = (recent + [track.id for track in tracks])[-MIX_RECENT_LIMIT:]
     await state.update_data(mix_recent=recent)
@@ -106,10 +107,10 @@ async def cb_queue_library(callback: CallbackQuery) -> None:
         tracks = await get_library_batch(session, user.id, offset)
         if not tracks:
             await callback.answer(
-                "Библиотека пуста" if offset == 0 else "✅ Очередь закончилась", show_alert=True
+                t("player.library_empty") if offset == 0 else t("player.queue_finished"), show_alert=True
             )
             return
-        await callback.answer("▶️ Включаю библиотеку")
+        await callback.answer(t("player.playing_library"))
         next_cb = f"q:lib:{offset + len(tracks)}" if len(tracks) == settings.queue_batch_size else None
         await _send_batch(callback, session, user, tracks, next_cb)
 
@@ -122,15 +123,15 @@ async def cb_queue_playlist(callback: CallbackQuery) -> None:
         user = await ensure_user(session, callback.from_user)
         playlist = await get_playlist(session, playlist_id)
         if playlist is None or playlist.user_id != user.id:
-            await callback.answer("Плейлист не найден", show_alert=True)
+            await callback.answer(t("playlists.not_found"), show_alert=True)
             return
         tracks = await get_playlist_batch(session, playlist_id, offset)
         if not tracks:
             await callback.answer(
-                "Плейлист пуст" if offset == 0 else "✅ Плейлист доигран", show_alert=True
+                t("player.playlist_empty") if offset == 0 else t("player.playlist_finished"), show_alert=True
             )
             return
-        await callback.answer(f"▶️ Включаю «{playlist.title}»")
+        await callback.answer(t("player.playing_playlist", title=playlist.title))
         next_cb = (
             f"q:pl:{playlist_id}:{offset + len(tracks)}"
             if len(tracks) == settings.queue_batch_size
@@ -145,17 +146,17 @@ async def cb_queue_search(callback: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
     query = data.get("track_query")
     if not query:
-        await callback.answer("Результаты устарели — выполните поиск заново", show_alert=True)
+        await callback.answer(t("player.results_stale"), show_alert=True)
         return
     async with session_factory() as session:
         user = await ensure_user(session, callback.from_user)
         tracks = await get_search_batch(session, query, offset)
         if not tracks:
             await callback.answer(
-                "Ничего не найдено" if offset == 0 else "✅ Результаты доиграны", show_alert=True
+                t("player.nothing_found") if offset == 0 else t("player.results_finished"), show_alert=True
             )
             return
-        await callback.answer("▶️ Включаю результаты поиска")
+        await callback.answer(t("player.playing_results"))
         next_cb = (
             f"q:srch:{offset + len(tracks)}" if len(tracks) == settings.queue_batch_size else None
         )
@@ -168,4 +169,4 @@ async def cb_queue_stop(callback: CallbackQuery) -> None:
         await callback.message.edit_reply_markup(reply_markup=None)
     except TelegramBadRequest:
         pass
-    await callback.answer("⏹ Очередь остановлена")
+    await callback.answer(t("player.queue_stopped"))

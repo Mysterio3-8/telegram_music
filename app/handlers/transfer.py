@@ -12,6 +12,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
+from app.i18n import t
 from app.config import settings
 from app.db.base import session_factory
 from app.handlers.common import ensure_user
@@ -37,8 +38,8 @@ class Transfer(StatesGroup):
 def _confirm_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="📥 Перенести", callback_data="tr:go")],
-            [InlineKeyboardButton(text="◀️ Отмена", callback_data="tr:cancel")],
+            [InlineKeyboardButton(text=t("transfer.button"), callback_data="tr:go")],
+            [InlineKeyboardButton(text=t("common.cancel"), callback_data="tr:cancel")],
         ]
     )
 
@@ -72,7 +73,7 @@ async def cb_transfer(callback: CallbackQuery, state: FSMContext) -> None:
 @router.callback_query(F.data == "tr:cancel")
 async def cb_cancel(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
-    await callback.message.edit_text("Перенос отменён.")
+    await callback.message.edit_text(t("transfer.cancelled"))
     await callback.answer()
 
 
@@ -89,7 +90,7 @@ async def process_source(message: Message, state: FSMContext) -> None:
         )
         return
 
-    status = await message.answer("Читаю список…")
+    status = await message.answer(t("transfer.reading"))
     try:
         items = await fetch_playlist(text) if text.startswith("http") else parse_text_list(text)
     except TransferSourceError as error:
@@ -97,12 +98,12 @@ async def process_source(message: Message, state: FSMContext) -> None:
         return
     except Exception:  # noqa: BLE001 — сеть/формат чужого сервиса
         logger.exception("Перенос: не удалось разобрать источник")
-        await status.edit_text("Не удалось прочитать список. Попробуйте прислать текстом.")
+        await status.edit_text(t("transfer.parse_failed"))
         return
 
     if not items:
         await status.edit_text(
-            "Не нашёл треков. Формат строки: <code>Артист — Название</code>.",
+            t("transfer.no_tracks"),
             parse_mode="HTML",
         )
         return
@@ -110,7 +111,7 @@ async def process_source(message: Message, state: FSMContext) -> None:
     await state.update_data(transfer_items=[{"artist": i.artist, "title": i.title} for i in items])
     await state.set_state(Transfer.waiting_confirm)
     preview = "\n".join(f"▪️ {i.artist} — {i.title}" for i in items[:MAX_PREVIEW])
-    tail = f"\n…и ещё {len(items) - MAX_PREVIEW}" if len(items) > MAX_PREVIEW else ""
+    tail = t("transfer.more", count=len(items) - MAX_PREVIEW) if len(items) > MAX_PREVIEW else ""
     await status.edit_text(
         f"Нашёл треков: <b>{len(items)}</b>\n\n{preview}{tail}\n\nПереносим в вашу библиотеку?",
         parse_mode="HTML",
@@ -124,7 +125,7 @@ async def cb_go(callback: CallbackQuery, state: FSMContext) -> None:
     items = data.get("transfer_items") or []
     await state.clear()
     if not items:
-        await callback.answer("Список пуст — начните заново", show_alert=True)
+        await callback.answer(t("transfer.empty_list"), show_alert=True)
         return
 
     async with session_factory() as session:
@@ -132,7 +133,7 @@ async def cb_go(callback: CallbackQuery, state: FSMContext) -> None:
 
     if not settings.effective_celery_broker:
         await callback.answer()
-        await callback.message.edit_text("Перенос временно недоступен — фоновые задачи выключены.")
+        await callback.message.edit_text(t("transfer.unavailable"))
         return
 
     from app.tasks.transfer import transfer_playlist_task
@@ -142,7 +143,7 @@ async def cb_go(callback: CallbackQuery, state: FSMContext) -> None:
     except Exception:  # noqa: BLE001
         logger.exception("Перенос: не удалось поставить задачу")
         await callback.answer()
-        await callback.message.edit_text("Не удалось запустить перенос — попробуйте позже.")
+        await callback.message.edit_text(t("transfer.start_failed"))
         return
 
     await callback.answer()
