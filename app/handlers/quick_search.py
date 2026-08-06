@@ -33,11 +33,7 @@ router = Router()
 _QUERY_KEY = "qs_query"  # запрос и кандидаты живут в FSM: в callback_data они не помещаются
 _ITEMS_KEY = "qs_items"
 
-_NOTHING_FOUND = (
-    "Ничего не нашли. Попробуйте иначе — например «Kizaru Фейк Айди»: "
-    "исполнитель и название вместе находятся точнее всего."
-)
-_EXPIRED = t("quick.stale")
+
 
 
 def _results_title(query: str) -> str:
@@ -61,7 +57,7 @@ async def quick_search(message: Message, state: FSMContext) -> None:
     status = await message.answer(t("quick.searching"))
     candidates = await search_with_cache(query)
     if not candidates:
-        await status.edit_text(_NOTHING_FOUND)
+        await status.edit_text(t("quick.nothing"))
         return
 
     await state.update_data(
@@ -77,7 +73,7 @@ async def quick_search_page(callback: CallbackQuery, state: FSMContext) -> None:
     page = int(callback.data.split(":")[2])
     query, candidates = await _stored_candidates(state)
     if not candidates:
-        await callback.answer(_EXPIRED, show_alert=True)
+        await callback.answer(t("quick.stale"), show_alert=True)
         return
     page = max(1, min(page, total_pages(candidates)))
     await callback.message.edit_text(
@@ -91,7 +87,7 @@ async def quick_search_send(callback: CallbackQuery, state: FSMContext) -> None:
     index = int(callback.data.split(":")[2])
     _, candidates = await _stored_candidates(state)
     if index >= len(candidates):
-        await callback.answer(_EXPIRED, show_alert=True)
+        await callback.answer(t("quick.stale"), show_alert=True)
         return
     candidate = candidates[index]
 

@@ -52,14 +52,7 @@ def _menu_keyboard() -> InlineKeyboardMarkup:
 async def cb_upload(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(UploadTrack.waiting_file)
     await callback.message.answer(
-        "⬆️ <b>Загрузка музыки</b>\n\n"
-        "📎 <b>Аудиофайлом</b> — пришлите трек файлом. Столько треков, сколько хотите, "
-        "хоть всю коллекцию по очереди — это <b>бесплатно и без лимитов</b>.\n\n"
-        "🔗 <b>Ссылкой</b> — YouTube Music или SoundCloud:\n"
-        "• один трек — <b>бесплатно</b>;\n"
-        "• целый профиль, плейлист или лайки пачкой — <b>💎 Premium</b>.\n\n"
-        "⚠️ Указывайте исполнителя — иначе трек станет «Неизвестным».\n\n"
-        "Жду файл или ссылку 👇",
+        t("upload.intro"),
         parse_mode="HTML",
         reply_markup=_cancel_keyboard(),
     )
@@ -106,8 +99,7 @@ async def _require_premium_for_bulk(message: Message) -> bool:
         if is_premium_active(user):
             return True
     await message.answer(
-        "Загрузка профиля, плейлиста или лайков целиком — только для 💎 Premium.\n"
-        "Бесплатно можно загрузить трек по одному — пришлите ссылку на конкретный трек.",
+        t("upload.premium_bulk"),
         reply_markup=_cancel_keyboard(),
     )
     return False
@@ -144,8 +136,7 @@ async def _process_playlist_link(message: Message, state: FSMContext) -> None:
         return
     await state.clear()
     await scanning.edit_text(
-        f"⏳ Принято {queued} видео.\n\n"
-        "Музыка появится в вашей библиотеке по мере обработки — без сообщений на каждый трек.",
+        t("upload.queued_videos", queued=queued),
         reply_markup=_menu_keyboard(),
     )
 
@@ -181,8 +172,7 @@ async def _process_soundcloud_bulk(message: Message, state: FSMContext, url: str
         return
     await state.clear()
     await scanning.edit_text(
-        f"⏳ Принято {queued} треков с SoundCloud.\n\n"
-        "Они появятся в вашей библиотеке по мере обработки — без сообщений на каждый трек.",
+        t("upload.queued_soundcloud", queued=queued),
         reply_markup=_menu_keyboard(),
     )
 
@@ -257,8 +247,7 @@ async def process_link(message: Message, state: FSMContext) -> None:
         return
     await state.clear()
     await checking.edit_text(
-        f"⏳ Принято: «{info.title}» ({format_duration(info.duration)}).\n"
-        "Скачаем и пришлём трек сюда — обычно это занимает меньше минуты.",
+        t("upload.queued_video", title=info.title, duration=format_duration(info.duration)),
         reply_markup=_menu_keyboard(),
     )
 
@@ -299,18 +288,16 @@ async def process_artist(message: Message, state: FSMContext) -> None:
         existing = await find_duplicate(session, data["title"], artist, data["duration"])
     warning = ""
     if existing is not None:
-        warning = (
-            f"\n\n⚠️ В базе уже есть «{existing.artist} — {existing.title}».\n"
-            "Если это другой трек — вернитесь и поменяйте название "
-            "(например, добавьте «(Rex)»). Иначе просто подтвердите."
-        )
+        warning = t("upload.duplicate_warning", artist=existing.artist, title=existing.title)
 
     await message.answer(
-        "Проверьте данные:\n\n"
-        f"Название: {data['title']}\n"
-        f"Исполнитель: {artist}\n"
-        f"Длительность: {format_duration(data['duration'])}"
-        f"{warning}",
+        t(
+            "upload.check_data",
+            title=data["title"],
+            artist=artist,
+            duration=format_duration(data["duration"]),
+        )
+        + warning,
         reply_markup=_confirm_keyboard(),
     )
 
@@ -335,12 +322,9 @@ async def cb_upload_confirm(callback: CallbackQuery, state: FSMContext) -> None:
     if track.moderation_status == "pending":
         # Стоп-слово в названии — трек в вашей библиотеке, но в общий каталог
         # попадёт после проверки модератором (блок D)
-        text = (
-            f"⏳ Трек «{track.artist} — {track.title}» добавлен в вашу библиотеку "
-            "и отправлен на проверку — в общем каталоге появится после одобрения."
-        )
+        text = t("upload.moderation", artist=track.artist, title=track.title)
     else:
-        text = f"✅ Трек «{track.artist} — {track.title}» добавлен в общую базу и вашу библиотеку."
+        text = t("upload.done", artist=track.artist, title=track.title)
     await callback.message.edit_text(text, reply_markup=_menu_keyboard())
     await callback.answer()
 

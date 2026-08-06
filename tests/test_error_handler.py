@@ -3,7 +3,8 @@
 import pytest
 from aiogram.types import ErrorEvent, Message, Update
 
-from app.handlers.errors import FRIENDLY_TEXT, handle_any_error
+from app.handlers.errors import handle_any_error
+from app.i18n import t
 
 _sent: list[str] = []
 
@@ -28,7 +29,7 @@ async def test_reports_error_and_answers_user():
     handled = await handle_any_error(event)
 
     assert handled is True  # иначе aiogram поднимет исключение выше
-    assert _sent == [FRIENDLY_TEXT]
+    assert _sent == [t("common.error")]
 
 
 @pytest.mark.asyncio

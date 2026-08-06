@@ -107,8 +107,7 @@ async def process_playlist_title(message: Message, state: FSMContext) -> None:
         if not await can_create_playlist(session, user):
             await state.clear()
             await message.answer(
-                f"На бесплатном тарифе доступно {settings.free_playlist_limit} плейлистов.\n"
-                "💎 Premium снимает лимит — раздел «Купить Premium» в меню."
+                t("playlists.free_limit", limit=settings.free_playlist_limit)
             )
             return
         await create_playlist(session, user.id, title)
@@ -145,7 +144,7 @@ async def cb_playlist_delete_ask(callback: CallbackQuery) -> None:
             await callback.answer(t("playlists.not_found"), show_alert=True)
             return
     await callback.message.edit_text(
-        f"Удалить плейлист «{playlist.title}»?\n\nТреки останутся в базе и вашей библиотеке.",
+        t("playlists.delete_confirm", title=playlist.title),
         reply_markup=confirm_delete_keyboard(playlist_id),
     )
     await callback.answer()

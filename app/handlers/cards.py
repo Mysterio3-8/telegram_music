@@ -16,9 +16,9 @@ from app.services.users import is_admin
 
 def build_track_card_text(track: Track) -> str:
     return (
-        f"🎧 {track.title}\n\n"
-        f"Исполнитель: {track.artist}\n"
-        f"Длительность: {format_duration(track.duration)}"
+        t("card.title", title=track.title) + "\n\n"
+        + t("common.artist_line", artist=track.artist) + "\n"
+        + t("common.duration_line", duration=format_duration(track.duration))
     )
 
 

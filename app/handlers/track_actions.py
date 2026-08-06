@@ -126,7 +126,7 @@ async def cb_track_action(callback: CallbackQuery) -> None:
         if action == "share":  # легаси-кнопка в старых сообщениях; новая — url-кнопка
             me = await callback.bot.me()
             await callback.message.answer(
-                f"Поделитесь треком «{track.artist} — {track.title}»:\n"
+                t("card.share_text", artist=track.artist, title=track.title) + "\n"
                 f"https://t.me/{me.username}?start=track_{track.id}"
             )
             await callback.answer()

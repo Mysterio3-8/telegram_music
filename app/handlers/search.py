@@ -177,9 +177,9 @@ async def cb_instrumental_card(callback: CallbackQuery) -> None:
         await callback.answer(t("search.instrumental_not_found"), show_alert=True)
         return
     await callback.message.edit_text(
-        f"🎼 {instrumental.title} (Минус)\n\n"
-        f"Исполнитель: {instrumental.artist}\n"
-        f"Длительность: {format_duration(instrumental.duration)}",
+        t("search.instrumental_card", title=instrumental.title) + "\n\n"
+        + t("common.artist_line", artist=instrumental.artist) + "\n"
+        + t("common.duration_line", duration=format_duration(instrumental.duration)),
         reply_markup=instrumental_card_keyboard(instrumental.id),
     )
     await callback.answer()

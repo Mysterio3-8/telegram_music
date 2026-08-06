@@ -20,7 +20,7 @@ from app.keyboards.premium import premium_keyboard
 from app.services.premium import activate_premium, is_premium_active
 from app.services.revenue import record_payment
 from app.services.yookassa_payments import create_premium_payment, is_yookassa_configured
-from app.i18n import t
+from app.i18n import plural, t
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -28,40 +28,21 @@ logger = logging.getLogger(__name__)
 PAYLOAD_STARS = "premium_stars"
 PAYLOAD_CARD = "premium_card"
 
-_BENEFITS = (
-    "🚫 <b>Без рекламы</b> — ни баннеров, ни пауз\n"
-    "📥 <b>Офлайн-режим</b> — качайте треки, слушайте без интернета\n"
-    "🔄 <b>Перенос пачкой</b> — целые плейлисты из Spotify, Яндекса, ВК, SoundCloud\n"
-    "🎼 <b>Без лимитов</b> — сколько угодно плейлистов и своих загрузок\n"
-    "🎛 <b>Эквалайзер и таймер сна</b> — 20 пресетов, засыпайте под музыку\n"
-    "📝 <b>Тексты песен</b> — добавляйте и редактируйте\n"
-    "🎁 <b>Дни в подарок</b> — достижения и друзья приносят ещё Premium"
-)
-
-
 def plan_label(months: int) -> str:
     """«месяц» / «3 месяца» / «год» — срок словами, для текста платежа."""
     if months == 12:
-        return "год"
+        return t("premium.plan_year")
     if months == 1:
-        return "месяц"
-    return f"{months} месяца" if months < 5 else f"{months} месяцев"
+        return t("premium.plan_month")
+    return t("premium.plan_months", months=months, months_word=plural("word.months", months))
 
 
 def _premium_text(active: bool, premium_until: datetime | None) -> str:
     if active and premium_until is not None:
-        return (
-            f"💎 <b>Premium активен</b> до {premium_until.strftime('%d.%m.%Y')}\n\n"
-            f"{_BENEFITS}\n\n"
-            f"Можно продлить заранее — дни суммируются."
-        )
-    return (
-        "💎 <b>TG Music Premium</b>\n\n"
-        f"{_BENEFITS}\n\n"
-        f"Всего <b>{settings.premium_price_rub} ₽ в месяц</b> — дешевле чашки кофе. "
-        "Чем длиннее тариф, тем ниже цена месяца.\n\n"
-        "Выберите срок:"
-    )
+        head, tail = t("premium.active", date=premium_until.strftime("%d.%m.%Y")).split("\n\n", 1)
+        return f"{head}\n\n{t('premium.perks')}\n\n{tail}"
+    head, tail = t("premium.offer", price=settings.premium_price_rub).split("\n\n", 1)
+    return f"{head}\n\n{t('premium.perks')}\n\n{tail}"
 
 
 @router.callback_query(F.data == "menu:premium")
@@ -122,9 +103,7 @@ async def cb_pay_yookassa(callback: CallbackQuery) -> None:
     # тарифа из настроек: за год списывалось 348 ₽, а в тексте стояло
     # «29 ₽ — Premium на 30 дней».
     await callback.message.answer(
-        f"💳 Оплата {price} ₽ — Premium на {plan_label(months)}.\n\n"
-        "Нажмите кнопку, оплатите любым удобным способом и вернитесь в бот — "
-        "Premium включится автоматически в течение минуты.",
+        t("premium.pay_intro", price=price, label=plan_label(months)),
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[
                 [InlineKeyboardButton(text=t("premium.pay_button", price=price), url=url)],
@@ -155,7 +134,7 @@ async def cb_pay_card(callback: CallbackQuery) -> None:
     price = plan_price_rub(months)
     try:
         await callback.message.answer_invoice(
-            title=f"Premium на {plan_label(months)}",
+            title=t("premium.invoice_title", label=plan_label(months)),
             description=t("premium.invoice_description"),
             # Срок едет в payload: без него оплата года включала месяц —
             # успешный платёж не знал, за какой тариф заплатили
@@ -215,7 +194,7 @@ async def cb_successful_payment(message: Message) -> None:
         payment.telegram_payment_charge_id,
     )
     await message.answer(
-        f"✅ Premium активирован до {until.strftime('%d.%m.%Y')}! Спасибо за поддержку 💛",
+        t("premium.activated", date=until.strftime("%d.%m.%Y")),
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[[InlineKeyboardButton(text=t("common.back_to_menu"), callback_data="menu:main")]]
         ),

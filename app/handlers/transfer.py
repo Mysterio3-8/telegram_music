@@ -44,29 +44,19 @@ def _confirm_keyboard() -> InlineKeyboardMarkup:
     )
 
 
-PROMPT = (
-    "📥 <b>Перенос музыки из других сервисов</b>\n\n"
-    "Пришлите:\n"
-    "▪️ ссылку на публичный плейлист <b>Spotify</b> или <b>Яндекс.Музыки</b>;\n"
-    "▪️ ссылку на <b>SoundCloud</b> (профиль, лайки, сет);\n"
-    "▪️ или просто список текстом, по строке на трек:\n"
-    "<code>Kizaru — Fendi\nBig Baby Tape — Gimme the Loot</code>\n\n"
-    "Так переносится музыка из ВКонтакте и откуда угодно ещё: скопируйте список "
-    "и пришлите сюда.\n\n"
-    "Мы найдём эти треки в нашей базе, а чего нет — загрузим."
-)
+
 
 
 @router.message(Command("transfer"))
 async def cmd_transfer(message: Message, state: FSMContext) -> None:
     await state.set_state(Transfer.waiting_source)
-    await message.answer(PROMPT, parse_mode="HTML")
+    await message.answer(t("transfer.intro"), parse_mode="HTML")
 
 
 @router.callback_query(F.data == "menu:transfer")
 async def cb_transfer(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(Transfer.waiting_source)
-    await callback.message.answer(PROMPT, parse_mode="HTML")
+    await callback.message.answer(t("transfer.intro"), parse_mode="HTML")
     await callback.answer()
 
 
@@ -85,8 +75,7 @@ async def process_source(message: Message, state: FSMContext) -> None:
     if detect_service(text) == "soundcloud":
         await state.clear()
         await message.answer(
-            "Ссылки SoundCloud принимает мастер «Загрузить трек» — он скачает "
-            "аудио напрямую, без поиска совпадений."
+            t("transfer.soundcloud_hint")
         )
         return
 
@@ -113,7 +102,7 @@ async def process_source(message: Message, state: FSMContext) -> None:
     preview = "\n".join(f"▪️ {i.artist} — {i.title}" for i in items[:MAX_PREVIEW])
     tail = t("transfer.more", count=len(items) - MAX_PREVIEW) if len(items) > MAX_PREVIEW else ""
     await status.edit_text(
-        f"Нашёл треков: <b>{len(items)}</b>\n\n{preview}{tail}\n\nПереносим в вашу библиотеку?",
+        t("transfer.found", count=len(items), preview=preview, tail=tail),
         parse_mode="HTML",
         reply_markup=_confirm_keyboard(),
     )
@@ -148,6 +137,5 @@ async def cb_go(callback: CallbackQuery, state: FSMContext) -> None:
 
     await callback.answer()
     await callback.message.edit_text(
-        f"📥 Переношу {len(items)} треков. Это займёт время — пришлю отчёт, когда закончу.\n\n"
-        "Найденное в базе появится в библиотеке сразу."
+        t("transfer.started", count=len(items))
     )

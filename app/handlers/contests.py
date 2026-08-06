@@ -16,9 +16,6 @@ from app.i18n import t
 
 router = Router()
 
-ALREADY_JOINED = t("contest.already")
-JOINED = t("contest.joined")
-CONTEST_CLOSED = t("contest.finished")
 
 
 def _requirements_text(referrals: int, required: int, subscribed: bool) -> str:
@@ -38,7 +35,7 @@ async def cb_contest_join(callback: CallbackQuery) -> None:
         user = await ensure_user(session, callback.from_user)
         contest = await get_contest(session, contest_id)
         if contest is None or not contest.is_active:
-            await callback.answer(CONTEST_CLOSED, show_alert=True)
+            await callback.answer(t("contest.finished"), show_alert=True)
             return
 
         subscribed = True
@@ -51,7 +48,7 @@ async def cb_contest_join(callback: CallbackQuery) -> None:
             session, contest, user, channel_subscribed=subscribed
         )
         if eligibility.joined:
-            await callback.answer(ALREADY_JOINED, show_alert=True)
+            await callback.answer(t("contest.already"), show_alert=True)
             return
 
         if not await join_contest(session, contest, user, eligibility):
@@ -65,6 +62,6 @@ async def cb_contest_join(callback: CallbackQuery) -> None:
 
         markup = contest_keyboard(contest, joined=True)
 
-    await callback.answer(JOINED, show_alert=True)
+    await callback.answer(t("contest.joined"), show_alert=True)
     if callback.message is not None:
         await callback.message.edit_reply_markup(reply_markup=markup)

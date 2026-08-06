@@ -3,6 +3,7 @@ import pytest
 
 from aiogram.types import Message
 
+from app.i18n import t
 from app.config import settings
 from app.middlewares import throttling
 from app.middlewares.throttling import ThrottlingMiddleware
@@ -77,7 +78,7 @@ async def test_instant_repeat_blocked(clock):
     result = await _call(middleware, _FakeMessage(), 1, calls)
     assert result is None
     assert len(calls) == 1
-    assert _sent == [throttling.WARNING_TEXT]
+    assert _sent == [t("common.throttled")]
 
 
 @pytest.mark.asyncio
@@ -104,7 +105,7 @@ async def test_warning_sent_once_per_series(clock):
     await _call(middleware, _FakeMessage(), 1, calls)
     for _ in range(5):
         await _call(middleware, _FakeMessage(), 1, calls)
-    assert _sent == [throttling.WARNING_TEXT]  # ровно одно предупреждение на серию
+    assert _sent == [t("common.throttled")]  # ровно одно предупреждение на серию
 
 
 @pytest.mark.asyncio

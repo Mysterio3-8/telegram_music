@@ -29,7 +29,6 @@ BURST_LIMIT = 12  # действий за окно
 BURST_WINDOW = 10.0  # секунд
 BLOCK_SECONDS = 20.0  # пауза после превышения
 
-WARNING_TEXT = t("common.throttled")
 
 
 class ThrottlingMiddleware(BaseMiddleware):
@@ -80,8 +79,8 @@ class ThrottlingMiddleware(BaseMiddleware):
         self._warned.add(user_id)
         try:
             if isinstance(event, CallbackQuery):
-                await event.answer(WARNING_TEXT, show_alert=False)
+                await event.answer(t("common.throttled"), show_alert=False)
             elif isinstance(event, Message):
-                await event.answer(WARNING_TEXT)
+                await event.answer(t("common.throttled"))
         except Exception:  # noqa: BLE001 — предупреждение best-effort
             pass

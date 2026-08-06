@@ -17,7 +17,6 @@ logger = logging.getLogger(__name__)
 
 router = Router()
 
-FRIENDLY_TEXT = t("common.error")
 
 
 @router.errors()
@@ -28,7 +27,7 @@ async def handle_any_error(event: ErrorEvent) -> bool:
     target = update.message or (update.callback_query.message if update.callback_query else None)
     if target is not None:
         try:
-            await target.answer(FRIENDLY_TEXT)
+            await target.answer(t("common.error"))
         except Exception:  # noqa: BLE001 — уведомление best-effort, не плодим новую ошибку
             logger.warning("Не удалось уведомить пользователя об ошибке", exc_info=True)
 
