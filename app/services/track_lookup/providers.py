@@ -19,8 +19,19 @@ _WATCH_URL = "https://www.youtube.com/watch?v={video_id}"
 
 
 def search_soundcloud(query: str, limit: int = 5) -> list[Candidate]:
-    """Кандидаты SoundCloud. Длительность приходит прямо из выдачи (extract_flat) —
-    мусор по времени отсеивается ДО скачивания, поэтому поиск укладывается в секунды."""
+    """Кандидаты SoundCloud.
+
+    Сперва прямой API поверх постоянного соединения: yt-dlp поднимает новое
+    TLS-соединение на каждый вызов, а это 8.5 сек против 0.7 сек по живому
+    (замер). yt-dlp остаётся запасным путём — если API забанят или он сменит
+    формат, поиск продолжит работать, просто медленнее.
+    """
+    from app.services.soundcloud_api import search_tracks
+
+    direct = search_tracks(query, limit)
+    if direct:
+        return direct
+    logger.info("SoundCloud API пуст — иду через yt-dlp «%s»", query)
     # sleep_requests=0: ответа ждёт живой человек, а обходим одну поисковую выдачу,
     # а не весь профиль артиста — пауза между запросами здесь только тормозит
     entries = list_soundcloud_entries(f"scsearch{max(1, limit)}:{query}", sleep_requests=0)
