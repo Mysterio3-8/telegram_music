@@ -87,7 +87,19 @@ def search_fetch_candidate(
                 # TELEGRAM_ARCHIVE_CHAT_ID отдельным каналом; до тех пор не дублируем.
                 await bot.send_message(chat_id, f"{caption} — готов.")
             elif track.tg_file_id:
-                await bot.send_audio(chat_id, track.tg_file_id, caption=caption)
+                # Кнопки карточки: добавить в библиотеку/плейлист, скачать, поделиться.
+                # Без них у свежескачанного трека не было никаких действий вообще.
+                from app.keyboards.track_card import track_card_keyboard
+
+                await bot.send_audio(
+                    chat_id,
+                    track.tg_file_id,
+                    caption=caption,
+                    reply_markup=track_card_keyboard(
+                        track, "srch", in_library=save_to_library,
+                        bot_username=settings.bot_username,
+                    ),
+                )
             else:
                 await bot.send_message(chat_id, f"{caption} — готов.")
         finally:

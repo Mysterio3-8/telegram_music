@@ -18,8 +18,10 @@ from aiogram.types import CallbackQuery, Message
 
 from app.db.base import session_factory
 from app.handlers.common import ensure_user
+from app.handlers.cards import build_card_keyboard
 from app.handlers.delivery import send_track_audio
 from app.keyboards.quick_search import quick_search_keyboard, total_pages
+from app.services.library import is_in_library
 from app.services.search import find_track_by_metadata
 from app.services.search_cache import search_with_cache
 from app.services.search_log import log_search_query
@@ -102,10 +104,17 @@ async def quick_search_send(callback: CallbackQuery, state: FSMContext) -> None:
         user = await ensure_user(session, callback.from_user)
         existing = await find_track_by_metadata(session, artist, title)
         if existing is not None:
-            # Уже минтили — отдаём мгновенно по file_id, скачивать нечего
+            # Уже минтили — отдаём мгновенно по file_id, скачивать нечего.
+            # С кнопками карточки: раз в библиотеку сам трек больше не падает,
+            # добавить его должно быть чем.
             await callback.answer(t("quick.sending"))
+            in_library = await is_in_library(session, user.id, existing.id)
+            keyboard = await build_card_keyboard(
+                callback.message, existing, "srch", in_library, user.telegram_id
+            )
             await send_track_audio(
-                callback.bot, callback.message.chat.id, session, user, existing
+                callback.bot, callback.message.chat.id, session, user, existing,
+                reply_markup=keyboard,
             )
             return
 

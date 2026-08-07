@@ -82,3 +82,13 @@ async def remove_from_library(session: AsyncSession, user_id: int, track_id: int
     if entry is not None:
         await session.delete(entry)
         await session.commit()
+
+
+async def is_in_library(session: AsyncSession, user_id: int, track_id: int) -> bool:
+    """Есть ли трек в библиотеке — для кнопки карточки «добавить/удалить»."""
+    found = await session.scalar(
+        select(UserLibrary.track_id).where(
+            UserLibrary.user_id == user_id, UserLibrary.track_id == track_id
+        )
+    )
+    return found is not None
