@@ -91,6 +91,18 @@ def _visible_candidates(query: str, candidates: list[Candidate]) -> list[Candida
     ]
 
 
+def is_russian_repertoire(query: str) -> bool:
+    """Кириллица в запросе — значит ищут русский репертуар.
+
+    Идея владельца, и она попадает в реальную картину: русское почти всё лежит
+    на SoundCloud, а западные мейджоры там под DRM (yt-dlp: «This video is DRM
+    protected») — качаются они с YouTube, из официальных каналов «- Topic».
+    Поэтому кириллический запрос обслуживает SoundCloud, а латинский обязан
+    спросить и YouTube, а не ждать, пока SoundCloud наберёт мало совпадений.
+    """
+    return any("а" <= char.lower() <= "я" or char.lower() == "ё" for char in query)
+
+
 async def search_candidates(query: str, limit: int | None = None) -> list[Candidate]:
     """Список найденных треков по свободному запросу — из источников, не из базы.
 
@@ -101,11 +113,20 @@ async def search_candidates(query: str, limit: int | None = None) -> list[Candid
     в SoundCloud не нашлось.
     """
     per_source = limit or settings.live_search_limit
-    soundcloud = await _search_soundcloud_variants(query, per_source)
-    if _confident_count(query, soundcloud) >= settings.youtube_fallback_min_results:
-        return soundcloud
-
-    youtube = await asyncio.to_thread(_safe_search, search_youtube, query, per_source)
+    russian = is_russian_repertoire(query)
+    if russian:
+        soundcloud = await _search_soundcloud_variants(query, per_source)
+        if _confident_count(query, soundcloud) >= settings.youtube_fallback_min_results:
+            return soundcloud
+        youtube = await asyncio.to_thread(_safe_search, search_youtube, query, per_source)
+    else:
+        # Латиница — западный репертуар: оба источника сразу и параллельно, время
+        # ответа равно медленному из двух, а не их сумме. Ждать, пока SoundCloud
+        # «наберёт мало», тут нельзя: он набирает много, только всё под DRM.
+        soundcloud, youtube = await asyncio.gather(
+            _search_soundcloud_variants(query, per_source),
+            asyncio.to_thread(_safe_search, search_youtube, query, per_source),
+        )
     music = [item for item in _visible_candidates(query, youtube) if looks_like_music(item)]
     return merge_candidates(soundcloud, music)
 

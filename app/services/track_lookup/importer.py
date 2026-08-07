@@ -12,7 +12,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Track
 from app.services.soundcloud import download_soundcloud_audio
-from app.services.track_lookup.providers import SOURCE_SOUNDCLOUD, search_soundcloud
+from app.services.track_lookup.providers import (
+    SOURCE_SOUNDCLOUD,
+    search_soundcloud,
+    search_youtube,
+)
 from app.services.track_lookup.ranking import Candidate
 from app.services.youtube.downloader import DownloadedAudio, download_audio
 from app.services.youtube.user_import import (
@@ -62,10 +66,24 @@ def download_with_fallback(candidate: Candidate) -> DownloadedAudio | None:
     artist, title = candidate_metadata(candidate)
     query = f"{artist} {title}".strip()
     logger.info("Не скачался «%s» — ищу замену по «%s»", candidate.title, query)
-    try:
-        alternatives = search_soundcloud(query, limit=MAX_DOWNLOAD_ATTEMPTS + 1)
-    except Exception:  # noqa: BLE001 — источник отвалился, отдаём честный отказ выше
-        logger.warning("Замена не искалась: источник не ответил", exc_info=True)
+    alternatives: list[Candidate] = []
+    # Под DRM лежат западные мейджоры, а их официальные загрузки есть на YouTube
+    # («Исполнитель - Topic»). Поэтому замену ищем в ОБОИХ источниках, и для
+    # латинского запроса YouTube идёт первым — там трек скачается, а на
+    # SoundCloud рядом лежат такие же защищённые копии.
+    from app.services.track_lookup import is_russian_repertoire
+
+    sources = (
+        (search_soundcloud, search_youtube)
+        if is_russian_repertoire(query)
+        else (search_youtube, search_soundcloud)
+    )
+    for source in sources:
+        try:
+            alternatives += source(query, limit=MAX_DOWNLOAD_ATTEMPTS + 1)
+        except Exception:  # noqa: BLE001 — один источник отвалился, второй ещё есть
+            logger.warning("Замена: источник %s не ответил", source.__name__, exc_info=True)
+    if not alternatives:
         return None
 
     for alternative in alternatives[:MAX_DOWNLOAD_ATTEMPTS]:
