@@ -113,10 +113,13 @@ async def quick_search_send(callback: CallbackQuery, state: FSMContext) -> None:
     try:
         from app.tasks.search_fetch import search_fetch_candidate
 
+        # Человек попросил прислать трек, а не сохранить его себе: библиотеку
+        # трогаем только кнопкой «➕ Добавить в библиотеку» в карточке.
         search_fetch_candidate.delay(
             candidate=asdict(candidate),
             telegram_id=callback.from_user.id,
             chat_id=callback.message.chat.id,
+            save_to_library=False,
         )
     except Exception:  # noqa: BLE001 — брокер недоступен, честно об этом говорим
         logger.warning("Живой поиск: очередь недоступна", exc_info=True)

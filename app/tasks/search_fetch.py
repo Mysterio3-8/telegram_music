@@ -45,7 +45,11 @@ async def _record_listen(session, telegram_id: int, track_id: int) -> None:
 
 @celery_app.task(name="search.fetch_candidate", bind=True, max_retries=2, queue="youtube_user")
 def search_fetch_candidate(
-    self, candidate: dict, telegram_id: int, chat_id: int | None = None
+    self,
+    candidate: dict,
+    telegram_id: int,
+    chat_id: int | None = None,
+    save_to_library: bool = True,
 ) -> None:
     """Качает КОНКРЕТНОГО кандидата, выбранного человеком в выдаче живого поиска.
 
@@ -65,7 +69,8 @@ def search_fetch_candidate(
         try:
             try:
                 track, _ = await import_candidate(
-                    session, bot, Candidate(**candidate), telegram_id
+                    session, bot, Candidate(**candidate), telegram_id,
+                    save_to_library=save_to_library,
                 )
             except UserImportRejected as exc:
                 if chat_id is not None:
@@ -80,11 +85,11 @@ def search_fetch_candidate(
                 # не задан, архивом становится чат первого админа, и владелец получал
                 # трек дважды: копию минта и нашу. Настоящее лечение — завести
                 # TELEGRAM_ARCHIVE_CHAT_ID отдельным каналом; до тех пор не дублируем.
-                await bot.send_message(chat_id, f"{caption} — добавлен в библиотеку.")
+                await bot.send_message(chat_id, f"{caption} — готов.")
             elif track.tg_file_id:
                 await bot.send_audio(chat_id, track.tg_file_id, caption=caption)
             else:
-                await bot.send_message(chat_id, f"{caption} — добавлен в библиотеку.")
+                await bot.send_message(chat_id, f"{caption} — готов.")
         finally:
             await bot.session.close()
 

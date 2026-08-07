@@ -79,9 +79,17 @@ class UserImportRejected(Exception):
 
 
 async def import_downloaded_audio(
-    session: AsyncSession, bot: Bot, audio: DownloadedAudio, telegram_id: int
+    session: AsyncSession,
+    bot: Bot,
+    audio: DownloadedAudio,
+    telegram_id: int,
+    save_to_library: bool = True,
 ) -> tuple[Track, bool]:
     """Общий хвост импорта: фильтры, запись в общую базу, библиотека, лимит загрузок.
+
+    save_to_library=False — «просто пришли послушать»: трек попадает в общий
+    каталог, но НЕ в личную библиотеку. Раньше библиотека пополнялась всегда, и
+    человек, попросивший один трек из выдачи, молча получал его себе в коллекцию.
 
     Одинаков для импорта по ссылке и по поисковому запросу — источник роли не играет,
     на вход приходит уже скачанное аудио.
@@ -124,7 +132,8 @@ async def import_downloaded_audio(
         # Считаем в лимит загрузок пользователя — как загрузку файлом
         session.add(Upload(user_id=user.id, track_id=track.id))
         await session.commit()
-    await add_to_library(session, user.id, track.id)
+    if save_to_library:
+        await add_to_library(session, user.id, track.id)
     return track, created
 
 

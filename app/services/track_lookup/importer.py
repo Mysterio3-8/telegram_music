@@ -109,12 +109,19 @@ def candidate_metadata(candidate: Candidate) -> tuple[str, str]:
 
 
 async def import_candidate(
-    session: AsyncSession, bot: Bot, candidate: Candidate, telegram_id: int
+    session: AsyncSession,
+    bot: Bot,
+    candidate: Candidate,
+    telegram_id: int,
+    save_to_library: bool = True,
 ) -> tuple[Track, bool]:
-    """Загружает выбранного пользователем кандидата и добавляет ему в библиотеку.
+    """Загружает выбранного пользователем кандидата.
 
     Отличие от import_by_query: кандидат уже выбран человеком, поиск не повторяем
-    и по длительности не придираемся — раз выбрал, значит именно это и хотел."""
+    и по длительности не придираемся — раз выбрал, значит именно это и хотел.
+
+    save_to_library=False — «просто пришли послушать»: трек уходит в общий
+    каталог, но не в личную библиотеку."""
     audio = await asyncio.to_thread(download_with_fallback, candidate)
     if audio is None:
         raise UserImportRejected(
@@ -129,7 +136,9 @@ async def import_candidate(
         uploader=audio.uploader or (candidate.artist or ""),
         thumbnail_url=audio.thumbnail_url or (candidate.cover_url or ""),
     )
-    track, created = await import_downloaded_audio(session, bot, audio, telegram_id)
+    track, created = await import_downloaded_audio(
+        session, bot, audio, telegram_id, save_to_library=save_to_library
+    )
     logger.info(
         "Импорт кандидата источник=%s user=%s → track=%s (created=%s)",
         candidate.source, telegram_id, track.id, created,
