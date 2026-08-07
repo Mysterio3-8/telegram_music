@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Track
 from app.services.soundcloud import download_soundcloud_audio
-from app.services.track_lookup.providers import SOURCE_SOUNDCLOUD
+from app.services.track_lookup.providers import SOURCE_SOUNDCLOUD, search_soundcloud
 from app.services.track_lookup.ranking import Candidate
 from app.services.youtube.downloader import DownloadedAudio, download_audio
 from app.services.youtube.user_import import (
@@ -39,6 +39,45 @@ def download_candidate(candidate: Candidate) -> DownloadedAudio | None:
     return download_audio(video_id, as_mp3=True) if video_id else None
 
 
+MAX_DOWNLOAD_ATTEMPTS = 4
+
+
+def download_with_fallback(candidate: Candidate) -> DownloadedAudio | None:
+    """Скачивает выбранный трек, а если не вышло — соседние варианты того же трека.
+
+    Часть треков на SoundCloud под DRM: yt-dlp отвечает «This video is DRM
+    protected», и скачать их нельзя в принципе. По полям API они неотличимы от
+    обычных — у DRM-«Blinding Lights» и у качающегося «ЗА ДЕНЬГИ ДА» одинаковые
+    policy=MONETIZE, monetization=AD_SUPPORTED, streamable=True. Значит отфильтровать
+    заранее нечем, зато почти всегда рядом в выдаче лежит тот же трек в чужом
+    аплоаде — и он качается.
+
+    Раньше мы в этом месте писали «попробуйте соседний вариант из списка», то есть
+    просили человека сделать перебор руками. Теперь перебираем сами.
+    """
+    audio = download_candidate(candidate)
+    if audio is not None:
+        return audio
+
+    artist, title = candidate_metadata(candidate)
+    query = f"{artist} {title}".strip()
+    logger.info("Не скачался «%s» — ищу замену по «%s»", candidate.title, query)
+    try:
+        alternatives = search_soundcloud(query, limit=MAX_DOWNLOAD_ATTEMPTS + 1)
+    except Exception:  # noqa: BLE001 — источник отвалился, отдаём честный отказ выше
+        logger.warning("Замена не искалась: источник не ответил", exc_info=True)
+        return None
+
+    for alternative in alternatives[:MAX_DOWNLOAD_ATTEMPTS]:
+        if alternative.url == candidate.url:
+            continue
+        audio = download_candidate(alternative)
+        if audio is not None:
+            logger.info("Замена нашлась: «%s»", alternative.title)
+            return audio
+    return None
+
+
 def candidate_metadata(candidate: Candidate) -> tuple[str, str]:
     """(исполнитель, название) кандидата — теми же правилами, что и при импорте.
 
@@ -58,10 +97,11 @@ async def import_candidate(
 
     Отличие от import_by_query: кандидат уже выбран человеком, поиск не повторяем
     и по длительности не придираемся — раз выбрал, значит именно это и хотел."""
-    audio = await asyncio.to_thread(download_candidate, candidate)
+    audio = await asyncio.to_thread(download_with_fallback, candidate)
     if audio is None:
         raise UserImportRejected(
-            "Не получилось скачать этот трек — попробуйте соседний вариант из списка."
+            "Этот трек скачать не вышло — у источника он под защитой. "
+            "Попробуйте другое название или соседний вариант."
         )
     # Выдача поиска знает автора и обложку; при скачивании источник их иногда не
     # отдаёт. Подставляем известное, иначе трек уходит человеку без обложки и
@@ -87,7 +127,7 @@ async def import_by_query(
     if candidate is None:
         raise UserImportRejected(NOT_FOUND_MESSAGE)
 
-    audio = await asyncio.to_thread(download_candidate, candidate)
+    audio = await asyncio.to_thread(download_with_fallback, candidate)
     if audio is None:
         raise UserImportRejected(NOT_FOUND_MESSAGE)
 
