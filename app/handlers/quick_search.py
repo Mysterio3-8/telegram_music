@@ -22,6 +22,7 @@ from app.handlers.delivery import send_track_audio
 from app.keyboards.quick_search import quick_search_keyboard, total_pages
 from app.services.search import find_track_by_metadata
 from app.services.search_cache import search_with_cache
+from app.services.search_log import log_search_query
 from app.services.track_lookup.importer import candidate_metadata
 from app.services.track_lookup.ranking import Candidate
 from app.i18n import t
@@ -52,7 +53,12 @@ async def quick_search(message: Message, state: FSMContext) -> None:
     if not query:
         return
     async with session_factory() as session:
-        await ensure_user(session, message.from_user)
+        user = await ensure_user(session, message.from_user)
+        # Запрос в журнал: по нему считаются «популярные запросы» и работает
+        # прогрев каталога (app.cli.warmup --popular). Раньше журнал заполнял
+        # только Mini App, а главный путь поиска — вот этот — молчал, поэтому
+        # список популярного оставался пустым.
+        await log_search_query(session, user.id, query)
 
     status = await message.answer(t("quick.searching"))
     candidates = await search_with_cache(query)
