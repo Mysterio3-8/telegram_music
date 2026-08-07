@@ -1,4 +1,4 @@
-# TG Music — Mini App
+# Infinity Music — Mini App
 
 Telegram Mini App поверх публичного API бота (`app/api`). Ванильный JS (ES-modules),
 без сборки: nginx отдаёт эту папку как статику.

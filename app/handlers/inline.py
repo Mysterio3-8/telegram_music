@@ -33,7 +33,7 @@ CACHE_SECONDS = 300
 
 
 def _open_bot_keyboard(sender_telegram_id: int) -> InlineKeyboardMarkup | None:
-    """Кнопка «Слушать в TG Music» под треком — по реф-ссылке отправителя."""
+    """Кнопка «Слушать в Infinity Music» под треком — по реф-ссылке отправителя."""
     if not settings.bot_username:
         return None
     return InlineKeyboardMarkup(

@@ -22,7 +22,7 @@ export function renderSettings(state) {
 
     <div class="rec-section-label">Музыка</div>
     <div class="card card--rows">
-      ${navRow("Настройки TG MIX", "tune", "open-recommendations")}
+      ${navRow("Настройки Infinity Mix", "tune", "open-recommendations")}
       ${navRow("Любимые исполнители", "mic", "open-artists")}
       ${navRow("Эквалайзер", "sliders", "open-equalizer")}
     </div>
@@ -37,7 +37,7 @@ export function renderSettings(state) {
 
     <div class="rec-section-label">Подписка</div>
     <div class="card card--rows">
-      ${navRow("TG Music Premium", "crown", "open-premium")}
+      ${navRow("Infinity Music Premium", "crown", "open-premium")}
       ${navRow("Реферальная программа", "gift", "open-referral")}
     </div>
 

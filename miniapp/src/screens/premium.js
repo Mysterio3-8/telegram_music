@@ -92,7 +92,7 @@ export function renderPremium(state) {
   return `
     <div class="page-head" data-role="page-head">
       <button class="icon-btn" data-action="back" aria-label="Назад">${icon("back")}</button>
-      <span>TG Music Premium</span>
+      <span>Infinity Music Premium</span>
     </div>
 
     <div class="premium-hero">

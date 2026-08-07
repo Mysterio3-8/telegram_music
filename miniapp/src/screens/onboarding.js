@@ -9,7 +9,7 @@ function renderWelcome() {
   return `
     <div class="onb-hero">
       <div class="onb-hero__logo">🎧</div>
-      <div class="onb-hero__title">Добро пожаловать в TG Music</div>
+      <div class="onb-hero__title">Добро пожаловать в Infinity Music</div>
       <div class="onb-hero__sub">Вся музыка в Телеграме: миксы под настроение, поиск, плейлисты, эквалайзер и офлайн</div>
     </div>
     <div class="onb-points">
@@ -54,7 +54,7 @@ function renderImport() {
     <div class="onb-hero">
       <div class="onb-hero__logo">📥</div>
       <div class="onb-hero__title">Перенесите свою музыку</div>
-      <div class="onb-hero__sub">Забыли любимые треки в другом сервисе? Перенесём их в TG Music за минуту.</div>
+      <div class="onb-hero__sub">Забыли любимые треки в другом сервисе? Перенесём их в Infinity Music за минуту.</div>
     </div>
     <button class="btn btn--primary btn--block" data-action="onb-import">Перенести из Spotify, Яндекса, ВК</button>
     <button class="btn btn--ghost btn--block" style="margin-top:10px" data-action="onb-finish">Позже, начать слушать</button>

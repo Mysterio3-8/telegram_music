@@ -99,7 +99,7 @@ export function renderProfile(state) {
       <div class="premium-card">
         <div class="premium-card__icon">${icon("crown")}</div>
         <div>
-          <div class="premium-card__title">TG Music Premium активен</div>
+          <div class="premium-card__title">Infinity Music Premium активен</div>
           <div class="premium-card__subtitle">Без рекламы и лимитов</div>
         </div>
       </div>
@@ -108,7 +108,7 @@ export function renderProfile(state) {
       <div class="premium-card" data-action="open-premium">
         <div class="premium-card__icon">${icon("crown")}</div>
         <div>
-          <div class="premium-card__title">TG Music Premium</div>
+          <div class="premium-card__title">Infinity Music Premium</div>
           <div class="premium-card__subtitle">от ${state.premium ? state.premium.price_rub : 21} ₽ в месяц</div>
         </div>
       </div>

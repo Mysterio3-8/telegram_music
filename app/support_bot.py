@@ -42,7 +42,7 @@ def _category_keyboard() -> InlineKeyboardMarkup:
 async def cmd_start(message: Message, state: FSMContext) -> None:
     await state.set_state(Ticket.choosing)
     await message.answer(
-        "👋 Это поддержка TG Music.\n\n"
+        "👋 Это поддержка Infinity Music.\n\n"
         "Выберите тему обращения — а затем опишите подробно. Можно приложить "
         "скриншот, фото, видео, аудио или документ, чтобы мы быстрее разобрались.",
         reply_markup=_category_keyboard(),

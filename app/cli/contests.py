@@ -39,13 +39,13 @@ WINNER_MESSAGE = (
 
 # Пост рассылки. Кнопка «Участвовать» приходит вместе с сообщением, поэтому
 # отдельным пунктом условий её не пишем — на неё жмут в конце.
-ANNOUNCE_TEMPLATE = """🎉 Розыгрыш TG Music Premium!
+ANNOUNCE_TEMPLATE = """🎉 Розыгрыш Infinity Music Premium!
 
-Разыгрываем подписку TG Music Premium — участвовать можно прямо здесь.
+Разыгрываем подписку Infinity Music Premium — участвовать можно прямо здесь.
 
 Что нужно сделать:
 ✅ Подписаться на наш канал{channel}
-✅ Пригласить друзей в TG Music
+✅ Пригласить друзей в Infinity Music
 ✅ Сделать репост записи во ВКонтакте или в Telegram Stories
 ✅ Нажать кнопку «Участвовать» ниже
 
@@ -111,7 +111,7 @@ async def _announce(contest_id: int, preview: bool) -> None:
     if preview:
         print("--- предпросмотр поста ---")
         print(text)
-        print("--- кнопки: подписка на канал, «Участвовать», открыть TG Music ---")
+        print("--- кнопки: подписка на канал, «Участвовать», открыть Infinity Music ---")
         return
 
     admin_chat_id = min(settings.admin_id_set, default=0)

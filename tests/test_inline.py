@@ -8,7 +8,7 @@ def test_open_bot_keyboard_uses_sender_referral_link(monkeypatch):
     keyboard = _open_bot_keyboard(777)
 
     button = keyboard.inline_keyboard[0][0]
-    assert button.text == "🎧 Слушать в TG Music"
+    assert button.text == "🎧 Слушать в Infinity Music"
     # приглашённый засчитывается отправителю трека
     assert button.url == "https://t.me/tgram_music_bot?start=ref_777"
 

@@ -23,7 +23,7 @@ export function renderSubGate(state) {
       <div class="sub-gate__icon">${icon("note")}</div>
       <h1 class="sub-gate__title">Подпишитесь, чтобы слушать</h1>
       <p class="sub-gate__text">
-        TG Music бесплатен, пока вы подписаны на наши каналы.
+        Infinity Music бесплатен, пока вы подписаны на наши каналы.
         Оформите Premium — и обязательные подписки больше не нужны.
       </p>
       <div class="sub-gate__channels">${channels}</div>

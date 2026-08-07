@@ -68,7 +68,7 @@ export function renderTransfer(state) {
 
     <div class="transfer-hero">
       <div class="transfer-hero__title">Перенесите плейлисты из других сервисов</div>
-      <div class="transfer-hero__sub">Слушайте любимые треки в TG Music</div>
+      <div class="transfer-hero__sub">Слушайте любимые треки в Infinity Music</div>
     </div>
 
     <div class="rec-section-label">Откуда перенести?</div>

@@ -52,7 +52,7 @@ MESSAGES: dict[str, str] = {
     "lang.pending": "Este idioma aún no está traducido — la interfaz seguirá en inglés.",
     "lang.back": "⬅️ Atrás",
     "gate.text": (
-        "🎵 Para usar TG Music, suscríbete a nuestros canales.\n\n"
+        "🎵 Para usar Infinity Music, suscríbete a nuestros canales.\n\n"
         "Cuando lo hayas hecho, pulsa «Comprobar suscripción»."
     ),
     "gate.check": "✅ Comprobar suscripción",
@@ -209,7 +209,7 @@ MESSAGES: dict[str, str] = {
     "premium.plan_months": "{months} {months_word}",
     "premium.active": "💎 <b>Premium activo</b> hasta el {date}\n\nPuedes renovar antes — los días se suman.",
     "premium.offer": (
-        "💎 <b>TG Music Premium</b>\n\n"
+        "💎 <b>Infinity Music Premium</b>\n\n"
         "Solo <b>{price} ₽ al mes</b> — más barato que un café. "
         "Cuanto más largo el plan, menor el precio mensual.\n\nElige un plan:"
     ),
@@ -295,8 +295,8 @@ MESSAGES: dict[str, str] = {
     "contest.subscribe": "📢 Suscribirse al canal",
     "contest.participating": "✅ Ya participas",
     "contest.join": "🎉 Participar",
-    "contest.open_app": "🎧 Abrir TG Music",
-    "inline.listen": "🎧 Escuchar en TG Music",
+    "contest.open_app": "🎧 Abrir Infinity Music",
+    "inline.listen": "🎧 Escuchar en Infinity Music",
     "inline.instrumental": "🎼 Instrumental",
-    "inline.open": "🎧 Abrir TG Music",
+    "inline.open": "🎧 Abrir Infinity Music",
 }

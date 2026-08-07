@@ -1137,7 +1137,7 @@ root.addEventListener("click", (event) => {
     case "invite-friend": {
       const profile = getState().profile;
       if (!profile) break;
-      const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(profile.referral.link)}&text=${encodeURIComponent("Слушай музыку в TG Music 🎧")}`;
+      const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(profile.referral.link)}&text=${encodeURIComponent("Слушай музыку в Infinity Music 🎧")}`;
       if (tg) tg.openTelegramLink(shareUrl);
       else window.open(shareUrl, "_blank");
       break;
