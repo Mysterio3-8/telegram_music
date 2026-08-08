@@ -17,7 +17,6 @@
 
 ## 🔴 Болит сейчас
 
-- [ ] 🔴 **Минусы не работают** — 42 в базе, у всех пустой `tg_file_id`, отправить нечем → [docs/tasks/instrumentals.md](docs/tasks/instrumentals.md)
 - [ ] 🔴 **iOS: «Deceptive Website Warning»** — Mini App не открывается у всех на iPhone → [docs/tasks/ios-safe-browsing.md](docs/tasks/ios-safe-browsing.md)
 - [ ] 🔴 **Рост и конверсия в Mini App** — цель 2 млн, сейчас 23 → [docs/tasks/growth.md](docs/tasks/growth.md)
 - [ ] ⏳ **Проверить живой платёж картой** — рублёвая оплата ни разу не проходила до конца вживую
@@ -25,11 +24,11 @@
 
 ## В работе
 
+- [~] **Минусы: импорт с YouTube идёт** — 525 видео с @MinusZvyaaga, ~90 мин → [docs/tasks/instrumentals.md](docs/tasks/instrumentals.md)
 - [~] **Прогрев каталога** — CLI готов, ждём накопления запросов → [docs/tasks/warmup-catalog.md](docs/tasks/warmup-catalog.md)
 
 ## Дальше по плану
 
-- [ ] **Парсер минусов с YouTube** — только то, где в названии «минус»/«instrumental» → [docs/tasks/instrumentals.md](docs/tasks/instrumentals.md)
 - [ ] **Загрузка своих треков удобнее** — обложка, понятные отказы → [docs/tasks/user-uploads.md](docs/tasks/user-uploads.md)
 - [ ] **Страница артиста** — артист заходит и заливает свои треки → [docs/tasks/artist-page.md](docs/tasks/artist-page.md)
 - [ ] **Перевод Mini App** — механизм есть, ~150 строк по экранам ещё русские → [docs/tasks/miniapp-i18n.md](docs/tasks/miniapp-i18n.md)
