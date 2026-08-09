@@ -148,6 +148,24 @@ const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : 
 // При смене бота править и здесь, и в app/config.py — иначе ссылки уводят на старого.
 const BOT_USERNAME = "muz_damn_bot";
 
+// Страницу открыли в обычном браузере, а не из Telegram: скрипт telegram.org
+// создаёт window.Telegram.WebApp где угодно, но initData непустой только внутри
+// клиента. Войти нечем, и приложению здесь делать нечего — поэтому оно вообще не
+// трогает DOM: в #app из index.html лежит описание сервиса со ссылками на бота,
+// поддержку и страницу «О сервисе». Раньше первый же render() затирал его
+// экраном «Откройте приложение из Telegram», и посетитель упирался в тупик без
+// единой ссылки — заодно это возвращало профиль «пустая страница под брендом
+// Telegram», из-за которого Safari ругался на домен.
+const OUTSIDE_TELEGRAM = (() => {
+  try {
+    // Dev-вход по токену из localStorage — это отладка в браузере, она должна жить
+    if (localStorage.getItem("tgmusic-dev-token")) return false;
+  } catch {
+    // приватный режим не отдаёт localStorage — считаем, что токена нет
+  }
+  return !(tg && tg.initData);
+})();
+
 if (tg) {
   tg.ready();
   tg.expand();
@@ -234,6 +252,7 @@ function scheduleRender() {
 }
 
 function render() {
+  if (OUTSIDE_TELEGRAM) return; // статичная страница из index.html остаётся как есть
   const state = getState();
 
   if (state.bootStatus !== "ready") {
@@ -336,6 +355,7 @@ subscribeProgress((current, duration) => {
 const CATALOG_PAGE_SIZE = 100;
 
 async function boot() {
+  if (OUTSIDE_TELEGRAM) return;
   mutate({ bootStatus: "loading", bootError: "" });
   try {
     // Язык — до первого рендера, иначе экран загрузки успевает мигнуть русским.

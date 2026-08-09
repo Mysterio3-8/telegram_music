@@ -3,7 +3,7 @@
   "configurations": [
     {
       "name": "miniapp",
-      "runtimeExecutable": "python",
+      "runtimeExecutable": "C:\\Windows\\Temp\\claude\\py312\\python.exe",
       "runtimeArgs": ["dev_server.py"],
       "port": 5500
     },
