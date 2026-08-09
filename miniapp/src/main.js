@@ -144,6 +144,10 @@ import {
 const root = document.getElementById("app");
 const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
 
+// Зеркалит settings.bot_username: сюда ведут «Поделиться» и «Открыть бота».
+// При смене бота править и здесь, и в app/config.py — иначе ссылки уводят на старого.
+const BOT_USERNAME = "muz_damn_bot";
+
 if (tg) {
   tg.ready();
   tg.expand();
@@ -1547,7 +1551,7 @@ root.addEventListener("click", (event) => {
     case "share": {
       const track = findTrack(id);
       if (track) {
-        const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(`https://t.me/tgram_music_bot?start=track_${track.id}`)}&text=${encodeURIComponent(`${track.artist} — ${track.title}`)}`;
+        const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(`https://t.me/${BOT_USERNAME}?start=track_${track.id}`)}&text=${encodeURIComponent(`${track.artist} — ${track.title}`)}`;
         if (tg) tg.openTelegramLink(shareUrl);
         else window.open(shareUrl, "_blank");
       }
@@ -1566,8 +1570,8 @@ root.addEventListener("click", (event) => {
       else window.open("https://t.me/suptgmusic_bot", "_blank");
       break;
     case "open-bot":
-      if (tg) tg.openTelegramLink("https://t.me/tgram_music_bot");
-      else window.open("https://t.me/tgram_music_bot", "_blank");
+      if (tg) tg.openTelegramLink(`https://t.me/${BOT_USERNAME}`);
+      else window.open(`https://t.me/${BOT_USERNAME}`, "_blank");
       break;
     default:
       break;

@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0f0f10" />
+    <title>Infinity Music — музыкальный бот для Telegram</title>
+    <meta
+      name="description"
+      content="Infinity Music — музыкальный бот и плеер для Telegram: поиск трека за доли секунды, личная библиотека, плейлисты, минусы. Бесплатный поиск в чате, плеер по подписке."
+    />
+    <link rel="canonical" href="https://keybest.cc/about/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Infinity Music" />
+    <meta property="og:title" content="Infinity Music — музыкальный бот для Telegram" />
+    <meta
+      property="og:description"
+      content="Поиск трека за доли секунды, библиотека, плейлисты и плеер — внутри Telegram."
+    />
+    <meta property="og:url" content="https://keybest.cc/about/" />
+    <meta name="twitter:card" content="summary" />
+    <style>
+      /* Страница-визитка. Самодостаточна: ни одного внешнего файла и ни одного
+         скрипта — её читают поисковые и антифишинговые сканеры, а им проще
+         поверить простой статике. Стили Mini App сюда не подключаем намеренно:
+         лендинг не должен ломаться от правок приложения. */
+      :root {
+        --bg: #0f0f10;
+        --card: #1a1a1d;
+        --line: #2a2a2e;
+        --text: #e9e9ec;
+        --muted: #a0a0a8;
+        --dim: #6b6b73;
+        --accent: #3b7bfe;
+      }
+      * { box-sizing: border-box; }
+      html { -webkit-text-size-adjust: 100%; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font: 17px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+      }
+      .wrap { max-width: 760px; margin: 0 auto; padding: 0 20px; }
+      a { color: var(--accent); }
+
+      header {
+        padding: 64px 0 48px;
+        background: radial-gradient(120% 100% at 50% 0%, #1c2340 0%, var(--bg) 62%);
+        border-bottom: 1px solid var(--line);
+      }
+      .logo {
+        font-size: 15px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin: 0 0 20px;
+      }
+      h1 { font-size: 40px; line-height: 1.15; margin: 0 0 16px; letter-spacing: -0.02em; }
+      .lead { font-size: 20px; color: var(--muted); margin: 0 0 32px; max-width: 34em; }
+
+      .actions { display: flex; flex-wrap: wrap; gap: 12px; }
+      .btn {
+        display: inline-block;
+        padding: 14px 26px;
+        border-radius: 12px;
+        font-weight: 600;
+        text-decoration: none;
+      }
+      .btn--main { background: var(--accent); color: #fff; }
+      .btn--ghost { border: 1px solid var(--line); color: var(--text); }
+
+      section { padding: 52px 0; border-bottom: 1px solid var(--line); }
+      h2 { font-size: 26px; margin: 0 0 8px; letter-spacing: -0.01em; }
+      .sub { color: var(--dim); margin: 0 0 28px; }
+
+      .grid { display: grid; gap: 16px; grid-template-columns: repeat(2, 1fr); }
+      .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px 22px; }
+      .card h3 { font-size: 17px; margin: 0 0 6px; }
+      .card p { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.55; }
+
+      ol.steps { counter-reset: s; list-style: none; margin: 0; padding: 0; }
+      ol.steps li {
+        counter-increment: s;
+        position: relative;
+        padding: 0 0 22px 46px;
+        color: var(--muted);
+      }
+      ol.steps li:last-child { padding-bottom: 0; }
+      ol.steps li::before {
+        content: counter(s);
+        position: absolute;
+        left: 0;
+        top: -1px;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        background: var(--card);
+        border: 1px solid var(--line);
+        color: var(--text);
+        font-size: 14px;
+        font-weight: 600;
+        display: grid;
+        place-items: center;
+      }
+      ol.steps b { color: var(--text); font-weight: 600; }
+
+      .who { margin: 0; padding: 0; list-style: none; }
+      .who li { padding: 12px 0; border-bottom: 1px solid var(--line); color: var(--muted); }
+      .who li:last-child { border-bottom: 0; }
+      .who b { color: var(--text); font-weight: 600; }
+
+      .chat {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 18px 20px;
+        font-size: 15px;
+      }
+      .chat p { margin: 0 0 12px; color: var(--muted); }
+      .chat p:last-child { margin-bottom: 0; }
+      .chat code {
+        display: inline-block;
+        background: #101014;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 3px 9px;
+        color: var(--text);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 14px;
+      }
+
+      details {
+        border-bottom: 1px solid var(--line);
+        padding: 16px 0;
+      }
+      details summary {
+        cursor: pointer;
+        font-weight: 600;
+        list-style: none;
+      }
+      details summary::-webkit-details-marker { display: none; }
+      details summary::after { content: " +"; color: var(--dim); }
+      details[open] summary::after { content: " –"; }
+      details p { color: var(--muted); margin: 10px 0 0; font-size: 16px; }
+
+      footer { padding: 40px 0 64px; color: var(--dim); font-size: 14px; }
+      footer p { margin: 0 0 10px; }
+      footer a { color: var(--muted); }
+
+      @media (max-width: 620px) {
+        h1 { font-size: 30px; }
+        .lead { font-size: 18px; }
+        .grid { grid-template-columns: 1fr; }
+        header { padding: 44px 0 36px; }
+        section { padding: 40px 0; }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="wrap">
+        <p class="logo">Infinity Music</p>
+        <h1>Музыка внутри Telegram — без сайтов и лишних вкладок</h1>
+        <p class="lead">
+          Напишите боту название трека — он найдёт и пришлёт его файлом прямо в чат.
+          А если нужен полноценный плеер с библиотекой, плейлистами и очередью — он
+          открывается кнопкой, тоже не выходя из мессенджера.
+        </p>
+        <div class="actions">
+          <a class="btn btn--main" href="https://t.me/muz_damn_bot">Открыть бота в Telegram</a>
+          <a class="btn btn--ghost" href="#how">Как пользоваться</a>
+        </div>
+      </div>
+    </header>
+
+    <section>
+      <div class="wrap">
+        <h2>Что умеет</h2>
+        <p class="sub">Всё работает в переписке — устанавливать нечего.</p>
+        <div class="grid">
+          <div class="card">
+            <h3>Поиск за доли секунды</h3>
+            <p>
+              Ищет по SoundCloud и YouTube одновременно и присылает аудиофайл в чат.
+              Кириллица, латиница, опечатки и «на слух» — распознаются.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Личная библиотека</h3>
+            <p>
+              Понравившийся трек добавляется в свою коллекцию одной кнопкой и остаётся
+              там — не теряется в истории переписки.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Плейлисты</h3>
+            <p>
+              Свои подборки, сортировка, перенос из Spotify, Яндекс.Музыки и ВК по
+              ссылке на плейлист.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Плеер с очередью и миксами</h3>
+            <p>
+              Приложение внутри Telegram: очередь, автоплей, перемешивание, тексты
+              песен, эквалайзер, персональный микс по вашим прослушиваниям.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Минусы для артистов</h3>
+            <p>
+              Отдельный раздел инструменталов — то, чего обычно нет в музыкальных
+              ботах. Для битмейкеров, вокалистов и тех, кто пишет свои треки.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Отправка друзьям</h3>
+            <p>
+              Наберите <code>@muz_damn_bot</code> и название прямо в любом чате —
+              трек отправится собеседнику, не переключая диалог.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="how">
+      <div class="wrap">
+        <h2>Как пользоваться</h2>
+        <p class="sub">Три шага, ни один не требует регистрации.</p>
+        <ol class="steps">
+          <li><b>Откройте бота</b> — <a href="https://t.me/muz_damn_bot">@muz_damn_bot</a> в Telegram и нажмите «Старт».</li>
+          <li><b>Напишите, что ищете</b> — исполнителя, название или обрывок фразы. Бот вернёт список вариантов; нажмите нужный — придёт файл.</li>
+          <li><b>Откройте плеер</b> — кнопка «🎧 Открыть плеер» в меню, если хотите слушать подряд, собирать плейлисты и слушать миксы.</li>
+        </ol>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <h2>Примеры запросов</h2>
+        <p class="sub">Так это выглядит в переписке.</p>
+        <div class="chat">
+          <p><code>кизару фейк айди</code> — русский текст найдёт трек с латинским названием</p>
+          <p><code>Земфира</code> — по одному исполнителю бот покажет его треки списком</p>
+          <p><code>розовое вино</code> — хватает части названия, без исполнителя</p>
+          <p><code>@muz_damn_bot the weeknd</code> — прямо в чате с другом, чтобы отправить ему трек</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <h2>Для кого</h2>
+        <ul class="who">
+          <li><b>Тем, кто слушает в дороге.</b> Трек приходит файлом в Telegram и остаётся доступен — в метро и в самолёте тоже.</li>
+          <li><b>Тем, кто делится музыкой.</b> Отправить трек другу — одна строка в том же чате, без ссылок на сторонние сайты.</li>
+          <li><b>Артистам и битмейкерам.</b> Раздел минусов и загрузка собственных треков в сервис.</li>
+          <li><b>Тем, кто ищет редкое.</b> Поиск идёт в SoundCloud, где живёт то, чего нет в больших стримингах.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <h2>Вопросы</h2>
+        <details>
+          <summary>Сколько это стоит?</summary>
+          <p>
+            Поиск и отправка треков в чате — бесплатно и без ограничений по времени.
+            Плеер-приложение с библиотекой, плейлистами и миксами — по подписке
+            29 ₽ в месяц, первый день бесплатно.
+          </p>
+        </details>
+        <details>
+          <summary>Нужно ли что-то устанавливать?</summary>
+          <p>
+            Нет. Бот работает в вашем Telegram, плеер открывается кнопкой внутри
+            мессенджера. Отдельного приложения и регистрации нет.
+          </p>
+        </details>
+        <details>
+          <summary>На каких языках работает?</summary>
+          <p>
+            Интерфейс переведён на русский, английский, испанский, немецкий,
+            французский, португальский и турецкий. Язык определяется автоматически,
+            его можно сменить вручную в настройках.
+          </p>
+        </details>
+        <details>
+          <summary>Можно ли загрузить свой трек?</summary>
+          <p>
+            Да. Отправьте боту аудиофайл — он попадёт в вашу библиотеку. Это
+            основной путь для собственных записей и для музыки, которой нет в
+            открытых источниках.
+          </p>
+        </details>
+        <details>
+          <summary>Откуда берётся музыка?</summary>
+          <p>
+            Из открытых источников — SoundCloud и YouTube — и из файлов, которые
+            загружают сами пользователи. Технические средства защиты сервис не
+            обходит: лицензионные релизы с DRM не скачиваются.
+          </p>
+        </details>
+        <details>
+          <summary>Куда писать, если что-то не работает?</summary>
+          <p>
+            В бот поддержки <a href="https://t.me/suptgmusic_bot">@suptgmusic_bot</a> —
+            жалобы, отзывы и идеи читает разработчик.
+          </p>
+        </details>
+      </div>
+    </section>
+
+    <footer>
+      <div class="wrap">
+        <p>
+          <a href="https://t.me/muz_damn_bot">Бот</a> ·
+          <a href="https://t.me/suptgmusic_bot">Поддержка</a> ·
+          <a href="https://t.me/tgramuzuka">Новости</a> ·
+          <a href="/">Плеер</a>
+        </p>
+        <p>
+          Сервис не связан с Telegram Messenger Inc. и не является его продуктом.
+          «Telegram» — товарный знак его правообладателя.
+        </p>
+        <p>© Infinity Music, 2026</p>
+      </div>
+    </footer>
+  </body>
+</html>
