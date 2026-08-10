@@ -17,7 +17,9 @@ def _is_exempt(event: TelegramObject) -> bool:
     if isinstance(event, Message):
         return bool(event.text) and event.text.startswith("/start")
     if isinstance(event, CallbackQuery):
-        return event.data == "sub:check"
+        # lang:* — экран выбора языка. Он показывается новичку ДО гейта подписки,
+        # поэтому гейтить его нельзя: иначе первый же экран бота мёртвый.
+        return event.data == "sub:check" or (event.data or "").startswith("lang:")
     return True
 
 

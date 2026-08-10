@@ -39,7 +39,7 @@ MESSAGES: dict[str, str] = {
         "VK ya da Apple Music gibi tam bir müzik servisi: mixler, çalma listeleri, "
         "şarkı sözleri, ekolayzer ve çevrimdışı mod."
     ),
-    "cabinet.price": "💎 {price} ₽/ay • İlk gün ücretsiz, ayrıca botta ve Mini App'te davet ödülleri",
+    "cabinet.price": "💎 {price} ₽/ay • İlk gün ücretsiz",
     "menu.player": "🎧 Oynatıcıyı aç",
     "menu.upload": "⬆️ Parça yükle",
     "menu.premium": "💎 Oynatıcıyı aç — {price} ₽/ay",
@@ -236,20 +236,15 @@ MESSAGES: dict[str, str] = {
         "📢 Reklam\n\nBurada senin reklamın olabilirdi.\n\n"
         "Reklamları kapat, 💎 Premium ile sınırsıza geç."
     ),
-    "referral.forever": "Sonsuza dek Premium",
+    "referral.forever": "Infinity Premium",
     "referral.reward_days": "{days} {days_word} Premium",
     "referral.rank": "{emoji} Seviye: <b>{title}</b>",
     "referral.to_next_rank": "{emoji} {title} seviyesine — {count} {friends_word} kaldı",
     "referral.next_reward": "\n🔥 {count} {friends_word} daha — ve {reward} kazanıyorsun\n",
     "referral.title": "🎁 <b>Davet programı</b>",
-    "referral.promise": (
-        "<b>{count} {friends_word} — {reward}.</b> Ödül, arkadaşın senin bağlantınla "
-        "müzik dinlemeye başlar başlamaz otomatik gelir."
-    ),
     "referral.invited": "👥 Davet edilen: <b>{count}</b>",
     "referral.your_link": "<b>Bağlantın</b> (kopyalamak için dokun):",
     "referral.rewards": "<b>Ödüller</b>",
-    "referral.discount_note": "Bir arkadaşın abonelik aldığında, sonraki alışverişinde %50 indirim kazanırsın.",
     "referral.share_text": (
         "Şu bota bak: her parçayı ücretsiz bulup indiriyor — "
         "sadece adını yazıyorsun, müziği gönderiyor."

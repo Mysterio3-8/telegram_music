@@ -26,8 +26,6 @@ from app.services.gamification import (
 
 router = Router()
 
-_VISIBLE_MILESTONES = 5  # весь список из 13 порогов в сообщении не нужен — только ближайшие
-
 
 def _friends_word(count: int) -> str:
     return plural("word.friends", count)
@@ -42,16 +40,15 @@ def _reward_text(days: int) -> str:
 
 
 def _rewards_block(invited: int) -> str:
-    """Ближайшие пороги: достигнутые с галочкой, остальные с подарком."""
-    upcoming = [row for row in REFERRAL_MILESTONES if row[0] > invited][:_VISIBLE_MILESTONES]
-    reached = [row for row in REFERRAL_MILESTONES if row[0] <= invited][-2:]
+    """Вся лестница порогов: достигнутые с галочкой, остальные с подарком.
+    Список показывается целиком (решение владельца) — верхние пороги и есть
+    главная мотивация звать дальше, обрезать их незачем."""
 
-    def line(mark: str, threshold: int, days: int) -> str:
+    def line(threshold: int, days: int) -> str:
+        mark = "✅" if threshold <= invited else "🎁"
         return f"{mark} {threshold} {_friends_word(threshold)} — {_reward_text(days)}"
 
-    lines = [line("✅", threshold, days) for threshold, days in reached]
-    lines += [line("🎁", threshold, days) for threshold, days in upcoming]
-    return "\n".join(lines)
+    return "\n".join(line(threshold, days) for threshold, days in REFERRAL_MILESTONES)
 
 
 async def build_referral_text(session: AsyncSession, user: User) -> str:
@@ -88,26 +85,15 @@ async def build_referral_text(session: AsyncSession, user: User) -> str:
             reward=_reward_text(next_reward_days),
         )
 
-    # Обещание считаем из настоящего первого порога, а не пишем словами
-    first_friends, first_days = REFERRAL_MILESTONES[0]
-
     return (
         t("referral.title") + "\n\n"
-        + t(
-            "referral.promise",
-            count=first_friends,
-            friends_word=_friends_word(first_friends),
-            reward=_reward_text(first_days),
-        )
-        + "\n\n"
         + t("referral.invited", count=invited) + "\n"
         + rank_line
         + next_line + "\n"
         + t("referral.your_link") + "\n"
         + f"<code>{link}</code>\n\n"
         + t("referral.rewards") + "\n"
-        + _rewards_block(invited) + "\n\n"
-        + t("referral.discount_note")
+        + _rewards_block(invited)
     )
 
 

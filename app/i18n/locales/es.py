@@ -40,7 +40,7 @@ MESSAGES: dict[str, str] = {
         "Un servicio de música completo, como VK o Apple Music: mixes, listas, "
         "letras, ecualizador y modo sin conexión."
     ),
-    "cabinet.price": "💎 {price} ₽/mes • Primer día gratis, además de referidos en el bot y la Mini App",
+    "cabinet.price": "💎 {price} ₽/mes • Primer día gratis",
     "menu.player": "🎧 Abrir el reproductor",
     "menu.upload": "⬆️ Subir una pista",
     "menu.premium": "💎 Abrir el reproductor — {price} ₽/mes",
@@ -237,20 +237,15 @@ MESSAGES: dict[str, str] = {
         "📢 Publicidad\n\nAquí podría estar tu anuncio.\n\n"
         "Quita los anuncios y ve sin límites con 💎 Premium."
     ),
-    "referral.forever": "Premium para siempre",
+    "referral.forever": "Infinity Premium",
     "referral.reward_days": "{days} {days_word} de Premium",
     "referral.rank": "{emoji} Rango: <b>{title}</b>",
     "referral.to_next_rank": "Para el rango {emoji} {title} — {count} {friends_word} más",
     "referral.next_reward": "\n🔥 {count} {friends_word} más — y recibes {reward}\n",
     "referral.title": "🎁 <b>Programa de referidos</b>",
-    "referral.promise": (
-        "<b>{count} {friends_word} — {reward}.</b> La recompensa llega automáticamente "
-        "en cuanto tu amigo empieza a escuchar con tu enlace."
-    ),
     "referral.invited": "👥 Invitados: <b>{count}</b>",
     "referral.your_link": "<b>Tu enlace</b> (pulsa para copiar):",
     "referral.rewards": "<b>Recompensas</b>",
-    "referral.discount_note": "Cuando un amigo compra la suscripción, te llevas un 50% de descuento en tu próxima compra.",
     "referral.share_text": (
         "Mira este bot: encuentra y descarga cualquier canción gratis — "
         "solo escribes el título y te envía la música."

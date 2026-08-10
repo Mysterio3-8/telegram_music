@@ -4,10 +4,15 @@
 
 Идемпотентно: плейлист ищется по (user_id, title), состав обновляется целиком —
 повторный прогон освежает подборки по мере роста базы.
+
+⚠️ Автогенерация ОТКЛЮЧЕНА владельцем (10.08.2026): подборок наплодилось столько,
+что они забили список плейлистов и мешали личным. `generate_genre_playlists`
+оставлена рабочей для ручного запуска, из ежедневного таймера обслуживания
+вызов убран, а уже созданные чистит `drop_genre_playlists`.
 """
 from dataclasses import dataclass
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Genre, Playlist, PlaylistTrack
@@ -57,3 +62,66 @@ async def generate_genre_playlists(
         await session.commit()
         results.append(GeneratedPlaylist(title=genre.name, track_count=len(tracks), created=created))
     return results
+
+
+@dataclass
+class DroppedPlaylist:
+    playlist_id: int
+    user_id: int
+    title: str
+    track_count: int
+
+
+async def drop_genre_playlists(
+    session: AsyncSession, *, user_ids: list[int] | None = None, apply: bool = False
+) -> list[DroppedPlaylist]:
+    """Убирает автоплейлисты по жанрам. Без apply=True только показывает список.
+
+    Признак «автоматический» — совпадение названия с именем жанра из дерева:
+    отдельного флага у Playlist нет, а генератор всегда берёт `genre.name` как есть.
+    Поэтому по умолчанию чистим только владельцев, под которыми шла генерация
+    (`user_ids`): у обычного человека плейлист «Рэп» — его собственный, и стереть
+    его молча нельзя.
+    """
+    titles = {
+        name.strip().lower()
+        for name in (await session.scalars(select(Genre.name))).all()
+        if name
+    }
+    if not titles:
+        return []
+
+    query = select(Playlist)
+    if user_ids is not None:
+        if not user_ids:
+            return []
+        query = query.where(Playlist.user_id.in_(user_ids))
+    victims = [
+        playlist
+        for playlist in (await session.scalars(query)).all()
+        if (playlist.title or "").strip().lower() in titles
+    ]
+    if not victims:
+        return []
+
+    dropped: list[DroppedPlaylist] = []
+    for playlist in victims:
+        count = await session.scalar(
+            select(func.count())
+            .select_from(PlaylistTrack)
+            .where(PlaylistTrack.playlist_id == playlist.id)
+        )
+        dropped.append(
+            DroppedPlaylist(
+                playlist_id=playlist.id,
+                user_id=playlist.user_id,
+                title=playlist.title,
+                track_count=count or 0,
+            )
+        )
+    if apply:
+        ids = [item.playlist_id for item in dropped]
+        await session.execute(delete(PlaylistTrack).where(PlaylistTrack.playlist_id.in_(ids)))
+        await session.execute(delete(Playlist).where(Playlist.id.in_(ids)))
+        await session.commit()
+    return dropped

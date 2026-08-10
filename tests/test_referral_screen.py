@@ -47,8 +47,15 @@ def test_first_milestone_is_one_day():
 
 def test_lifetime_milestone_reads_as_forever():
     """36500 дней человеку показывать нельзя — верхний порог пишется словом."""
-    assert _reward_text(LIFETIME_DAYS) == "Premium навсегда"
+    assert _reward_text(LIFETIME_DAYS) == "Infinity Premium"
     assert REFERRAL_MILESTONES[-1] == (5000, LIFETIME_DAYS)
+
+
+def test_rewards_block_shows_the_whole_ladder():
+    """Лестницу показываем целиком (решение владельца) — обрезки больше нет."""
+    block = _rewards_block(invited=3)
+    assert len(block.splitlines()) == len(REFERRAL_MILESTONES)
+    assert "🎁 5000 друзей — Infinity Premium" in block
 
 
 async def test_referral_text_contains_link_and_counters(session):

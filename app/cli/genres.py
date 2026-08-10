@@ -2,6 +2,7 @@
 
   python -m app.cli.genres seed            # идемпотентный сид дерева жанров
   python -m app.cli.genres make-playlists  # подборки «редакции» по жанрам (от первого админа)
+  python -m app.cli.genres drop-playlists  # удалить автоподборки по жанрам (по умолчанию — показ)
   python -m app.cli.genres stats           # сколько жанров и привязок в базе
 """
 import argparse
@@ -12,7 +13,7 @@ from sqlalchemy import func, select
 from app.config import settings
 from app.db.base import session_factory
 from app.db.models import ArtistGenre, Genre, User
-from app.services.genre_playlists import generate_genre_playlists
+from app.services.genre_playlists import drop_genre_playlists, generate_genre_playlists
 from app.services.genres import seed_genres
 
 
@@ -40,6 +41,28 @@ async def _make_playlists(telegram_id: int | None) -> None:
     print(f"Подборок всего: {len(results)}")
 
 
+async def _drop_playlists(apply: bool, all_users: bool) -> None:
+    """Чистка автоподборок по жанрам (решение владельца: в списке плейлистов
+    должны остаться только личные). По умолчанию бьём только по админам — под
+    ними шла генерация; --all-users расширяет на всю базу, но тогда под удаление
+    попадёт и личный плейлист человека, названный именем жанра."""
+    async with session_factory() as session:
+        user_ids: list[int] | None = None
+        if not all_users:
+            admins = (
+                await session.scalars(
+                    select(User.id).where(User.telegram_id.in_(settings.admin_id_set))
+                )
+            ).all()
+            user_ids = list(admins)
+        dropped = await drop_genre_playlists(session, user_ids=user_ids, apply=apply)
+
+    for item in dropped:
+        print(f"  #{item.playlist_id} user={item.user_id} «{item.title}» — {item.track_count} треков")
+    verb = "Удалено" if apply else "Под удаление (нужен --apply)"
+    print(f"{verb}: {len(dropped)}")
+
+
 async def _stats() -> None:
     async with session_factory() as session:
         genres = (await session.scalar(select(func.count()).select_from(Genre))) or 0
@@ -53,6 +76,13 @@ def main() -> None:
     sub.add_parser("seed")
     playlists = sub.add_parser("make-playlists")
     playlists.add_argument("--user", type=int, default=None, help="telegram_id админа-«редакции»")
+    drop = sub.add_parser("drop-playlists")
+    drop.add_argument("--apply", action="store_true", help="реально удалить, а не показать")
+    drop.add_argument(
+        "--all-users",
+        action="store_true",
+        help="чистить у всех, а не только у админов (осторожно: заденет личные плейлисты с именем жанра)",
+    )
     sub.add_parser("stats")
 
     args = parser.parse_args()
@@ -60,6 +90,8 @@ def main() -> None:
         asyncio.run(_seed())
     elif args.command == "make-playlists":
         asyncio.run(_make_playlists(args.user))
+    elif args.command == "drop-playlists":
+        asyncio.run(_drop_playlists(args.apply, args.all_users))
     else:
         asyncio.run(_stats())
 

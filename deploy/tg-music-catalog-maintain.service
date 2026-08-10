@@ -8,7 +8,9 @@ WorkingDirectory=/opt/tg-music-bot
 # Порядок важен: сначала привязываем новые треки к артистам (artist_id),
 # затем собираем подборки — иначе свежие треки не попадут в жанры.
 ExecStart=/opt/tg-music-bot/.venv/bin/python -m app.cli.artists bind-tracks
-ExecStart=/opt/tg-music-bot/.venv/bin/python -m app.cli.genres make-playlists
+# Автоподборки по жанрам отключены владельцем (10.08.2026) — они забивали список
+# плейлистов. Чистка уже созданных: python -m app.cli.genres drop-playlists --apply
+# ExecStart=/opt/tg-music-bot/.venv/bin/python -m app.cli.genres make-playlists
 # Автопродление Premium (блок E): списание с сохранённых способов у истекающих подписок
 ExecStart=/opt/tg-music-bot/.venv/bin/python -m app.cli.autorenew
 # Защита диска (инцидент 2026-07-26): чистим брошенный temp yt-dlp старше 2 часов

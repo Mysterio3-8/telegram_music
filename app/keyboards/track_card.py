@@ -43,10 +43,9 @@ def track_card_keyboard(
         rows.append(
             [InlineKeyboardButton(text=t("card.remove_playlist"), callback_data=f"ta:delpl:{track.id}:{ctx}")]
         )
-    if track.tg_file_id or track.storage_path:
-        rows.append(
-            [InlineKeyboardButton(text=t("card.download"), callback_data=f"ta:file:{track.id}:{ctx}")]
-        )
+    # «Скачать» убрана (решение владельца): карточка и так приходит аудиосообщением,
+    # а его Telegram сохраняет своими средствами — кнопка дублировала клиент.
+    # Обработчик ta:file оставлен рабочим ради кнопок в старых сообщениях.
     rows.append([InlineKeyboardButton(text=t("card.share"), url=share_url(track, bot_username))])
     if is_admin:
         rows.append(

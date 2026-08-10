@@ -8,7 +8,7 @@ from app.db.base import session_factory
 from app.db.models import User, UserLibrary
 from app.handlers.cards import show_track_card
 from app.handlers.common import ensure_user
-from app.keyboards.main_menu import main_menu_keyboard
+from app.keyboards.main_menu import language_setup_keyboard, main_menu_keyboard
 from app.keyboards.subscription import subscription_gate_keyboard
 from app.i18n import t, tracks_word
 from app.services.gamification import register_referral
@@ -66,6 +66,35 @@ async def _show_shared_track(message: Message, user: User, args: str) -> bool:
     return True
 
 
+async def _gate_view(session: AsyncSession, lang: str) -> tuple[str, object]:
+    from app.services.required_channels import get_required_channels
+
+    channels = await get_required_channels(session)
+    return t("gate.text", lang), subscription_gate_keyboard(channels, lang)
+
+
+async def show_start_screen(session: AsyncSession, user: User, message: Message) -> None:
+    """Гейт подписки или кабинет, поверх существующего сообщения.
+
+    Сюда приземляется выбор языка на первом запуске (lang:setup:*): экран выбора
+    заменяется тем, что человек увидел бы сразу после /start.
+    """
+    lang = user_language(user)
+    subscribed = await is_fully_subscribed(
+        session, message.bot, user.id, user.telegram_id, force=True
+    )
+    if subscribed:
+        text, markup, parse_mode = (
+            await build_cabinet_text(session, user),
+            main_menu_keyboard(lang),
+            "HTML",
+        )
+    else:
+        text, markup = await _gate_view(session, lang)
+        parse_mode = None
+    await message.edit_text(text, reply_markup=markup, parse_mode=parse_mode)
+
+
 @router.message(CommandStart())
 async def cmd_start(message: Message, state: FSMContext, command: CommandObject) -> None:
     await state.clear()
@@ -77,24 +106,30 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
             referrer_raw = command.args.removeprefix("ref_")
             if referrer_raw.isdigit():
                 await register_referral(session, user, int(referrer_raw))
+        # Первый вход — сначала язык (решение владельца). ui_language хранит только
+        # осознанный выбор, поэтому пустое поле и есть признак «ещё не спрашивали»;
+        # подсвечиваем то, что определилось по языку устройства.
+        if user.ui_language is None:
+            lang = user_language(user)
+            await message.answer(
+                t("lang.title", lang),
+                reply_markup=language_setup_keyboard(lang),
+                parse_mode="HTML",
+            )
+            return
+        lang = user_language(user)
         subscribed = await is_fully_subscribed(
             session, message.bot, user.id, user.telegram_id, force=True
         )
         if not subscribed:
-            from app.services.required_channels import get_required_channels
-
-            channels = await get_required_channels(session)
-            # Язык уже известен: ensure_user выше положил language_code устройства
-            lang = user_language(user)
-            await message.answer(
-                t("gate.text", lang), reply_markup=subscription_gate_keyboard(channels, lang)
-            )
+            text, markup = await _gate_view(session, lang)
+            await message.answer(text, reply_markup=markup)
             return
         text = await build_cabinet_text(session, user)
     if command.args and command.args.startswith("track_"):
         if await _show_shared_track(message, user, command.args):
             return
-    await message.answer(text, reply_markup=main_menu_keyboard(user_language(user)), parse_mode="HTML")
+    await message.answer(text, reply_markup=main_menu_keyboard(lang), parse_mode="HTML")
 
 
 async def render_main_menu(callback: CallbackQuery) -> None:

@@ -15,16 +15,12 @@ const STEPS = [
   "Награда начисляется автоматически",
 ];
 
-// Заголовок считаем из первого настоящего порога, а не пишем словами: награды
-// урезаны множителем, и «неделя Premium» была неправдой.
-function introTitle(profile) {
-  const first =
-    profile && profile.referral.milestones && profile.referral.milestones.length
-      ? profile.referral.milestones[0]
-      : null;
-  if (!first) return "Приглашайте друзей — получайте Premium";
-  const friends = first.friends === 1 ? "друг" : first.friends < 5 ? "друга" : "друзей";
-  return `${first.friends} ${friends} — ${first.days} ${dayWord(first.days)} Premium`;
+// Верхний порог — «Infinity Premium», а не «36500 дней»: столько дней стоит в
+// REFERRAL_MILESTONES как техническая запись «навсегда».
+const LIFETIME_DAYS = 36500;
+
+function prizeText(days) {
+  return days >= LIFETIME_DAYS ? "Infinity Premium" : `${days} ${dayWord(days)} Premium`;
 }
 
 function rewardsList(profile) {
@@ -37,7 +33,7 @@ function rewardsList(profile) {
       <div class="ref-reward${done ? " is-done" : ""}">
         <span class="ref-reward__check">${icon(done ? "check" : "gift")}</span>
         <span class="ref-reward__friends">${r.friends} ${r.friends === 1 ? "друг" : r.friends < 5 ? "друга" : "друзей"}</span>
-        <span class="ref-reward__prize">${r.days} ${dayWord(r.days)} Premium</span>
+        <span class="ref-reward__prize">${prizeText(r.days)}</span>
       </div>
     `;
     })
@@ -80,7 +76,7 @@ function nextRewardBanner(profile) {
   if (!left || !days) return "";
   return `
     <div class="ref-next">
-      <div class="ref-next__title">Ещё ${left} ${left === 1 ? "друг" : left < 5 ? "друга" : "друзей"} — и ${days} ${dayWord(days)} Premium</div>
+      <div class="ref-next__title">Ещё ${left} ${left === 1 ? "друг" : left < 5 ? "друга" : "друзей"} — и ${prizeText(days)}</div>
       <div class="ref-next__sub">Награда придёт автоматически</div>
     </div>
   `;
@@ -124,12 +120,6 @@ export function renderReferral(state) {
     <div class="page-head" data-role="page-head">
       <button class="icon-btn" data-action="back" aria-label="Назад">${icon("back")}</button>
       <span>Реферальная программа</span>
-    </div>
-
-    <div class="ref-intro">
-      <div class="ref-intro__emoji">🎁</div>
-      <div class="ref-intro__title">${introTitle(profile)}</div>
-      <div class="ref-intro__text">Первая награда приходит сразу за первого приглашённого. Дальше больше — вплоть до Premium навсегда. А когда друг оплачивает подписку, вам падает скидка 50% на следующую покупку.</div>
     </div>
 
     ${nextRewardBanner(profile)}

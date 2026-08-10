@@ -78,7 +78,7 @@ function renderReferralTeaser(state) {
     <button class="ref-teaser" data-action="open-referral">
       <span class="ref-teaser__emoji">🎁</span>
       <span class="ref-teaser__text">
-        <span class="ref-teaser__title">Пригласи друга — неделя Premium</span>
+        <span class="ref-teaser__title">Приглашай друзей — получай Premium</span>
         <span class="ref-teaser__sub">Награда приходит сразу, за первого же</span>
       </span>
       ${icon("chevron")}

@@ -47,7 +47,7 @@ MESSAGES: dict[str, str] = {
         "Полноценный музыкальный сервис как VK или Apple Music: миксы, плейлисты, "
         "тексты песен, эквалайзер и офлайн-режим. Удобнее и лучше чем другие сервисы."
     ),
-    "cabinet.price": "💎 {price} ₽/месяц • Первый день бесплатно и рефералки в боте и Mini App",
+    "cabinet.price": "💎 {price} ₽/месяц • Первый день бесплатно",
     "menu.player": "🎧 Открыть плеер",
     "menu.upload": "⬆️ Загрузить трек",
     "menu.premium": "💎 Открыть плеер — {price} ₽/мес",
@@ -257,20 +257,15 @@ MESSAGES: dict[str, str] = {
         "Отключите рекламу и получите безлимит с 💎 Premium."
     ),
     # --- рефералка
-    "referral.forever": "Premium навсегда",
+    "referral.forever": "Infinity Premium",
     "referral.reward_days": "{days} {days_word} Premium",
     "referral.rank": "{emoji} Ранг: <b>{title}</b>",
     "referral.to_next_rank": "До ранга {emoji} {title} — ещё {count} {friends_word}",
     "referral.next_reward": "\n🔥 Ещё {count} {friends_word} — и {reward}\n",
     "referral.title": "🎁 <b>Реферальная программа</b>",
-    "referral.promise": (
-        "<b>{count} {friends_word} — {reward}.</b> Награда приходит автоматически, "
-        "как только друг начнёт слушать музыку по вашей ссылке."
-    ),
     "referral.invited": "👥 Приглашено: <b>{count}</b>",
     "referral.your_link": "<b>Ваша ссылка</b> (нажмите, чтобы скопировать):",
     "referral.rewards": "<b>Награды</b>",
-    "referral.discount_note": "Когда друг оплачивает подписку, вам падает скидка 50% на следующую покупку.",
     "referral.share_text": (
         "Держи бота, где можно найти и скачать любой трек бесплатно — "
         "просто пишешь название, и он присылает музыку."
