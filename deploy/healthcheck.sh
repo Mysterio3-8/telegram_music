@@ -20,6 +20,14 @@ STATE_DIR=/var/lib/tg-music-health
 # Не чаще одного одинакового сообщения в полчаса: сторож, спамящий владельца,
 # перестают читать через день, и следующая настоящая поломка проходит мимо.
 ALERT_COOLDOWN=1800
+# Сколько ждать, прежде чем считать юнит упавшим. Рестарт при деплое занимает
+# секунды, и без этой паузы сторож ловил сервисы между «остановлен» и «запущен»
+# и слал три тревоги подряд на ровном месте (11.08, первый же вечер работы).
+RESTART_GRACE=15
+# Мало памяти — сообщаем, только если низко в двух проверках подряд (4 минуты):
+# одиночный провал бывает в момент скачивания трека и проходит сам.
+LOWMEM_MB=60
+LOWMEM_COOLDOWN=7200
 # Очередь поискового парсера. Порог с запасом: несколько задач в моменте — это
 # норма (одна закачка ~8 сек), а вот десяток, не убывающий две проверки подряд,
 # уже означает, что разбирать некому.
@@ -29,6 +37,8 @@ QUEUE_STALL_LIMIT=10
 CRITICAL_UNITS=(redis-server tg-music-bot tg-music-api tg-music-worker tg-music-youtube-user)
 
 mkdir -p "$STATE_DIR"
+recovered=()
+failed=()
 
 # --- уведомление владельцу -------------------------------------------------
 # Токен и админов берём из того же .env, что и бот: второй источник правды
@@ -78,17 +88,34 @@ for unit in "${CRITICAL_UNITS[@]}"; do
     [ "$(systemctl is-enabled "$unit" 2>/dev/null)" = "enabled" ] || continue
     systemctl is-active --quiet "$unit" && continue
 
+    # Пауза и повторная проверка: чаще всего юнит не «лежит», а перезапускается
+    # (деплой, install-units.sh, ручной restart). Поднялся сам — молчим.
+    sleep "$RESTART_GRACE"
+    if systemctl is-active --quiet "$unit"; then
+        logger -t tg-music-health "$unit перезапускался — поднялся сам, тревоги нет"
+        continue
+    fi
+
     logger -t tg-music-health "$unit лежит — поднимаю"
     systemctl reset-failed "$unit" 2>/dev/null || true
     systemctl start "$unit" 2>/dev/null || true
     sleep 5
 
     if systemctl is-active --quiet "$unit"; then
-        notify "down-$unit" "$unit лежал, сторож поднял. Проверь, почему остановился: journalctl -u $unit -n 50"
+        recovered+=("$unit")
     else
-        notify "fail-$unit" "$unit НЕ ПОДНИМАЕТСЯ. Прод частично мёртв: systemctl status $unit"
+        failed+=("$unit")
     fi
 done
+
+# Одно сообщение на прогон, а не по штуке на юнит: сервисы падают пачкой (общая
+# память, общий Redis), и три тревоги подряд в чате — это шум, из-за которого
+# перестают читать четвёртую.
+if [ ${#failed[@]} -gt 0 ]; then
+    notify "fail" "НЕ ПОДНИМАЮТСЯ: ${failed[*]}. Прод частично мёртв — systemctl status ${failed[0]}"
+elif [ ${#recovered[@]} -gt 0 ]; then
+    notify "down" "Лежали, сторож поднял: ${recovered[*]}. Почему остановились: journalctl -u ${recovered[0]} -n 50"
+fi
 
 # --- 2. Очередь не убывает -------------------------------------------------
 # Юнит может быть active, а работа стоять: тогда systemd доволен, а треки не
@@ -120,8 +147,19 @@ fi
 # Ранний сигнал: на этом боксе 961 МБ, и все прошлые инциденты начинались с
 # того, что доступная память уходила к нулю.
 avail=$(awk '/MemAvailable/ {print int($2/1024)}' /proc/meminfo)
-if [ -n "$avail" ] && [ "$avail" -lt 60 ]; then
-    notify "lowmem" "Свободно всего ${avail} МБ памяти. Смотри, кто её ест: systemd-cgtop -1 -n1, redis-cli info memory"
+lowmem_file="$STATE_DIR/lowmem-streak"
+if [ -n "$avail" ] && [ "$avail" -lt "$LOWMEM_MB" ]; then
+    streak=$(cat "$lowmem_file" 2>/dev/null | tr -dc '0-9')
+    streak=$(( ${streak:-0} + 1 ))
+    echo "$streak" >"$lowmem_file"
+    # Провал в одной проверке — обычное дело: скачивание трека с перекодированием
+    # съедает память на десяток секунд и отдаёт обратно. Тревожим со второй.
+    if [ "$streak" -ge 2 ]; then
+        ALERT_COOLDOWN=$LOWMEM_COOLDOWN notify "lowmem" \
+            "Свободно ${avail} МБ памяти уже несколько минут. Кто ест: systemd-cgtop -1 -n1, redis-cli info memory"
+    fi
+else
+    echo 0 >"$lowmem_file"
 fi
 
 # --- 4. Диск ---------------------------------------------------------------

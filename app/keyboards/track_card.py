@@ -51,7 +51,9 @@ def track_card_keyboard(
         rows.append(
             [InlineKeyboardButton(text=t("card.edit_admin"), callback_data=f"ta:edit:{track.id}:{ctx}")]
         )
-    rows.append([InlineKeyboardButton(text=t("common.back"), callback_data="back:del")])
+    # «Назад» убрана (решение владельца 11.08): карточка — это само аудиосообщение
+    # в ленте чата, возвращаться из него некуда, а кнопка лишь удаляла присланный
+    # трек. Обработчик back:del оставлен рабочим ради кнопок в старых сообщениях.
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
