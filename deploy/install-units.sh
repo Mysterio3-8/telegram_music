@@ -56,7 +56,9 @@ echo "==> Перечитываю systemd и поднимаю сервисы"
 systemctl daemon-reload
 
 echo "==> Сторож здоровья (инцидент 11.08: воркеры стояли в inactive, никто не заметил)"
-chmod +x deploy/healthcheck.sh
+# chmod тут больше не делаем: он менял режим файла в рабочем дереве, git считал
+# это локальной правкой, и следующий `git pull` падал с «Your local changes
+# would be overwritten». Исполняемый бит хранится в самом репозитории (100755).
 mkdir -p /var/lib/tg-music-health
 systemctl enable --now tg-music-health.timer
 # Только включённые: массовый парсер (tg-music-soundcloud, tg-music-youtube)

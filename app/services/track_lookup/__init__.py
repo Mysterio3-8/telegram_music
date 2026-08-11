@@ -78,17 +78,28 @@ def find_track(query: str, limit: int = 4) -> Candidate | None:
 
 
 def _visible_candidates(query: str, candidates: list[Candidate]) -> list[Candidate]:
-    """Кандидаты в порядке для показа. Ранжирование отбрасывает мусор и промахи,
-    но если оно отбросило ВСЁ (запрос из одной буквы, экзотическое название) —
-    отдаём то, что вернул источник: охват важнее чистоты (решение владельца)."""
+    """Кандидаты в порядке для показа: сперва совпавшие по названию и артисту,
+    следом всё остальное, что вернул источник.
+
+    Ранжирование меняет ПОРЯДОК, но больше ничего не выбрасывает. Причина — фиты:
+    «Big Baby Tape — DUO» это трек с Кизару, но в названии и в поле артиста его
+    имени нет, оно живёт в описании и тегах SoundCloud. Наш счёт давал такому
+    треку ноль, и он исчезал из выдачи, хотя источник вернул его по этому самому
+    запросу — то есть совпадение у себя нашёл. Доверяем источнику: он искал по
+    полям, которых у нас на руках нет.
+
+    Отсеиваем только явную не-музыку и то, что вне границ длительности.
+    """
     ranked = rank_candidates(query, candidates)
-    if ranked:
-        return ranked
-    return [
+    seen = {id(item) for item in ranked}
+    rest = [
         item
         for item in candidates
-        if not is_probably_junk(item.title) and is_track_duration(item.duration)
+        if id(item) not in seen
+        and not is_probably_junk(item.title)
+        and is_track_duration(item.duration)
     ]
+    return ranked + rest
 
 
 def is_russian_repertoire(query: str) -> bool:
