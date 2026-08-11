@@ -194,6 +194,11 @@ async def import_candidate(
         session, bot, audio, telegram_id,
         save_to_library=save_to_library,
         source_url=candidate.url,
+        # Отпечаток тут не считаем: fpcalc декодирует трек целиком, а на боксе с
+        # одним ядром это секунды ожидания живого человека. Дубликат мы и так
+        # ловим раньше — по ссылке источника и по «исполнитель — название».
+        # Отпечаток нужен там, где файл приносит пользователь и ссылки нет.
+        with_fingerprint=False,
     )
     logger.info(
         "Импорт кандидата источник=%s user=%s → track=%s (created=%s)",

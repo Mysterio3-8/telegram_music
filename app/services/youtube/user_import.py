@@ -7,6 +7,7 @@
 - лимит бесплатного тарифа — тот же, что у загрузки файлом (can_upload);
 - дедуп по отпечатку/метаданным — как у остальных импортёров.
 """
+import asyncio
 import logging
 import re
 
@@ -27,6 +28,11 @@ from app.services.youtube.downloader import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+async def _none():
+    """Заглушка вместо задачи отпечатка, когда он не нужен: gather ждёт корутину."""
+    return None
 
 # youtu.be/ID | youtube.com/watch?v=ID | youtube.com/shorts/ID | music.youtube.com/watch?v=ID
 _URL_PATTERNS = [
@@ -85,6 +91,7 @@ async def import_downloaded_audio(
     telegram_id: int,
     save_to_library: bool = True,
     source_url: str | None = None,
+    with_fingerprint: bool = True,
 ) -> tuple[Track, bool]:
     """Общий хвост импорта: фильтры, запись в общую базу, библиотека, лимит загрузок.
 
@@ -111,7 +118,23 @@ async def import_downloaded_audio(
     # YouTube Music помечает авто-каналы «Исполнитель - Topic» — чистим суффикс
     fallback_artist = audio.uploader.removesuffix(" - Topic").strip() or "Исполнитель"
     artist, title = parse_title(audio.video_title, fallback_artist)
-    fingerprint = compute_fingerprint_from_bytes(audio.data, suffix=f".{audio.file_format}")
+
+    # Три блокирующие операции разом: отпечаток (fpcalc декодирует трек целиком),
+    # обложка и миниатюра под Telegram (два похода в сеть по 15 сек таймаута).
+    # Раньше они шли подряд прямо в событийном цикле — это и держало человека в
+    # ожидании, пока трек «качается». Теперь параллельно и в потоках.
+    fingerprint_task = (
+        asyncio.to_thread(
+            compute_fingerprint_from_bytes, audio.data, suffix=f".{audio.file_format}"
+        )
+        if with_fingerprint
+        else _none()
+    )
+    fingerprint, cover, thumbnail = await asyncio.gather(
+        fingerprint_task,
+        asyncio.to_thread(fetch_thumbnail, audio.thumbnail_url),
+        asyncio.to_thread(fetch_telegram_thumbnail, audio.thumbnail_url),
+    )
 
     track, created = await import_via_telegram_mint(
         session,
@@ -123,10 +146,10 @@ async def import_downloaded_audio(
         data=audio.data,
         fingerprint=fingerprint,
         archive_chat_id=settings.effective_archive_chat_id,
-        cover=fetch_thumbnail(audio.thumbnail_url),
+        cover=cover,
         cover_url=audio.thumbnail_url or None,
         album=audio.album or None,
-        thumbnail=fetch_telegram_thumbnail(audio.thumbnail_url),
+        thumbnail=thumbnail,
         source_url=source_url,
     )
 

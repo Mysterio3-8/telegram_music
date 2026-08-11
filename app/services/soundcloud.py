@@ -289,8 +289,12 @@ def _download_soundcloud_once(
         opts = {
             **_base_opts(impersonate=True, use_proxy=use_proxy),
             # mp3 предпочтительнее «на входе»: если источник уже отдаёт mp3,
-            # перекодирование не понадобится вовсе (быстрее и без потери качества)
-            "format": "bestaudio[ext=mp3]/bestaudio/best",
+            # перекодирование не понадобится вовсе (быстрее и без потери качества).
+            # http_mp3_128 — прогрессивный mp3-поток SoundCloud, он есть почти у
+            # всех треков; без явного указания yt-dlp нередко выбирал HLS-opus, и
+            # дальше ffmpeg переколачивал его в mp3 — несколько секунд на слабом
+            # ядре, пока человек ждёт трек.
+            "format": "http_mp3_128/bestaudio[ext=mp3]/bestaudio/best",
             "outtmpl": str(Path(tmp) / "sc.%(ext)s"),
             "noplaylist": True,
             "retries": settings.youtube_max_retries,
