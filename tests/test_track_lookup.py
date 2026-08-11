@@ -175,3 +175,32 @@ def test_fallback_returns_first_downloadable_alternative(monkeypatch):
         lambda candidate: "audio" if candidate.url == good.url else None,
     )
     assert importer.download_with_fallback(_candidate("Original", artist="Artist")) == "audio"
+
+
+def test_soundcloud_artist_comes_from_title_not_account():
+    """Исполнитель — из заголовка, а не из имени аккаунта.
+
+    Заливать чужое на SoundCloud может кто угодно, и в выдаче по «Кизару»
+    исполнителями значились «yarik», «Kogo», «original pidors».
+    """
+    from app.services.track_lookup.providers import soundcloud_candidate_fields
+
+    assert soundcloud_candidate_fields("Кизару - Зеркало", "yarik") == ("Кизару", "Зеркало")
+    # Заголовок без разделителя — тогда аккаунт единственный источник имени
+    assert soundcloud_candidate_fields("Секс", "Lida") == ("Lida", "Секс")
+
+
+def test_same_track_from_different_uploaders_collapses():
+    """Четыре «Кизару — Зеркало» от разных заливщиков — одна строка выдачи."""
+    from app.services.track_lookup.merge import dedup_candidates
+
+    copies = [
+        Candidate(source="soundcloud", url=f"https://sc/{name}", title="Зеркало",
+                  duration=152, artist="Кизару", uploader=name)
+        for name in ("yarik", "Kogo", "Na1tis", "original pidors")
+    ]
+    other = Candidate(source="soundcloud", url="https://sc/x", title="Тяжелый метал",
+                      duration=293, artist="Кизару")
+    result = dedup_candidates([*copies, other])
+    assert [item.title for item in result] == ["Зеркало", "Тяжелый метал"]
+    assert result[0].uploader == "yarik"  # остаётся первый, он же лучший по рангу

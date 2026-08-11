@@ -16,6 +16,28 @@ def dedup_key(candidate: Candidate) -> str:
     return normalize_query(candidate.full_title)
 
 
+def dedup_candidates(candidates: list[Candidate]) -> list[Candidate]:
+    """Убирает повторы одного трека внутри одного источника, сохраняя порядок.
+
+    На SoundCloud популярный трек залит десятком аккаунтов, и по запросу «Кизару»
+    полстраницы занимали четыре «Кизару — Зеркало» от разных заливщиков. Раньше
+    они не схлопывались, потому что ключом служило имя аккаунта; теперь артист
+    разбирается из заголовка, и копии наконец видны как копии.
+
+    Остаётся первый — он же лучший: список уже отранжирован.
+    """
+    result: list[Candidate] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        key = dedup_key(candidate)
+        if key and key in seen:
+            continue
+        if key:
+            seen.add(key)
+        result.append(candidate)
+    return result
+
+
 def merge_candidates(primary: list[Candidate], extra: list[Candidate]) -> list[Candidate]:
     """primary целиком, следом уникальные из extra. Порядок внутри каждого списка
     сохраняется — ранжирование уже отработало до склейки."""

@@ -9,7 +9,7 @@ import asyncio
 import logging
 
 from app.config import settings
-from app.services.track_lookup.merge import dedup_key, merge_candidates
+from app.services.track_lookup.merge import dedup_candidates, dedup_key, merge_candidates
 from app.services.track_lookup.providers import (
     PROVIDERS,
     SOURCE_SOUNDCLOUD,
@@ -163,7 +163,10 @@ async def _search_soundcloud_variants(query: str, limit: int) -> list[Candidate]
     merged: list[Candidate] = []
     for found in results:
         merged = merge_candidates(merged, _visible_candidates(query, found))
-    return merged
+    # Один трек, залитый десятком аккаунтов, — это десять строк выдачи об одном и
+    # том же. Схлопываем: артист теперь разбирается из заголовка, поэтому копии
+    # наконец имеют одинаковый ключ.
+    return dedup_candidates(merged)
 
 
 def _confident_count(query: str, candidates: list[Candidate]) -> int:

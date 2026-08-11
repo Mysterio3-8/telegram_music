@@ -35,20 +35,40 @@ def search_soundcloud(query: str, limit: int = 5) -> list[Candidate]:
     # sleep_requests=0: ответа ждёт живой человек, а обходим одну поисковую выдачу,
     # а не весь профиль артиста — пауза между запросами здесь только тормозит
     entries = list_soundcloud_entries(f"scsearch{max(1, limit)}:{query}", sleep_requests=0)
-    return [
-        Candidate(
-            source=SOURCE_SOUNDCLOUD,
-            url=entry.url,
-            title=entry.title,
-            duration=_to_seconds(entry.duration),
-            # Автор идёт в сопоставление (full_title): официальный аплоад артиста
-            # обгоняет чужой реаплоад с похожим названием
-            artist=entry.uploader or None,
-            uploader=entry.uploader or None,
-            cover_url=entry.cover_url or None,
-        )
-        for entry in entries
-    ]
+    return [_soundcloud_candidate(entry.url, entry.title, entry.duration, entry.uploader, entry.cover_url) for entry in entries]
+
+
+def soundcloud_candidate_fields(title: str, uploader: str | None) -> tuple[str, str]:
+    """(исполнитель, название) для трека SoundCloud.
+
+    Заливать чужую музыку там может кто угодно, поэтому имя аккаунта — это НЕ
+    исполнитель: в выдаче по «Кизару» стояли «yarik», «Kogo», «original pidors».
+    Настоящий артист почти всегда в самом заголовке («Кизару - Зеркало»), и
+    разбираем мы его тем же parse_title, каким подписывается трек при импорте —
+    иначе кнопка в боте и подпись пришедшего файла говорили бы разное.
+
+    Автора аккаунта оставляем запасным вариантом: у части треков заголовок это
+    одно слово («Секс»), и тогда без него исполнителя взять неоткуда.
+    """
+    from app.services.title_parser import parse_title
+
+    return parse_title(title, (uploader or "").strip())
+
+
+def _soundcloud_candidate(url: str, title: str, duration, uploader, cover_url) -> Candidate:
+    artist, clean_title = soundcloud_candidate_fields(title, uploader)
+    return Candidate(
+        source=SOURCE_SOUNDCLOUD,
+        url=url,
+        title=clean_title or title,
+        duration=_to_seconds(duration),
+        # В сопоставление (full_title) идёт разобранный артист, а не владелец
+        # аккаунта: иначе «Кизару — Зеркало» от четырёх разных заливщиков
+        # выглядели как четыре разных трека и занимали пол-страницы выдачи.
+        artist=artist or None,
+        uploader=(uploader or "").strip() or None,
+        cover_url=cover_url or None,
+    )
 
 
 def _to_seconds(value) -> int:

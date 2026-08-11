@@ -157,13 +157,26 @@ def _to_candidate(item: dict) -> Candidate | None:
         return None
     uploader = ((item.get("user") or {}).get("username") or "").strip()
     artwork = item.get("artwork_url") or ""
+
+    # Кто исполнитель, по убыванию доверия:
+    # 1. publisher_metadata.artist — метаданные правообладателя, самое надёжное;
+    # 2. разбор заголовка «Кизару - Зеркало» тем же parse_title, что и при импорте;
+    # 3. имя аккаунта — последнее средство.
+    # Имя аккаунта нельзя брать первым: заливать чужое там может кто угодно, и в
+    # выдаче по «Кизару» исполнителями значились «yarik», «Kogo», «original pidors».
+    from app.services.track_lookup.providers import soundcloud_candidate_fields
+
+    publisher = (item.get("publisher_metadata") or {}).get("artist") or ""
+    parsed_artist, parsed_title = soundcloud_candidate_fields(title, uploader)
+    artist = publisher.strip() or parsed_artist
+
     return Candidate(
         source="soundcloud",
         url=url,
-        title=title,
+        title=parsed_title or title,
         # duration приходит в миллисекундах
         duration=int(item.get("duration") or 0) // 1000,
-        artist=uploader or None,
+        artist=artist or None,
         uploader=uploader or None,
         cover_url=artwork or None,
     )
