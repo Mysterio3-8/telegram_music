@@ -49,3 +49,24 @@ async def test_search_instrumentals(session):
 
     assert total == 1
     assert results[0].title == "Believer (Минус)"
+
+
+async def test_find_track_by_source_url_matches_exact_page(session):
+    """Кандидат опознаётся по ссылке источника, а не по названию.
+
+    Название в поисковой выдаче и в скачанном файле расходятся («Official Audio»,
+    «prod. …»), поэтому сверка по «исполнитель — название» промахивалась и бот
+    заново качал уже залитый трек: лишние секунды, а на DRM-копии ещё и ложное
+    «трек под защитой».
+    """
+    from app.services.search import find_track_by_source_url
+
+    url = "https://soundcloud.com/artist/song"
+    session.add(Track(title="Song (Official Audio)", artist="Artist", duration=200, source_url=url))
+    session.add(Track(title="Song", artist="Artist", duration=200))
+    await session.commit()
+
+    found = await find_track_by_source_url(session, url)
+    assert found is not None and found.source_url == url
+    assert await find_track_by_source_url(session, "https://soundcloud.com/other") is None
+    assert await find_track_by_source_url(session, "") is None

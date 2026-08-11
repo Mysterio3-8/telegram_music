@@ -54,6 +54,22 @@ async def find_track_by_metadata(
     return (await session.scalars(stmt.limit(1))).first()
 
 
+async def find_track_by_source_url(session: AsyncSession, url: str) -> Track | None:
+    """Трек, уже залитый с этой самой страницы источника. None — такого нет.
+
+    Точнее сверки по «исполнитель — название»: в поисковой выдаче у трека один
+    заголовок, а в скачанном файле другой (источник дописывает «Official Audio»,
+    «prod. …»), из-за чего уже залитый трек не опознавался и качался заново —
+    лишние секунды ожидания, а на DRM-копии ещё и ложное «трек под защитой».
+    """
+    if not url:
+        return None
+    stmt = select(Track).where(
+        Track.source_url == url, Track.moderation_status == "approved"
+    )
+    return (await session.scalars(stmt.limit(1))).first()
+
+
 async def search_tracks(
     session: AsyncSession, query: str, page: int, page_size: int | None = None
 ) -> tuple[list[Track], int]:

@@ -108,6 +108,7 @@ MESSAGES: dict[str, str] = {
     "quick.sending": "Gönderiliyor…",
     "quick.busy": "İndirme servisi meşgul, bir dakika sonra dene",
     "quick.downloading": "Parçayı indiriyorum — buraya gelecek",
+    "quick.already_fetching": "Bu parça zaten indiriliyor — birkaç saniye içinde gelecek",
     "card.title": "🎧 {title}",
     "card.not_found": "Parça bulunamadı",
     "card.added": "Kitaplığına eklendi",

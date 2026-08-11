@@ -123,6 +123,7 @@ MESSAGES: dict[str, str] = {
     "quick.sending": "Отправляю…",
     "quick.busy": "Сервис загрузки занят, попробуйте через минуту",
     "quick.downloading": "Загружаю трек — пришлю сюда",
+    "quick.already_fetching": "Этот трек уже качаю — придёт через несколько секунд",
     # --- карточка трека
     "card.title": "🎧 {title}",
     "card.not_found": "Трек не найден",

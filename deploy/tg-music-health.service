@@ -1,0 +1,11 @@
+[Unit]
+Description=Telegram Music Bot — сторож: поднимает упавшие сервисы и зависшие очереди
+After=network-online.target redis-server.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/tg-music-bot
+ExecStart=/usr/bin/env bash /opt/tg-music-bot/deploy/healthcheck.sh
+# Сторож не должен сам стать проблемой на боксе с 961 МБ.
+MemoryMax=64M
+TimeoutStartSec=120

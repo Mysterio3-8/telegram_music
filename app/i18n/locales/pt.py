@@ -109,6 +109,7 @@ MESSAGES: dict[str, str] = {
     "quick.sending": "A enviar…",
     "quick.busy": "O serviço de download está ocupado, tenta daqui a um minuto",
     "quick.downloading": "A descarregar a faixa — chega aqui",
+    "quick.already_fetching": "Já estou a descarregar esta faixa — chega em poucos segundos",
     "card.title": "🎧 {title}",
     "card.not_found": "Faixa não encontrada",
     "card.added": "Adicionada à tua biblioteca",

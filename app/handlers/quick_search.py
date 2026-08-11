@@ -10,6 +10,7 @@
 (мастера загрузки/поиска/админки со своими состояниями срабатывают раньше).
 """
 import logging
+import time
 from dataclasses import asdict
 
 from aiogram import F, Router
@@ -22,7 +23,7 @@ from app.handlers.cards import build_card_keyboard
 from app.handlers.delivery import send_track_audio
 from app.keyboards.quick_search import quick_search_keyboard, total_pages
 from app.services.library import is_in_library
-from app.services.search import find_track_by_metadata
+from app.services.search import find_track_by_metadata, find_track_by_source_url
 from app.services.search_cache import search_with_cache
 from app.services.search_log import log_search_query
 from app.services.track_lookup.importer import candidate_metadata
@@ -35,6 +36,31 @@ router = Router()
 
 _QUERY_KEY = "qs_query"  # запрос и кандидаты живут в FSM: в callback_data они не помещаются
 _ITEMS_KEY = "qs_items"
+
+# Сколько секунд считать нажатие «ещё в работе». Скачивание с минтом занимает
+# ~8 сек, неудачная попытка с перебором замен — до полуминуты; берём с запасом,
+# но не бесконечно: если задача потерялась, человек должен иметь возможность
+# повторить, а не упереться в вечное «уже качаю».
+_FETCH_LOCK_SECONDS = 60.0
+_fetch_started: dict[tuple[int, str], float] = {}
+
+
+def _fetch_in_progress(user_id: int, url: str) -> bool:
+    """Занял слот под пару «человек + трек». True — такое же нажатие уже в работе.
+
+    Счётчик в памяти процесса: бот один, а после рестарта забыть незавершённые
+    нажатия правильно. В Redis намеренно не пишем — запись на диск при флуде уже
+    роняла прод (26.07)."""
+    now = time.monotonic()
+    for key, started in list(_fetch_started.items()):
+        if now - started > _FETCH_LOCK_SECONDS:
+            del _fetch_started[key]
+
+    key = (user_id, url)
+    if key in _fetch_started:
+        return True
+    _fetch_started[key] = now
+    return False
 
 
 
@@ -99,10 +125,22 @@ async def quick_search_send(callback: CallbackQuery, state: FSMContext) -> None:
         return
     candidate = candidates[index]
 
+    # Один и тот же трек, нажатый десять раз подряд, это десять скачиваний в
+    # воркере и десять одинаковых ответов человеку (11.08 владелец получил девять
+    # подряд «трек под защитой»). Пока предыдущее нажатие в работе — молчим.
+    if _fetch_in_progress(callback.from_user.id, candidate.url):
+        await callback.answer(t("quick.already_fetching"))
+        return
+
     artist, title = candidate_metadata(candidate)
     async with session_factory() as session:
         user = await ensure_user(session, callback.from_user)
-        existing = await find_track_by_metadata(session, artist, title)
+        # Сперва по ссылке источника — точный ключ «этот кандидат уже залит».
+        # Сверка по «исполнитель — название» остаётся фолбэком для треков,
+        # заведённых до появления source_url.
+        existing = await find_track_by_source_url(session, candidate.url)
+        if existing is None:
+            existing = await find_track_by_metadata(session, artist, title)
         if existing is not None:
             # Уже минтили — отдаём мгновенно по file_id, скачивать нечего.
             # С кнопками карточки: раз в библиотеку сам трек больше не падает,

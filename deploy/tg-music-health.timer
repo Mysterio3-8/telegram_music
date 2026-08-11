@@ -1,0 +1,13 @@
+[Unit]
+Description=Проверять здоровье прода каждые 2 минуты
+
+[Timer]
+# Первый прогон вскоре после загрузки: если сервисы не поднялись сами,
+# сторож поднимет их раньше, чем это заметят пользователи.
+OnBootSec=2min
+OnUnitActiveSec=2min
+AccuracySec=15s
+Unit=tg-music-health.service
+
+[Install]
+WantedBy=timers.target

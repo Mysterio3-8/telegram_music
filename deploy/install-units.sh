@@ -54,6 +54,11 @@ systemctl restart fail2ban
 
 echo "==> Перечитываю systemd и поднимаю сервисы"
 systemctl daemon-reload
+
+echo "==> Сторож здоровья (инцидент 11.08: воркеры стояли в inactive, никто не заметил)"
+chmod +x deploy/healthcheck.sh
+mkdir -p /var/lib/tg-music-health
+systemctl enable --now tg-music-health.timer
 # Только включённые: массовый парсер (tg-music-soundcloud, tg-music-youtube)
 # выключен решением владельца 27.07 — поднимать его здесь значило бы тихо
 # отменять это решение и занимать 180 МБ из 961 МБ на боксе.

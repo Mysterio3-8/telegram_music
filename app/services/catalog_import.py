@@ -246,6 +246,7 @@ async def create_track_from_telegram(
     tg_file_id: str,
     cover_url: str | None = None,
     album: str | None = None,
+    source_url: str | None = None,
 ) -> Track:
     """Создаёт трек БЕЗ архивной копии на диске — файл уже заминчен через бота
     (tg_file_id валиден сразу), сохраняется только ссылка. Дедуп — забота вызывающей
@@ -266,6 +267,7 @@ async def create_track_from_telegram(
         fingerprint=fingerprint,
         tg_file_id=tg_file_id,
         cover_url=cover_url or None,
+        source_url=source_url or None,
         meta_synced=True,
     )
     session.add(track)
@@ -288,6 +290,7 @@ async def import_via_telegram_mint(
     cover_url: str | None = None,
     album: str | None = None,
     thumbnail: bytes = b"",
+    source_url: str | None = None,
 ) -> tuple[Track, bool]:
     """Дедуп; если трек новый — перетегирует, вшивает обложку, отправляет через
     бота (единственный способ заминтить file_id — реально отправить файл через
@@ -296,6 +299,11 @@ async def import_via_telegram_mint(
     Возвращает (трек, создан_ли_новый)."""
     track = await find_existing_track(session, fingerprint, title, artist, duration)
     if track is not None:
+        # Дозаписываем ссылку старым трекам: следующий человек, ткнувший в того же
+        # кандидата в выдаче, получит трек мгновенно, а не через новое скачивание.
+        if source_url and not track.source_url:
+            track.source_url = source_url
+            await session.commit()
         return track, False
 
     tagged = retag_audio(data, file_format, title, artist)
@@ -323,6 +331,7 @@ async def import_via_telegram_mint(
         tg_file_id=sent.audio.file_id,
         cover_url=cover_url,
         album=album,
+        source_url=source_url,
     )
     _seed_cache(f"tracks/{track.id}", tagged)
     return track, True

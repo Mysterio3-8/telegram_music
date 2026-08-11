@@ -84,6 +84,7 @@ async def import_downloaded_audio(
     audio: DownloadedAudio,
     telegram_id: int,
     save_to_library: bool = True,
+    source_url: str | None = None,
 ) -> tuple[Track, bool]:
     """Общий хвост импорта: фильтры, запись в общую базу, библиотека, лимит загрузок.
 
@@ -126,6 +127,7 @@ async def import_downloaded_audio(
         cover_url=audio.thumbnail_url or None,
         album=audio.album or None,
         thumbnail=fetch_telegram_thumbnail(audio.thumbnail_url),
+        source_url=source_url,
     )
 
     if created:

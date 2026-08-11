@@ -43,7 +43,26 @@ def download_candidate(candidate: Candidate) -> DownloadedAudio | None:
     return download_audio(video_id, as_mp3=True) if video_id else None
 
 
-MAX_DOWNLOAD_ATTEMPTS = 4
+MAX_DOWNLOAD_ATTEMPTS = 6
+
+
+def _interleave(*groups: list[Candidate]) -> list[Candidate]:
+    """Перемешивает выдачу источников по очереди: первый из SC, первый из YT, второй
+    из SC и так далее.
+
+    Зачем: раньше замены брались срезом из склеенного списка, а склейка шла
+    источник за источником — то есть все попытки съедал ОДИН источник, и до
+    второго перебор не доходил. Для западного трека это было фатально: список
+    начинался с YouTube, YouTube с серверного IP регулярно отвечает антиботом, и
+    человек получал «трек под защитой», хотя на SoundCloud рядом лежала
+    качающаяся копия, до которой мы просто не дошли.
+    """
+    result: list[Candidate] = []
+    for row in range(max((len(group) for group in groups), default=0)):
+        for group in groups:
+            if row < len(group):
+                result.append(group[row])
+    return result
 
 
 def download_with_fallback(candidate: Candidate) -> DownloadedAudio | None:
@@ -66,11 +85,11 @@ def download_with_fallback(candidate: Candidate) -> DownloadedAudio | None:
     artist, title = candidate_metadata(candidate)
     query = f"{artist} {title}".strip()
     logger.info("Не скачался «%s» — ищу замену по «%s»", candidate.title, query)
-    alternatives: list[Candidate] = []
+
     # Под DRM лежат западные мейджоры, а их официальные загрузки есть на YouTube
-    # («Исполнитель - Topic»). Поэтому замену ищем в ОБОИХ источниках, и для
-    # латинского запроса YouTube идёт первым — там трек скачается, а на
-    # SoundCloud рядом лежат такие же защищённые копии.
+    # («Исполнитель - Topic»). Поэтому замену ищем в ОБОИХ источниках и пробуем их
+    # вперемежку: у каждого свой способ отказать (SoundCloud — DRM, YouTube —
+    # антибот с серверного IP), и попытки не должен съедать один из них.
     from app.services.track_lookup import is_russian_repertoire
 
     sources = (
@@ -78,22 +97,42 @@ def download_with_fallback(candidate: Candidate) -> DownloadedAudio | None:
         if is_russian_repertoire(query)
         else (search_youtube, search_soundcloud)
     )
+    groups: list[list[Candidate]] = []
     for source in sources:
         try:
-            alternatives += source(query, limit=MAX_DOWNLOAD_ATTEMPTS + 1)
+            groups.append(list(source(query, limit=MAX_DOWNLOAD_ATTEMPTS + 1)))
         except Exception:  # noqa: BLE001 — один источник отвалился, второй ещё есть
             logger.warning("Замена: источник %s не ответил", source.__name__, exc_info=True)
-    if not alternatives:
-        return None
+            groups.append([])
 
-    for alternative in alternatives[:MAX_DOWNLOAD_ATTEMPTS]:
-        if alternative.url == candidate.url:
+    tried = {candidate.url}
+    attempts = 0
+    for alternative in _interleave(*groups):
+        if alternative.url in tried:
             continue
+        tried.add(alternative.url)
+        attempts += 1
+        if attempts > MAX_DOWNLOAD_ATTEMPTS:
+            break
         audio = download_candidate(alternative)
         if audio is not None:
-            logger.info("Замена нашлась: «%s»", alternative.title)
+            logger.info(
+                "Замена нашлась с %s попытки: «%s» (%s)",
+                attempts, alternative.title, alternative.source,
+            )
             return audio
+
+    logger.warning(
+        "«%s»: не скачался ни оригинал, ни %s замен из %s источников",
+        query, attempts, len([group for group in groups if group]),
+    )
     return None
+
+
+async def _user_by_telegram_id(session: AsyncSession, telegram_id: int):
+    from app.services.users import get_user_by_telegram_id
+
+    return await get_user_by_telegram_id(session, telegram_id)
 
 
 def candidate_metadata(candidate: Candidate) -> tuple[str, str]:
@@ -122,6 +161,21 @@ async def import_candidate(
 
     save_to_library=False — «просто пришли послушать»: трек уходит в общий
     каталог, но не в личную библиотеку."""
+    from app.services.library import add_to_library
+    from app.services.search import find_track_by_source_url
+
+    # Этот же кандидат уже приезжал — отдаём готовое, скачивать нечего. Проверка
+    # по ссылке, а не по «исполнитель — название»: заголовок в выдаче и в
+    # скачанном файле расходятся, и сверка по нему промахивалась.
+    existing = await find_track_by_source_url(session, candidate.url)
+    if existing is not None:
+        if save_to_library:
+            user = await _user_by_telegram_id(session, telegram_id)
+            if user is not None:
+                await add_to_library(session, user.id, existing.id)
+        logger.info("Кандидат уже в базе: %s → track=%s", candidate.url, existing.id)
+        return existing, False
+
     audio = await asyncio.to_thread(download_with_fallback, candidate)
     if audio is None:
         raise UserImportRejected(
@@ -137,7 +191,9 @@ async def import_candidate(
         thumbnail_url=audio.thumbnail_url or (candidate.cover_url or ""),
     )
     track, created = await import_downloaded_audio(
-        session, bot, audio, telegram_id, save_to_library=save_to_library
+        session, bot, audio, telegram_id,
+        save_to_library=save_to_library,
+        source_url=candidate.url,
     )
     logger.info(
         "Импорт кандидата источник=%s user=%s → track=%s (created=%s)",

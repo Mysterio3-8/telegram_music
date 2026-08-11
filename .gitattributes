@@ -1,0 +1,8 @@
+# Скрипты и юниты уезжают на Linux-VPS: с окончаниями строк CRLF bash отвечает
+# «bad interpreter: /usr/bin/env bash^M», а systemd молча не читает директивы.
+# Разработка идёт на Windows, поэтому фиксируем LF явно, а не полагаемся на
+# настройки конкретной машины.
+*.sh text eol=lf
+*.service text eol=lf
+*.timer text eol=lf
+*.conf text eol=lf

@@ -13,6 +13,7 @@
 рестарте забыть блокировки — не проблема (Redis не трогаем, чтобы флуд не
 превращался в запись на диск — именно это уронило прод 2026-07-26).
 """
+import logging
 import time
 from collections import defaultdict, deque
 from collections.abc import Awaitable, Callable
@@ -28,6 +29,15 @@ THROTTLE_SECONDS = 0.7  # минимальный интервал между д�
 BURST_LIMIT = 12  # действий за окно
 BURST_WINDOW = 10.0  # секунд
 BLOCK_SECONDS = 20.0  # пауза после превышения
+
+logger = logging.getLogger(__name__)
+
+# Жёсткий потолок (требование владельца): больше RAPID_LIMIT действий за секунду
+# человек физически не делает — это скрипт. Пауза дольше обычной: обычный флуд
+# гасим на 20 секунд, машинный — на минуту.
+RAPID_LIMIT = 20
+RAPID_WINDOW = 1.0
+RAPID_BLOCK_SECONDS = 60.0
 
 
 
@@ -51,14 +61,30 @@ class ThrottlingMiddleware(BaseMiddleware):
         user_id = tg_user.id
         now = time.monotonic()
 
-        if now < self._blocked_until.get(user_id, 0.0):
-            await self._warn_once(event, user_id)
-            return None  # тихо гасим: хендлер не вызывается, нагрузки нет
-
+        # Счётчик ведём ДО проверки блокировки: попытки заблокированного тоже
+        # приходят на сервер, и именно по ним видно скрипт. Считай мы только
+        # пропущенные действия, машинный шквал был бы неотличим от человека,
+        # который разок промахнулся по кнопке дважды.
         history = self._history[user_id]
         history.append(now)
         while history and now - history[0] > BURST_WINDOW:
             history.popleft()
+
+        # Жёсткий потолок: больше RAPID_LIMIT действий за секунду — это скрипт.
+        # Проверяем раньше остальных правил, чтобы блокировка была длиннее обычной.
+        in_last_second = sum(1 for stamp in history if now - stamp <= RAPID_WINDOW)
+        if in_last_second > RAPID_LIMIT:
+            self._blocked_until[user_id] = now + RAPID_BLOCK_SECONDS
+            logger.warning(
+                "Флуд: user=%s сделал %s действий за секунду — пауза %s сек",
+                user_id, in_last_second, int(RAPID_BLOCK_SECONDS),
+            )
+            await self._warn_once(event, user_id)
+            return None
+
+        if now < self._blocked_until.get(user_id, 0.0):
+            await self._warn_once(event, user_id)
+            return None  # тихо гасим: хендлер не вызывается, нагрузки нет
 
         too_fast = now - self._last_action.get(user_id, 0.0) < THROTTLE_SECONDS
         too_many = len(history) > BURST_LIMIT

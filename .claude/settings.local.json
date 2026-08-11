@@ -1,0 +1,1 @@
+{"permissions":{"allow":["Bash(ssh news-rewriter-vps:*)","Bash(scp:*)","PowerShell(ssh news-rewriter-vps:*)","PowerShell(scp:*)"]}}

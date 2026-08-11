@@ -126,3 +126,23 @@ async def test_admin_never_throttled(clock, monkeypatch):
     for _ in range(30):
         assert await _call(middleware, _FakeMessage(), 777, calls) == "handled"
     assert len(calls) == 30
+
+
+@pytest.mark.asyncio
+async def test_machine_burst_blocks_for_a_minute(clock):
+    """Больше 20 нажатий в секунду — это скрипт, а не человек: пауза минута.
+
+    Требование владельца. Обычный флуд гасится на 20 секунд, машинный — дольше,
+    чтобы одна вкладка с автокликером не держала воркер занятым.
+    """
+    middleware = ThrottlingMiddleware()
+    calls: list[int] = []
+    for _ in range(25):
+        await _call(middleware, _FakeMessage(), 1, calls)
+        clock["now"] += 0.01  # 100 нажатий в секунду
+
+    # Обычная блокировка к этому моменту истекла бы, машинная — ещё держит
+    clock["now"] += throttling.BLOCK_SECONDS + 1
+    assert await _call(middleware, _FakeMessage(), 1, calls) is None
+    clock["now"] += throttling.RAPID_BLOCK_SECONDS
+    assert await _call(middleware, _FakeMessage(), 1, calls) == "handled"

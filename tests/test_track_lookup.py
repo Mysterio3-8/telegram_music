@@ -132,3 +132,46 @@ def test_find_track_weak_query_still_returns_something(monkeypatch):
     found = find_track("s")
     assert found is not None
     assert found.title == "Some Popular Song"
+
+
+def test_fallback_tries_both_sources_alternately(monkeypatch):
+    """Замены перебираются вперемежку по источникам.
+
+    Раньше попытки съедал один источник: список склеивался «сначала весь YouTube,
+    потом весь SoundCloud», а срез обрезал его по первым четырём. Для западного
+    трека это значило «YouTube ответил антиботом → трек под защитой», хотя рядом
+    на SoundCloud лежала качающаяся копия.
+    """
+    from app.services.track_lookup import importer
+
+    yt = [_candidate(f"yt{i}", artist="Artist", source="youtube") for i in range(4)]
+    sc = [_candidate(f"sc{i}", artist="Artist", source="soundcloud") for i in range(4)]
+    monkeypatch.setattr(importer, "search_youtube", lambda query, limit=5: yt)
+    monkeypatch.setattr(importer, "search_soundcloud", lambda query, limit=5: sc)
+
+    tried: list[str] = []
+
+    def fake_download(candidate):
+        tried.append(candidate.source)
+        return None  # ничего не качается — интересен сам порядок перебора
+
+    monkeypatch.setattr(importer, "download_candidate", fake_download)
+    assert importer.download_with_fallback(_candidate("Original", artist="Artist")) is None
+    # первая попытка — сам кандидат, дальше замены через один источник
+    assert tried[1:5] == ["youtube", "soundcloud", "youtube", "soundcloud"]
+
+
+def test_fallback_returns_first_downloadable_alternative(monkeypatch):
+    from app.services.track_lookup import importer
+
+    good = _candidate("sc-good", artist="Artist", source="soundcloud")
+    monkeypatch.setattr(
+        importer, "search_youtube",
+        lambda query, limit=5: [_candidate("yt-drm", artist="Artist", source="youtube")],
+    )
+    monkeypatch.setattr(importer, "search_soundcloud", lambda query, limit=5: [good])
+    monkeypatch.setattr(
+        importer, "download_candidate",
+        lambda candidate: "audio" if candidate.url == good.url else None,
+    )
+    assert importer.download_with_fallback(_candidate("Original", artist="Artist")) == "audio"
