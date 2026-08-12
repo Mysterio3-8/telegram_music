@@ -219,3 +219,29 @@ def test_popular_upload_wins_over_reupload_with_same_name():
                          duration=182, artist="Big Baby Tape", popularity=120)
     ranked = rank_candidates("big baby tape surname", [reupload, official])
     assert ranked[0].url == "https://sc/official"
+
+
+def test_artist_query_puts_artist_tracks_above_songs_about_him():
+    """По имени артиста сверху его треки, а не чужие песни с этим словом.
+
+    Скрин владельца по запросу «Буда»: первым шёл «SCALLY MILANO — Буда слился»,
+    а треки самого OG Buda — ниже. Слово «буда» есть у обоих, но человек искал
+    артиста.
+    """
+    about = Candidate(source="soundcloud", url="https://sc/about", title="Буда слился",
+                      duration=80, artist="SCALLY MILANO", popularity=90_000)
+    artist = Candidate(source="soundcloud", url="https://sc/ogbuda", title="Плаки",
+                       duration=96, artist="OG Buda", popularity=900_000)
+    ranked = rank_candidates("Буда", [about, artist])
+    assert ranked[0].url == "https://sc/ogbuda"
+
+
+def test_mashup_loses_to_official_track():
+    """«кизару я ебал твою маму» не должен стоять выше официального трека."""
+    junk = Candidate(source="soundcloud", url="https://sc/junk",
+                     title="кизару я ебал твою маму", duration=140,
+                     artist="Ww8wW?", popularity=300)
+    official = Candidate(source="soundcloud", url="https://sc/mirror", title="Зеркало",
+                         duration=152, artist="Кизару", popularity=2_000_000)
+    ranked = rank_candidates("Кизару", [junk, official])
+    assert ranked[0].url == "https://sc/mirror"

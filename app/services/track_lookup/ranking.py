@@ -5,6 +5,7 @@
 приводим к латинице и сравниваем — так транслит и кириллица совпадают между собой.
 Здесь только вычисления: ни сети, ни БД.
 """
+import math
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 
@@ -158,14 +159,45 @@ def match_score(query: str, candidate: Candidate) -> float:
     return round(score * version_penalty(query, candidate.full_title), 4)
 
 
+def popularity_weight(popularity: int) -> float:
+    """Прослушивания → 0.0—1.0. По логарифму, а не линейно: разница между сотней
+    и десятью тысячами прослушиваний существенна, между миллионом и двумя — уже
+    нет. Миллион даёт единицу."""
+    return min(1.0, math.log10(max(0, popularity) + 1) / 6)
+
+
+def artist_hit(query: str, candidate: Candidate) -> bool:
+    """Запрос — это имя исполнителя, а не слово из названия.
+
+    Разница решающая. По запросу «Буда» слово «буда» есть и в «SCALLY MILANO —
+    Буда слился» (там оно в названии, а исполнитель другой), и у самого OG Buda.
+    Человек, набравший «Буда», ищет артиста, поэтому его треки должны идти
+    первыми, а песни про буду — следом.
+    """
+    normalized = normalize_query(query)
+    artist = normalize_query(candidate.artist or "")
+    return bool(normalized) and bool(artist) and normalized in artist
+
+
 def rank_candidates(query: str, candidates: list[Candidate]) -> list[Candidate]:
-    """Кандидаты от лучшего к худшему. Мусор и нулевые совпадения отброшены."""
+    """Кандидаты от лучшего к худшему. Мусор и нулевые совпадения отброшены.
+
+    Порядок решают три довода вместе, а не один: похожесть текста, попадание в
+    имя исполнителя и прослушивания. Одной похожести не хватало — по «Кизару»
+    наверх лезли мэшапы и «кизару я ебал твою маму», потому что слово из запроса
+    в них есть, а больше сравнивать было нечем.
+    """
     scored = [(match_score(query, item), item) for item in candidates]
-    # Сортируем по похожести, огрублённой до сотых, а внутри равных — по
-    # прослушиваниям. Огрубление важно: без него разница в третьем знаке
-    # (лишний пробел в названии) решала бы исход вместо миллиона прослушиваний.
-    ordered = sorted(scored, key=lambda row: (-round(row[0], 2), -row[1].popularity))
-    return [item for score, item in ordered if score > 0]
+
+    def order(row: tuple[float, Candidate]) -> float:
+        score, candidate = row
+        return -(
+            score * 0.6
+            + popularity_weight(candidate.popularity) * 0.3
+            + (0.1 if artist_hit(query, candidate) else 0.0)
+        )
+
+    return [item for score, item in sorted(scored, key=order) if score > 0]
 
 
 def best_match(query: str, candidates: list[Candidate], min_score: float = 0.45) -> Candidate | None:
