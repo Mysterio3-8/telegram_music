@@ -179,16 +179,22 @@ def _to_candidate(item: dict) -> Candidate | None:
     parsed_artist, parsed_title = soundcloud_candidate_fields(title, uploader)
     artist = publisher.strip() or parsed_artist
 
-    # Официальная загрузка — по трём независимым признакам, любого достаточно:
-    # 1. есть метаданные правообладателя (лейбл прописал артиста и ISRC) —
-    #    у реаплоада и мэшапа их не бывает;
-    # 2. аккаунт верифицирован SoundCloud (галочка артиста);
-    # 3. имя аккаунта совпадает с исполнителем — артист залил сам.
+    # Официальная загрузка. Признаки только те, которые нельзя подделать
+    # случайно: метаданные правообладателя (лейбл прописал артиста и ISRC — у
+    # мэшапа и перезалива их не бывает) и верифицированный аккаунт.
+    #
+    # ⚠️ Сюда нельзя добавлять «имя аккаунта совпало с исполнителем» в лоб. Мы
+    # попробовали, и выдача сломалась: у заголовка без разделителя («БИГ БЕЙБИ
+    # ТЕЙП НА МАКСИМАЛКАХ») исполнителем становится сам аккаунт, совпадение
+    # выходит автоматическим, и «Андрей Квитка» уехал в официальные — на первое
+    # место по запросу «Тейп». Совпадение засчитываем, только если артист
+    # РАЗОБРАН из заголовка, то есть заголовок правда был «Артист - Название».
+    parsed_from_title = bool(parsed_title) and parsed_title.strip() != title
     official = bool(
         publisher.strip()
         or publisher_meta.get("isrc")
         or (item.get("user") or {}).get("verified")
-        or (uploader and artist and _same_name(uploader, artist))
+        or (parsed_from_title and uploader and artist and _same_name(uploader, artist))
     )
 
     return Candidate(

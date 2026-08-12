@@ -261,3 +261,31 @@ def test_official_upload_always_above_reupload():
                          popularity=800_000, official=True)
     ranked = rank_candidates("Тейп", [reupload, official])
     assert ranked[0].url == "https://sc/bbt"
+
+
+def test_reupload_with_plain_title_is_not_official():
+    """Заголовок без разделителя не делает аккаунт официальным.
+
+    «Андрей Квитка» залил «БИГ БЕЙБИ ТЕЙП НА МАКСИМАЛКАХ» — разделителя нет,
+    поэтому исполнителем становится сам аккаунт, и проверка «аккаунт совпал с
+    исполнителем» срабатывала сама на себя. Перезалив уехал в официальные и
+    занял первое место по запросу «Тейп».
+    """
+    from app.services.soundcloud_api import _to_candidate
+
+    reupload = _to_candidate({
+        "permalink_url": "https://sc/kvitka",
+        "title": "БИГ БЕЙБИ ТЕЙП НА МАКСИМАЛКАХ",
+        "duration": 148_000,
+        "user": {"username": "Андрей Квитка"},
+    })
+    assert reupload is not None and reupload.official is False
+
+    labeled = _to_candidate({
+        "permalink_url": "https://sc/bbt",
+        "title": "Surname",
+        "duration": 182_000,
+        "user": {"username": "Big Baby Tape"},
+        "publisher_metadata": {"artist": "Big Baby Tape", "isrc": "RU1234500001"},
+    })
+    assert labeled is not None and labeled.official is True
