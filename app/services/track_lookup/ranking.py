@@ -6,6 +6,7 @@
 Здесь только вычисления: ни сети, ни БД.
 """
 import math
+import re
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 
@@ -70,6 +71,34 @@ _NOISE_WORDS = frozenset(
 # Опечатка в длинном слове допустима: «feik» ↔ «feyk», «аиди» ↔ «айди»
 _TYPO_RATIO = 0.7
 _TYPO_MIN_LENGTH = 4
+
+
+# Один звук, записанный по-разному. Кириллица транслитерируется буква в букву
+# («тейп» → «teyp»), а по-английски то же слово пишется «tape» — сопоставление
+# промахивалось, и по запросу «Тейп» ни один Big Baby Tape не считался
+# совпадением. Сводим написания к общему виду ПОСЛЕ транслита.
+_PHONETIC = (
+    ("ey", "a"),    # teyp → tap(e), beybi → babi
+    ("ay", "i"),    # rayd → rid
+    ("iy", "i"),
+    ("dzh", "j"),   # dzhon → jon
+    ("kh", "h"),
+    ("ts", "c"),
+    ("yu", "u"),
+    ("ya", "a"),
+    ("e", "a"),     # tap ↔ tape после отбрасывания немого «e» ниже
+)
+
+
+def phonetic(text: str) -> str:
+    """Грубая фонетическая свёртка: одинаково звучащее пишется одинаково."""
+    result = to_latin(text)
+    for source, target in _PHONETIC:
+        result = result.replace(source, target)
+    # Удвоенные буквы и немая гласная на конце слова ничего не решают:
+    # «tape» → «tapa» → «tap», и это сходится с «тейп» → «teyp» → «tap».
+    result = re.sub('(.)\\1+', '\\1', result)
+    return re.sub('a\\b', "", result)
 
 
 def normalize_query(text: str) -> str:
@@ -157,11 +186,22 @@ def match_score(query: str, candidate: Candidate) -> float:
     if not normalized_query or not normalized_target:
         return 0.0
 
-    ratio = SequenceMatcher(None, normalized_query, normalized_target).ratio()
-    coverage = _token_coverage(normalized_query.split(), set(normalized_target.split()))
-    # Покрытие слов важнее посимвольного сходства: длинное название с лишними
-    # словами («… (Official Audio)») не должно топить точное совпадение.
-    score = coverage * 0.7 + ratio * 0.3
+    def similarity(left: str, right: str) -> float:
+        ratio = SequenceMatcher(None, left, right).ratio()
+        coverage = _token_coverage(left.split(), set(right.split()))
+        # Покрытие слов важнее посимвольного сходства: длинное название с лишними
+        # словами («… (Official Audio)») не должно топить точное совпадение.
+        return coverage * 0.7 + ratio * 0.3
+
+    # Считаем дважды: буква в букву и на слух. Транслит переводит побуквенно
+    # («Тейп» → «teyp»), а по-английски то же слово пишется «tape» — по запросу
+    # «Тейп» ни один Big Baby Tape не считался совпадением, выдача заполнялась
+    # случайными треками. Берём лучшее из двух: точное написание не проигрывает,
+    # а разное написание одного звука перестаёт быть промахом.
+    score = max(
+        similarity(normalized_query, normalized_target),
+        similarity(phonetic(normalized_query), phonetic(normalized_target)),
+    )
     # Оригинал должен обгонять slowed/reverb/cover, если их не просили явно
     score *= version_penalty(query, candidate.full_title)
     # Бит/минус/фристайл, которого не просили, — вниз. Не выбрасываем: человеку,

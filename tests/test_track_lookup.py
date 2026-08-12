@@ -316,3 +316,16 @@ def test_beat_query_keeps_beats():
     beat = Candidate(source="soundcloud", url="https://sc/beat", title="Драгонборн type beat",
                      duration=201, artist="LOLANE BEATS")
     assert match_score("драгонборн type beat", beat) > 0.5
+
+
+def test_cyrillic_spelling_matches_english_name():
+    """«Тейп» и «Tape» — одно слово, записанное на слух и по-английски.
+
+    Транслит переводит побуквенно («тейп» → «teyp»), поэтому по запросу «Тейп»
+    ни один Big Baby Tape не считался совпадением: выдача заполнялась случайными
+    треками вроде «фанат кот10 — Martine Rose».
+    """
+    tape = _candidate("Surname", artist="Big Baby Tape")
+    noise = _candidate("Martine Rose", artist="фанат кот10")
+    assert match_score("Тейп", tape) > 0.5
+    assert match_score("Тейп", noise) < 0.2

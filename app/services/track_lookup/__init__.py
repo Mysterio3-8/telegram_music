@@ -90,6 +90,8 @@ def _visible_candidates(query: str, candidates: list[Candidate]) -> list[Candida
 
     Отсеиваем только явную не-музыку и то, что вне границ длительности.
     """
+    from app.services.track_lookup.ranking import popularity_weight
+
     ranked = rank_candidates(query, candidates)
     seen = {id(item) for item in ranked}
     rest = [
@@ -99,6 +101,13 @@ def _visible_candidates(query: str, candidates: list[Candidate]) -> list[Candida
         and not is_probably_junk(item.title)
         and is_track_duration(item.duration)
     ]
+    # Хвост — это кандидаты, которых источник вернул по запросу, а наше
+    # сопоставление текста в них ничего не узнало (фиты, а ещё запросы вроде
+    # «Тейп», где кириллица и латиница пишутся по-разному). Раньше они шли в
+    # сыром порядке SoundCloud, и «фанат кот10 — Martine Rose» оказывался выше
+    # «Big Baby Tape — NOBODY». Порядок внутри хвоста: официальные, потом по
+    # прослушиваниям.
+    rest.sort(key=lambda item: (0 if item.official else 1, -popularity_weight(item.popularity)))
     return ranked + rest
 
 
