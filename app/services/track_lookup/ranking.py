@@ -42,6 +42,10 @@ class Candidate:
     # едет на речку», а официальный Big Baby Tape — на третьей странице.
     # 0 — источник счётчика не дал (YouTube), тогда порядок решает похожесть.
     popularity: int = 0
+    # Официальная ли это загрузка: релиз правообладателя или верифицированного
+    # аккаунта артиста, а не чужой реаплоад, мэшап и «slowed + reverb».
+    # Приоритет владельца: сперва официальные, всё остальное — следом.
+    official: bool = False
 
     @property
     def full_title(self) -> str:
@@ -189,13 +193,18 @@ def rank_candidates(query: str, candidates: list[Candidate]) -> list[Candidate]:
     """
     scored = [(match_score(query, item), item) for item in candidates]
 
-    def order(row: tuple[float, Candidate]) -> float:
+    def order(row: tuple[float, Candidate]) -> tuple[int, float]:
         score, candidate = row
-        return -(
+        relevance = (
             score * 0.6
             + popularity_weight(candidate.popularity) * 0.3
             + (0.1 if artist_hit(query, candidate) else 0.0)
         )
+        # Официальность — СТАРШИЙ ключ, а не слагаемое (решение владельца):
+        # релиз правообладателя обязан стоять выше любого реаплоада, даже если
+        # у реаплоада название ближе к запросу. Внутри каждой группы порядок
+        # обычный — похожесть, прослушивания, имя артиста.
+        return (0 if candidate.official else 1, -relevance)
 
     return [item for score, item in sorted(scored, key=order) if score > 0]
 

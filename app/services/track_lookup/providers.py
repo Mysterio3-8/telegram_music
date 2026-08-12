@@ -115,6 +115,10 @@ def search_youtube(query: str, limit: int = 5) -> list[Candidate]:
             # канала попадёт в сопоставление и сломает дедуп с SoundCloud
             uploader=entry.uploader or None,
             cover_url=entry.cover_url or None,
+            # «Исполнитель - Topic» — автоматический канал, который YouTube
+            # заводит по поставке от дистрибьютора. Это официальный релиз по
+            # определению, в отличие от перезалива на обычном канале.
+            official=(entry.uploader or "").strip().endswith(_TOPIC_CHANNEL_SUFFIX),
         )
         for entry in search_videos(query, limit=limit, sleep_requests=0)
     ]

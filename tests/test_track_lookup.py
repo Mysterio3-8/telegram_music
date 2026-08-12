@@ -245,3 +245,19 @@ def test_mashup_loses_to_official_track():
                          duration=152, artist="Кизару", popularity=2_000_000)
     ranked = rank_candidates("Кизару", [junk, official])
     assert ranked[0].url == "https://sc/mirror"
+
+
+def test_official_upload_always_above_reupload():
+    """Официальный релиз выше перезалива, даже если у перезалива название ближе.
+
+    Приоритет владельца: сперва официальные источники, всё остальное — следом.
+    Поэтому официальность это старший ключ сортировки, а не ещё одно слагаемое.
+    """
+    reupload = Candidate(source="soundcloud", url="https://sc/reup",
+                         title="Тейп", duration=150, artist="Андрей Квитка",
+                         popularity=50_000, official=False)
+    official = Candidate(source="soundcloud", url="https://sc/bbt",
+                         title="Surname", duration=182, artist="Big Baby Tape",
+                         popularity=800_000, official=True)
+    ranked = rank_candidates("Тейп", [reupload, official])
+    assert ranked[0].url == "https://sc/bbt"

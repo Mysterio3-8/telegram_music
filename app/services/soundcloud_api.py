@@ -150,6 +150,14 @@ def _request(path: str) -> bytes | None:
     return None
 
 
+def _same_name(left: str, right: str) -> bool:
+    """Одно и то же имя с точностью до регистра, пробелов и раскладки: «kizaru»
+    и «Кизару» — один артист, а сравнение «в лоб» этого не видит."""
+    from app.services.track_lookup.ranking import normalize_query
+
+    return normalize_query(left) == normalize_query(right)
+
+
 def _to_candidate(item: dict) -> Candidate | None:
     url = item.get("permalink_url")
     title = (item.get("title") or "").strip()
@@ -166,9 +174,22 @@ def _to_candidate(item: dict) -> Candidate | None:
     # выдаче по «Кизару» исполнителями значились «yarik», «Kogo», «original pidors».
     from app.services.track_lookup.providers import soundcloud_candidate_fields
 
-    publisher = (item.get("publisher_metadata") or {}).get("artist") or ""
+    publisher_meta = item.get("publisher_metadata") or {}
+    publisher = publisher_meta.get("artist") or ""
     parsed_artist, parsed_title = soundcloud_candidate_fields(title, uploader)
     artist = publisher.strip() or parsed_artist
+
+    # Официальная загрузка — по трём независимым признакам, любого достаточно:
+    # 1. есть метаданные правообладателя (лейбл прописал артиста и ISRC) —
+    #    у реаплоада и мэшапа их не бывает;
+    # 2. аккаунт верифицирован SoundCloud (галочка артиста);
+    # 3. имя аккаунта совпадает с исполнителем — артист залил сам.
+    official = bool(
+        publisher.strip()
+        or publisher_meta.get("isrc")
+        or (item.get("user") or {}).get("verified")
+        or (uploader and artist and _same_name(uploader, artist))
+    )
 
     return Candidate(
         source="soundcloud",
@@ -180,6 +201,7 @@ def _to_candidate(item: dict) -> Candidate | None:
         uploader=uploader or None,
         cover_url=artwork or None,
         popularity=int(item.get("playback_count") or 0),
+        official=official,
     )
 
 
