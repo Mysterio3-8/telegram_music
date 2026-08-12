@@ -56,6 +56,33 @@ _JUNK_MARKERS = (
     r"s\d+e\d+",
 )
 
+# Биты и болванки для рэперов. Их на SoundCloud больше, чем самих треков, и по
+# запросу «Драгонборн» половина выдачи была «LIL PUMP x PHARAON x BIG BABY TAPE
+# TYPE BEAT» и «[FREE] ... x LIL KRYSTALLL». Формально это музыка, поэтому в
+# общий мусор их класть нельзя — человек, ищущий бит, должен его найти. Но если
+# он бита не просил, такие записи обязаны стоять ПОСЛЕ настоящих треков.
+_BEAT_MARKERS = (
+    r"type\s*beat",
+    r"free\s*beat",
+    r"\[\s*free\s*\]",
+    r"\(\s*free\s*\)",
+    r"минус\w*",
+    r"instrumental",
+    r"инструментал\w*",
+    r"фристайл",
+    r"freestyle",
+    r"мэшап",
+    r"mashup",
+    r"бит\s+для",
+)
+
+_BEAT_RE = re.compile("|".join(_BEAT_MARKERS), re.IGNORECASE)
+
+
+def is_beat_or_instrumental(title: str) -> bool:
+    """True — это бит, минус, фристайл или мэшап, а не авторский трек."""
+    return bool(title) and bool(_BEAT_RE.search(title))
+
 _JUNK_RE = re.compile(r"(?:^|[\s\(\[\|/–—-])(?:" + "|".join(_JUNK_MARKERS) + r")(?:$|[\s\)\]\|/–—-])", re.IGNORECASE)
 
 

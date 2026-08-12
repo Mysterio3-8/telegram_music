@@ -289,3 +289,30 @@ def test_reupload_with_plain_title_is_not_official():
         "publisher_metadata": {"artist": "Big Baby Tape", "isrc": "RU1234500001"},
     })
     assert labeled is not None and labeled.official is True
+
+
+def test_type_beats_fall_below_real_tracks():
+    """Биты и фристайлы уходят под настоящие треки.
+
+    Скрин владельца по «Драгонборн»: верный трек стоял первым, а дальше шли
+    «LIL PUMP x PHARAON x BIG BABY TAPE TYPE BEAT», «[FREE] ... x LIL KRYSTALLL»
+    и «FFM Freestyle». Формально это музыка, поэтому в мусор их не выкидываем —
+    просто ставим после треков.
+    """
+    beat = Candidate(source="soundcloud", url="https://sc/beat",
+                     title="LIL PUMP x BIG BABY TAPE TYPE BEAT - Драгонборн",
+                     duration=201, artist="LOLANE BEATS", popularity=40_000)
+    track = Candidate(source="soundcloud", url="https://sc/track", title="Dragonborn",
+                      duration=176, artist="Big Baby Tape", popularity=700_000)
+    ranked = rank_candidates("Драгонборн", [track, beat])
+    assert ranked[0].url == "https://sc/track"
+    assert ranked[-1].url == "https://sc/beat"
+
+
+def test_beat_query_keeps_beats():
+    """А если бит и просили — штрафа нет."""
+    from app.services.track_lookup.ranking import match_score
+
+    beat = Candidate(source="soundcloud", url="https://sc/beat", title="Драгонборн type beat",
+                     duration=201, artist="LOLANE BEATS")
+    assert match_score("драгонборн type beat", beat) > 0.5

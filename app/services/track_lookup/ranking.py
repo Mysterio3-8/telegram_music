@@ -9,7 +9,7 @@ import math
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 
-from app.services.title_quality import is_probably_junk
+from app.services.title_quality import is_beat_or_instrumental, is_probably_junk
 
 _TRANSLIT = {
     "а": "a", "б": "b", "в": "v", "г": "g", "д": "d", "е": "e", "ё": "e",
@@ -111,6 +111,9 @@ _VERSION_MARKERS = tuple(
 _VERSION_PENALTY = 0.45  # версия проигрывает оригиналу, но остаётся в выдаче
 
 
+_BEAT_PENALTY = 0.35
+
+
 def version_penalty(query: str, title: str) -> float:
     """1.0 — штрафа нет; <1 — название это пере-версия, а просили оригинал.
 
@@ -160,7 +163,13 @@ def match_score(query: str, candidate: Candidate) -> float:
     # словами («… (Official Audio)») не должно топить точное совпадение.
     score = coverage * 0.7 + ratio * 0.3
     # Оригинал должен обгонять slowed/reverb/cover, если их не просили явно
-    return round(score * version_penalty(query, candidate.full_title), 4)
+    score *= version_penalty(query, candidate.full_title)
+    # Бит/минус/фристайл, которого не просили, — вниз. Не выбрасываем: человеку,
+    # который ищет именно бит, он нужен, и по запросу со словом «минус» штрафа
+    # не будет вовсе.
+    if is_beat_or_instrumental(candidate.full_title) and not is_beat_or_instrumental(query):
+        score *= _BEAT_PENALTY
+    return round(score, 4)
 
 
 def popularity_weight(popularity: int) -> float:

@@ -6,6 +6,7 @@
 import logging
 import subprocess
 import tempfile
+from urllib.parse import quote
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -227,6 +228,45 @@ def search_videos(query: str, limit: int = 1, sleep_requests: int = 1) -> list[V
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(f"ytsearch{max(1, limit)}:{query}", download=False)
     return _collect_entries(info)
+
+
+# Фильтр «Songs» в поиске YouTube Music. Без него выдача мешает альбомы,
+# плейлисты и видео, и половина записей приходит без пригодного video_id.
+_YTM_SONGS_FILTER = "EgWKAQIIAWoKEAoQCRADEAQQBQ%3D%3D"
+
+
+def search_music_titles(query: str, limit: int = 20) -> list[str]:
+    """Названия треков из YouTube Music — чистая дискография артиста.
+
+    Идея подсмотрена у Lavalink-ботов: у них есть отдельный префикс поиска
+    `ytmsearch:`. Разница принципиальная — обычный YouTube это видеохостинг, и
+    на «big baby tape» он отдаёт клипы, реакции и часовые миксы, а YouTube Music
+    это каталог лейблов: только треки, только официальные поставки.
+
+    Возвращаем именно НАЗВАНИЯ, а не кандидатов: в быстром режиме YT Music не
+    отдаёт ни длительность, ни исполнителя, а качать каждую запись отдельно ради
+    метаданных дорого. Названия нужны прогреву — он ищет по ним в SoundCloud,
+    где есть и метаданные, и готовый mp3 без перекодирования.
+    """
+    url = f"https://music.youtube.com/search?q={quote(query)}&sp={_YTM_SONGS_FILTER}"
+    opts = {
+        **_base_opts(sleep_requests=0),
+        "extract_flat": "in_playlist",
+        "skip_download": True,
+        "playlistend": max(1, limit),
+    }
+    try:
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+    except Exception:  # noqa: BLE001 — YouTube мог ответить антиботом
+        logger.warning("YouTube Music: поиск «%s» не удался", query, exc_info=True)
+        return []
+    titles = [
+        (entry.get("title") or "").strip()
+        for entry in ((info or {}).get("entries") or [])
+        if entry.get("title")
+    ]
+    return titles[:limit]
 
 
 def search_first_video(query: str) -> VideoEntry | None:
