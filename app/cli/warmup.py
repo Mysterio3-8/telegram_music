@@ -9,6 +9,7 @@
 (замер: 7240 треков = 65 МБ). Отсюда потолок — см. --help.
 
     python -m app.cli.warmup --popular 300        # что люди реально ищут
+    python -m app.cli.warmup --artists artists.txt --per-artist 20   # дискографии
     python -m app.cli.warmup --file queries.txt   # свой список, запрос на строку
     python -m app.cli.warmup --popular 50 --dry   # только показать, что будет
 
@@ -59,6 +60,25 @@ def read_queries(path: str, limit: int) -> list[str]:
     return lines[:limit] if limit else lines
 
 
+async def artist_queries(names: list[str], per_artist: int) -> list[str]:
+    """Разворачивает имена артистов в конкретные треки.
+
+    Один запрос прогревает один трек, а человек ищет артиста и хочет любую его
+    вещь. Спрашиваем у источника его выдачу и греем каждый трек отдельно —
+    так за один прогон закрывается дискография, а не одна песня.
+    """
+    from app.services.track_lookup import search_candidates
+
+    queries: list[str] = []
+    for name in names:
+        candidates = await search_candidates(name)
+        for candidate in candidates[:per_artist]:
+            artist = (candidate.artist or name).strip()
+            queries.append(f"{artist} {candidate.title}".strip())
+        logger.info("«%s» — треков к прогреву: %s", name, min(len(candidates), per_artist))
+    return queries
+
+
 async def warm_one(bot: Bot, query: str, dry: bool) -> str:
     """Один запрос. Возвращает исход словом — для сводки."""
     candidate = await asyncio.to_thread(find_track, query)
@@ -97,6 +117,11 @@ async def warm_one(bot: Bot, query: str, dry: bool) -> str:
             cover_url=audio.thumbnail_url or candidate.cover_url or None,
             album=audio.album or None,
             thumbnail=fetch_telegram_thumbnail(audio.thumbnail_url or candidate.cover_url or ""),
+            # Без ссылки прогретый трек не опознаётся, когда человек ткнёт в того
+            # же кандидата в выдаче: сверка по «исполнитель — название»
+            # промахивается на расхождении заголовков. Прогрев без source_url —
+            # это скачать трек заранее и всё равно скачать его повторно.
+            source_url=candidate.url,
         )
     return f"заминчен #{track.id}" if created else "уже в базе"
 
@@ -139,16 +164,26 @@ def main() -> None:
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument("--popular", type=int, metavar="N", help="N самых частых запросов людей")
     source.add_argument("--file", metavar="ПУТЬ", help="файл со списком запросов, по одному на строку")
+    source.add_argument(
+        "--artists",
+        metavar="ПУТЬ",
+        help="файл с именами артистов — прогреть по --per-artist треков каждого",
+    )
+    parser.add_argument(
+        "--per-artist", type=int, default=20, help="сколько треков брать у артиста (с --artists)"
+    )
     parser.add_argument("--limit", type=int, default=0, help="ограничить число запросов из файла")
     parser.add_argument("--delay", type=float, default=DELAY_SECONDS, help="пауза между треками, сек")
     parser.add_argument("--dry", action="store_true", help="только показать, ничего не качать")
     args = parser.parse_args()
 
-    queries = (
-        asyncio.run(popular_queries(args.popular))
-        if args.popular
-        else read_queries(args.file, args.limit)
-    )
+    if args.popular:
+        queries = asyncio.run(popular_queries(args.popular))
+    elif args.artists:
+        names = read_queries(args.artists, args.limit)
+        queries = asyncio.run(artist_queries(names, args.per_artist))
+    else:
+        queries = read_queries(args.file, args.limit)
     if not queries:
         raise SystemExit("Список запросов пуст")
     logger.info("Запросов к прогреву: %s%s", len(queries), " (пробный прогон)" if args.dry else "")
