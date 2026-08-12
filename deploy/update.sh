@@ -28,6 +28,13 @@ echo "==> Миграции базы"
 echo "==> Юниты, сторож, перезапуск сервисов"
 bash deploy/install-units.sh
 
+# Кэш выдачи живёт 3 часа и хранит СОБРАННЫЕ старым кодом списки: пока он не
+# протухнет, правки поиска не видны, и деплой выглядит «не доехавшим». Дважды
+# за вечер 11.08 это съело время на диагностику совершенно исправного деплоя.
+echo "==> Сбрасываю кэш выдачи поиска"
+deleted=$(redis-cli --scan --pattern 'livesearch:*' | xargs -r redis-cli del || echo 0)
+echo "    удалено записей: ${deleted:-0}"
+
 echo
 echo "==> Готово. Проверь, что всё живо:"
 systemctl is-active tg-music-bot tg-music-worker tg-music-youtube-user tg-music-api || true
