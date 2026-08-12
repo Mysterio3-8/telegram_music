@@ -204,3 +204,18 @@ def test_same_track_from_different_uploaders_collapses():
     result = dedup_candidates([*copies, other])
     assert [item.title for item in result] == ["Зеркало", "Тяжелый метал"]
     assert result[0].uploader == "yarik"  # остаётся первый, он же лучший по рангу
+
+
+def test_popular_upload_wins_over_reupload_with_same_name():
+    """При равной похожести выигрывает трек с бо́льшим числом прослушиваний.
+
+    По запросу «Тейп» в выдаче стояли «grby - piv0liz-Тейп едет на речку» и
+    «kugakrewceo», а официальные загрузки Big Baby Tape уходили вниз: текстовая
+    похожесть у них была примерно одинаковой, а других доводов у нас не было.
+    """
+    official = Candidate(source="soundcloud", url="https://sc/official", title="Surname",
+                         duration=182, artist="Big Baby Tape", popularity=5_000_000)
+    reupload = Candidate(source="soundcloud", url="https://sc/reup", title="Surname",
+                         duration=182, artist="Big Baby Tape", popularity=120)
+    ranked = rank_candidates("big baby tape surname", [reupload, official])
+    assert ranked[0].url == "https://sc/official"

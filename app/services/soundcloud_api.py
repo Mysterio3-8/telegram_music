@@ -179,6 +179,7 @@ def _to_candidate(item: dict) -> Candidate | None:
         artist=artist or None,
         uploader=uploader or None,
         cover_url=artwork or None,
+        popularity=int(item.get("playback_count") or 0),
     )
 
 

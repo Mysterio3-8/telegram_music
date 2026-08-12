@@ -35,6 +35,12 @@ class Candidate:
     # но фильтру «похоже ли на музыку» он нужен — «Исполнитель - Topic» это
     # автоматический музыкальный канал.
     uploader: str | None = None
+    # Прослушивания у источника. Нужны как решающий довод при похожих названиях:
+    # официальная загрузка артиста набирает миллионы, самопальный реаплоад —
+    # сотни. Без этого в выдаче по «Тейп» первым мог стоять «grby - piv0liz-Тейп
+    # едет на речку», а официальный Big Baby Tape — на третьей странице.
+    # 0 — источник счётчика не дал (YouTube), тогда порядок решает похожесть.
+    popularity: int = 0
 
     @property
     def full_title(self) -> str:
@@ -155,7 +161,11 @@ def match_score(query: str, candidate: Candidate) -> float:
 def rank_candidates(query: str, candidates: list[Candidate]) -> list[Candidate]:
     """Кандидаты от лучшего к худшему. Мусор и нулевые совпадения отброшены."""
     scored = [(match_score(query, item), item) for item in candidates]
-    return [item for score, item in sorted(scored, key=lambda row: -row[0]) if score > 0]
+    # Сортируем по похожести, огрублённой до сотых, а внутри равных — по
+    # прослушиваниям. Огрубление важно: без него разница в третьем знаке
+    # (лишний пробел в названии) решала бы исход вместо миллиона прослушиваний.
+    ordered = sorted(scored, key=lambda row: (-round(row[0], 2), -row[1].popularity))
+    return [item for score, item in ordered if score > 0]
 
 
 def best_match(query: str, candidates: list[Candidate], min_score: float = 0.45) -> Candidate | None:
