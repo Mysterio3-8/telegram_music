@@ -16,6 +16,7 @@ def main_menu_keyboard(lang: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
             )
         ],
         [InlineKeyboardButton(text=t("menu.referral", lang), callback_data="menu:referral")],
+        [InlineKeyboardButton(text=t("menu.settings", lang), callback_data="menu:settings")],
         [InlineKeyboardButton(text=t("menu.language", lang), callback_data="menu:lang")],
         # Кнопка поддержки («жалобы / идеи») временно убрана по решению владельца.
         # Сам бот @suptgmusic_bot жив — вернуть строку, когда понадобится:

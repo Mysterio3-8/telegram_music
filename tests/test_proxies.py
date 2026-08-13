@@ -30,7 +30,7 @@ def test_download_retries_with_next_proxy(monkeypatch):
     monkeypatch.setattr(settings, "proxy_list", "http://a:1,http://b:2")
     calls = []
 
-    def failing_download(url, as_mp3=False, use_proxy=True):
+    def failing_download(url, as_mp3=False, use_proxy=True, original=False):
         calls.append(use_proxy)
         raise RuntimeError("proxy connection refused")
 
@@ -50,7 +50,7 @@ def test_dead_proxies_do_not_disable_soundcloud(monkeypatch):
     прокси Connection refused → SoundCloud молча отдавал ноль."""
     monkeypatch.setattr(settings, "proxy_list", "http://dead:1,http://dead:2")
 
-    def download(url, as_mp3=False, use_proxy=True):
+    def download(url, as_mp3=False, use_proxy=True, original=False):
         if use_proxy:
             raise RuntimeError("proxy connection refused")
         return ("audio", "uploader")
@@ -67,7 +67,7 @@ def test_download_single_attempt_without_proxies(monkeypatch):
     monkeypatch.setattr(settings, "proxy_list", "")
     calls = []
 
-    def failing_download(url, as_mp3=False, use_proxy=True):
+    def failing_download(url, as_mp3=False, use_proxy=True, original=False):
         calls.append(use_proxy)
         raise RuntimeError("network down")
 

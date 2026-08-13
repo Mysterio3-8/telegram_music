@@ -197,6 +197,12 @@ def _to_candidate(item: dict) -> Candidate | None:
         or (parsed_from_title and uploader and artist and _same_name(uploader, artist))
     )
 
+    # Исходный файл автора (WAV/FLAC/оригинальный mp3) доступен, только когда
+    # автор разрешил скачивание И квота скачиваний за месяц не выбрана. Второе
+    # поле обязательно: у популярного трека `downloadable` стоит, а квота
+    # кончилась, и запрос оригинала вернул бы ошибку вместо файла.
+    hq_available = bool(item.get("downloadable")) and bool(item.get("has_downloads_left"))
+
     return Candidate(
         source="soundcloud",
         url=url,
@@ -208,6 +214,7 @@ def _to_candidate(item: dict) -> Candidate | None:
         cover_url=artwork or None,
         popularity=int(item.get("playback_count") or 0),
         official=official,
+        hq_available=hq_available,
     )
 
 

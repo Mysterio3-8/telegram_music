@@ -69,6 +69,35 @@ def _results_title(query: str) -> str:
     return t("quick.results_title", query=query)
 
 
+def _queue_original(user, track, candidate: Candidate, chat_id: int) -> None:
+    """Досылает оригинальное качество, если человек его выбрал и оплатил.
+
+    Ставится задачей, а не делается здесь: сорок мегабайт в памяти процесса бота
+    на боксе 961 МБ — это ровно тот OOM, который дважды ронял прод. Сам mp3 к
+    этому моменту уже ушёл, поэтому неудача очереди человека не задевает и
+    сообщать о ней нечего.
+    """
+    from app.services.original_audio import wants_original
+
+    if not wants_original(user):
+        return
+    # Ничего не найдётся — экономим и очередь, и закачку: оригинал спрашиваем,
+    # только если он либо уже заминчен, либо выдача сказала, что он доступен.
+    if not track.hq_file_id and not candidate.hq_available:
+        return
+    try:
+        from app.tasks.search_fetch import search_fetch_original
+
+        search_fetch_original.delay(
+            track_id=track.id,
+            telegram_id=user.telegram_id,
+            chat_id=chat_id,
+            source_url=candidate.url,
+        )
+    except Exception:  # noqa: BLE001 — брокер лёг; mp3 человек получил, этого достаточно
+        logger.warning("Оригинал: очередь недоступна, track=%s", track.id, exc_info=True)
+
+
 async def _stored_candidates(state: FSMContext) -> tuple[str, list[Candidate]]:
     data = await state.get_data()
     rows = data.get(_ITEMS_KEY) or []
@@ -154,6 +183,7 @@ async def quick_search_send(callback: CallbackQuery, state: FSMContext) -> None:
                 callback.bot, callback.message.chat.id, session, user, existing,
                 reply_markup=keyboard,
             )
+            _queue_original(user, existing, candidate, callback.message.chat.id)
             return
 
     # Скачивание уходит в воркер: ffmpeg на боксе 961 МБ дважды ронял прод по OOM

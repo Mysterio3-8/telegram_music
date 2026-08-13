@@ -255,11 +255,22 @@ def collect_soundcloud_entries(info: dict) -> list[SoundcloudEntry]:
     return entries
 
 
-def download_soundcloud_audio(url: str, as_mp3: bool = False) -> tuple[DownloadedAudio, str] | None:
+# Форматы, в которых имеет смысл отдавать «оригинал»: это то, что авторы
+# заливают на SoundCloud исходником. Всё прочее (webm/opus и подобное) — уже
+# результат перекодирования на их стороне, отдавать такое как «оригинальное
+# качество» нечестно, и мы молча уходим на обычный mp3.
+ORIGINAL_FORMATS = frozenset({"wav", "flac", "aiff", "aif", "mp3", "m4a", "ogg"})
+
+
+def download_soundcloud_audio(
+    url: str, as_mp3: bool = False, original: bool = False
+) -> tuple[DownloadedAudio, str] | None:
     """Скачивает один трек. Возвращает (аудио, uploader) или None.
     as_mp3=True — гарантированный mp3 (перекодирование ffmpeg): поисковый парсер
     отдаёт пользователю только mp3. Массовая закачка 24/7 зовёт без флага —
     там перекодировать каждый трек дорого, храним исходный контейнер.
+    original=True — исходный файл автора вместо потока 128 kbps (см.
+    `_download_soundcloud_once`); as_mp3 при этом игнорируется.
     Ошибка сети/прокси → повтор через следующий прокси; последняя ошибка наружу
     (вызывающая сторона различает постоянные отказы по тексту)."""
     from app.services.disk import enough_free_disk
@@ -269,7 +280,9 @@ def download_soundcloud_audio(url: str, as_mp3: bool = False) -> tuple[Downloade
     last_error: Exception | None = None
     for attempt, use_proxy in enumerate(attempt_plan(), start=1):
         try:
-            result = _download_soundcloud_once(url, as_mp3=as_mp3, use_proxy=use_proxy)
+            result = _download_soundcloud_once(
+                url, as_mp3=as_mp3, use_proxy=use_proxy, original=original
+            )
         except Exception as exc:  # noqa: BLE001 — сеть/прокси, пробуем следующую попытку
             last_error = exc
             logger.warning("SoundCloud: скачивание %s (попытка %s): %s", url, attempt, exc)
@@ -283,7 +296,7 @@ def download_soundcloud_audio(url: str, as_mp3: bool = False) -> tuple[Downloade
 
 
 def _download_soundcloud_once(
-    url: str, as_mp3: bool = False, use_proxy: bool = True
+    url: str, as_mp3: bool = False, use_proxy: bool = True, original: bool = False
 ) -> tuple[DownloadedAudio, str] | None:
     with tempfile.TemporaryDirectory() as tmp:
         opts = {
@@ -299,7 +312,18 @@ def _download_soundcloud_once(
             "noplaylist": True,
             "retries": settings.youtube_max_retries,
         }
-        if as_mp3:
+        if original:
+            # `download` — формат-псевдоним yt-dlp для исходного файла, который
+            # автор загрузил сам. Он появляется у трека, только если разрешено
+            # скачивание и не выбрана месячная квота. Запасных вариантов здесь
+            # НЕТ намеренно: «оригинала не оказалось» должно быть отличимо от
+            # «скачали обычный поток и выдали его за оригинал».
+            opts["format"] = "download"
+            # Ограничение на стороне yt-dlp: он оборвёт закачку, не дожидаясь
+            # конца. Иначе получасовой WAV на 300 МБ был бы скачан целиком и
+            # только потом выброшен — впустую трафик, диск и минуты ожидания.
+            opts["max_filesize"] = settings.original_max_size_mb * 1024 * 1024
+        elif as_mp3:
             opts["postprocessors"] = [
                 {"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "192"}
             ]
@@ -310,7 +334,14 @@ def _download_soundcloud_once(
         files = [p for p in Path(tmp).glob("sc.*") if not p.name.endswith(".conv.m4a")]
         if not files:
             return None
-        data, file_format = _read_supported(files[0])
+        if original:
+            file_format = files[0].suffix.lstrip(".").lower()
+            if file_format not in ORIGINAL_FORMATS:
+                logger.info("SoundCloud: оригинал в формате %s — не берём", file_format)
+                return None
+            data = files[0].read_bytes()
+        else:
+            data, file_format = _read_supported(files[0])
         uploader = (info.get("uploader") or info.get("artist") or "").strip()
         audio = DownloadedAudio(
             data=data,

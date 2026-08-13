@@ -11,7 +11,10 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_COMMANDS = [BotCommand(command="start", description="Главное меню")]
+DEFAULT_COMMANDS = [
+    BotCommand(command="start", description="Главное меню"),
+    BotCommand(command="settings", description="Настройки — формат треков"),
+]
 ADMIN_COMMANDS = DEFAULT_COMMANDS + [BotCommand(command="admin", description="Админ-панель")]
 
 

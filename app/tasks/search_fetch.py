@@ -43,6 +43,77 @@ async def _record_listen(session, telegram_id: int, track_id: int) -> None:
         await record_event(session, user.id, track_id, "listen")
 
 
+async def _maybe_send_original(session, bot, track, candidate, telegram_id: int, chat_id) -> None:
+    """Досылает оригинальное качество тем, кто его выбрал и оплатил.
+
+    Отдельной функцией, а не строчкой в задаче, потому что зовётся из двух мест:
+    отсюда (трек только что скачан) и из задачи `search.fetch_original` (трек в
+    базе уже был, скачивать заново нечего).
+
+    Любая ошибка здесь гасится: mp3 человек УЖЕ получил, и падать задаче из-за
+    необязательного бонуса нельзя — Celery начнёт её повторять и пришлёт трек
+    второй раз.
+    """
+    from app.services.original_audio import deliver_original, wants_original
+    from app.services.users import get_user_by_telegram_id
+
+    if chat_id is None:
+        return  # «импортировать молча» — это Mini App, файлы в чат он не шлёт
+    try:
+        user = await get_user_by_telegram_id(session, telegram_id)
+        if user is None or not wants_original(user):
+            return
+        await deliver_original(
+            session, bot, track, chat_id,
+            source_url=candidate.url if candidate is not None else None,
+            hq_available=bool(candidate.hq_available) if candidate is not None else True,
+        )
+    except Exception:  # noqa: BLE001 — трек уже доставлен, бонус не обязан удаться
+        logger.warning("Оригинал для track=%s не доехал", track.id, exc_info=True)
+
+
+@celery_app.task(name="search.fetch_original", bind=True, max_retries=1, queue="youtube_user")
+def search_fetch_original(
+    self, track_id: int, telegram_id: int, chat_id: int, source_url: str | None = None
+) -> None:
+    """Оригинал для трека, который в базе уже есть (mp3 ушёл мгновенно по file_id).
+
+    Живёт в воркере по той же причине, что и остальные закачки: десятки
+    мегабайт в памяти процесса бота на боксе 961 МБ — это OOM, ронявший прод.
+    """
+    from app.db.models import Track
+
+    async def _run(session):
+        track = await session.get(Track, track_id)
+        if track is None:
+            return
+        bot = Bot(token=settings.bot_token)
+        try:
+            await _maybe_send_original(
+                session, bot, track, _UrlOnly(source_url), telegram_id, chat_id
+            )
+        finally:
+            await bot.session.close()
+
+    try:
+        asyncio.run(_with_session(_run))
+    except Exception as exc:  # noqa: BLE001 — mp3 человек получил, оригинал не критичен
+        logger.warning("Оригинал track=%s не удался: %s", track_id, exc)
+
+
+class _UrlOnly:
+    """Заглушка кандидата для задачи: из выдачи сюда доезжает только ссылка.
+
+    hq_available=True здесь не «мы уверены, что оригинал есть», а «спросить
+    источник разрешено» — решение принимает вызывающая сторона в боте, она и
+    видела флаг из выдачи."""
+
+    hq_available = True
+
+    def __init__(self, url: str | None) -> None:
+        self.url = url
+
+
 @celery_app.task(name="search.fetch_candidate", bind=True, max_retries=2, queue="youtube_user")
 def search_fetch_candidate(
     self,
@@ -66,10 +137,11 @@ def search_fetch_candidate(
 
     async def _run(session):
         bot = Bot(token=settings.bot_token)
+        chosen = Candidate(**candidate)
         try:
             try:
                 track, _ = await import_candidate(
-                    session, bot, Candidate(**candidate), telegram_id,
+                    session, bot, chosen, telegram_id,
                     save_to_library=save_to_library,
                 )
             except UserImportRejected as exc:
@@ -102,6 +174,11 @@ def search_fetch_candidate(
                 )
             else:
                 await bot.send_message(chat_id, f"{caption} — готов.")
+
+            # Оригинал — вторым сообщением и только после того, как mp3 уже у
+            # человека: сорок мегабайт заливаются в Telegram десятки секунд, и
+            # держать его всё это время без трека было бы хуже, чем сейчас.
+            await _maybe_send_original(session, bot, track, chosen, telegram_id, chat_id)
         finally:
             await bot.session.close()
 

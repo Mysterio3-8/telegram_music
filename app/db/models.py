@@ -33,6 +33,10 @@ class User(Base):
     # Пока pay_method_id пуст — списывать нечем; юзер может выключить autorenew.
     autorenew: Mapped[bool] = mapped_column(default=True, server_default="1")
     pay_method_id: Mapped[str | None] = mapped_column(String(64))
+    # Желаемое качество выдачи: 'mp3' (по умолчанию) или 'original' — исходный
+    # файл автора. Работает только у Premium и только там, где автор разрешил
+    # скачивание; во всех остальных случаях молча остаётся mp3.
+    audio_quality: Mapped[str] = mapped_column(String(16), default="mp3", server_default="mp3")
 
 
 class UserAchievement(Base):
@@ -93,6 +97,23 @@ class Track(Base):
     # секунды вместо мгновенной пересылки, а на DRM-треке получал «под защитой»
     # там, где раньше трек приходил (жалоба владельца 11.08).
     source_url: Mapped[str | None] = mapped_column(String(512), index=True)
+    # Оригинальное качество: тот же трек, но исходным файлом автора (WAV/FLAC).
+    # Отдельными полями, а не отдельной строкой в tracks, сознательно: это ОДИН
+    # трек. Заведи мы вторую запись — он раздвоился бы в библиотеке, плейлистах,
+    # поиске и статистике, а дедуп по «исполнитель — название» начал бы считать
+    # две наши собственные записи дубликатами друг друга.
+    #
+    # hq_file_id — это file_id ДОКУМЕНТА, не аудио: Bot API рисует в плеере
+    # только mp3 и m4a, а WAV/FLAC отправляются файлом. Значит и пересылать его
+    # надо через send_document — send_audio с этим id не сработает.
+    hq_file_id: Mapped[str | None] = mapped_column(String(256))
+    hq_format: Mapped[str | None] = mapped_column(String(8))
+    hq_size: Mapped[int | None] = mapped_column()  # байты — показываем в подписи
+    # NULL — оригинал ещё не спрашивали; 'ready' — лежит в hq_file_id;
+    # 'none' — автор не разрешил скачивание либо файл не влез в лимит Bot API.
+    # Сетевая ошибка статус НЕ меняет: она временная, и следующий человек должен
+    # попробовать снова, а не упереться в вечное «оригинала нет».
+    hq_status: Mapped[str | None] = mapped_column(String(16))
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
     __table_args__ = (

@@ -62,6 +62,18 @@ async def set_user_language(session: AsyncSession, user: User, code: str) -> str
     return resolved
 
 
+async def set_audio_quality(session: AsyncSession, user: User, choice: str) -> str:
+    """Запоминает формат выдачи. Неизвестное значение трактуем как mp3:
+    в callback_data может прийти что угодно, а молча дать оригинал бесплатно —
+    это раздать Premium-функцию всем."""
+    from app.services.original_audio import QUALITY_MP3, QUALITY_ORIGINAL
+
+    resolved = QUALITY_ORIGINAL if choice == QUALITY_ORIGINAL else QUALITY_MP3
+    user.audio_quality = resolved
+    await session.commit()
+    return resolved
+
+
 def is_admin(telegram_id: int) -> bool:
     return telegram_id in settings.admin_id_set
 
