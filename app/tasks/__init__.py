@@ -35,6 +35,22 @@ def enqueue_user_import(
         return False
 
 
+def enqueue_link_import(
+    url: str, telegram_id: int, chat_id: int, quiet: bool = False
+) -> bool:
+    """Импорт по ссылке с произвольной площадки. False — очередь недоступна."""
+    if not settings.effective_celery_broker:
+        return False
+    try:
+        from app.tasks.link_import import link_user_import
+
+        link_user_import.delay(url=url, telegram_id=telegram_id, chat_id=chat_id, quiet=quiet)
+        return True
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Не удалось поставить импорт по ссылке %s: %s", url, exc)
+        return False
+
+
 def enqueue_soundcloud_user_import(
     url: str, telegram_id: int, chat_id: int, quiet: bool = False
 ) -> bool:

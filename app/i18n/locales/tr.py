@@ -158,23 +158,16 @@ MESSAGES: dict[str, str] = {
     "player.results_finished": "✅ Sonuçlar bitti",
     "player.playing_results": "▶️ Arama sonuçlarını çalıyorum",
     "player.queue_stopped": "⏹ Sıra durduruldu",
-    "upload.intro": (
-        "⬆️ <b>Müzik yükle</b>\n\n"
-        "📎 <b>Dosya olarak</b> — parçayı ses dosyası olarak gönder. İstediğin kadar, "
-        "tüm koleksiyonunu tek tek — <b>ücretsiz ve sınırsız</b>.\n\n"
-        "🔗 <b>Bağlantıyla</b> — YouTube Music ya da SoundCloud:\n"
-        "• tek parça — <b>ücretsiz</b>;\n"
-        "• profilin, listenin ya da beğenilerin tamamı — <b>💎 Premium</b>.\n\n"
-        "⚠️ Sanatçıyı yaz — yoksa parça «Bilinmeyen» olur.\n\n"
-        "Dosya ya da bağlantı bekliyorum 👇"
-    ),
+    "upload.intro": "⬆️ <b>Müzik yükleme</b>\n\n📎 <b>Ses dosyası olarak</b> — parçayı dosya olarak gönderin. İstediğiniz kadar, tüm koleksiyonunuzu tek tek — <b>ücretsiz ve sınırsız</b>.\n\n🔗 <b>Bağlantıyla</b> — YouTube Music, SoundCloud ve diğer platformlardan: <b>💎 Premium</b> gerekir.\n\n⚠️ Sanatçıyı yazın — yoksa parça «Bilinmeyen» olur.\n\nDosya ya da bağlantı bekliyorum 👇",
     "upload.confirm_button": "✅ Yükle",
     "upload.enter_title": "Başlığı yaz.",
     "upload.as_audio": "Dosyayı ses (müzik) olarak gönder, belge olarak değil.",
-    "upload.premium_bulk": (
-        "Profilin, listenin ya da beğenilerin tamamını yüklemek yalnızca 💎 Premium ile olur.\n"
-        "Ücretsiz olarak teker teker yükleyebilirsin — tek bir parçanın bağlantısını gönder."
-    ),
+    "upload.premium_bulk": "Bağlantıyla yükleme yalnızca 💎 Premium içindir.\nSes dosyaları ücretsiz ve sınırsız — parçayı dosya olarak gönderin.",
+    "upload.reading_link": "🔍 Bağlantıyı okuyorum…",
+    "upload.link_failed": "Bu bağlantı açılamadı. Kontrol edip tekrar deneyin.",
+    "upload.queued_link": "⏳ Alındı! Parçayı indirip buraya göndereceğiz — genelde bir dakikadan az.",
+    "upload.drm_service": "🔒 <b>{service}</b> yalnızca korumalı akış veriyor — dosyanın kendisi orada yok.\n\nAma parça listesi okunuyor: «Aktarım» aynı şarkıları erişilebilir kaynaklarda bulup kitaplığınıza ekler.",
+    "upload.go_transfer": "🔄 Çalma listesini aktar",
     "upload.reading_playlist": "🔍 Çalma listesini okuyorum…",
     "upload.playlist_failed": "Bu çalma listesini okuyamadım. Bağlantıyı kontrol edip tekrar dene.",
     "upload.unavailable": "İçe aktarma şu anda kullanılamıyor — sonra dene.",

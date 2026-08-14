@@ -159,23 +159,16 @@ MESSAGES: dict[str, str] = {
     "player.results_finished": "✅ Resultados terminados",
     "player.playing_results": "▶️ Reproduciendo los resultados",
     "player.queue_stopped": "⏹ Cola detenida",
-    "upload.intro": (
-        "⬆️ <b>Subir música</b>\n\n"
-        "📎 <b>Como archivo</b> — envía la pista como archivo de audio. Tantas como "
-        "quieras, toda tu colección una a una — es <b>gratis y sin límites</b>.\n\n"
-        "🔗 <b>Por enlace</b> — YouTube Music o SoundCloud:\n"
-        "• una sola pista — <b>gratis</b>;\n"
-        "• un perfil, lista o «me gusta» enteros — <b>💎 Premium</b>.\n\n"
-        "⚠️ Indica el artista — si no, la pista quedará como «Desconocido».\n\n"
-        "Envía un archivo o un enlace 👇"
-    ),
+    "upload.intro": "⬆️ <b>Subir música</b>\n\n📎 <b>Como archivo de audio</b> — envía la pista como archivo. Tantas como quieras, toda tu colección una a una — <b>gratis y sin límites</b>.\n\n🔗 <b>Por enlace</b> — de YouTube Music, SoundCloud y otras plataformas: requiere <b>💎 Premium</b>.\n\n⚠️ Indica el artista — si no, la pista quedará como «Desconocido».\n\nEspero un archivo o un enlace 👇",
     "upload.confirm_button": "✅ Subir",
     "upload.enter_title": "Escribe el título.",
     "upload.as_audio": "Envía el archivo como audio (música), no como documento.",
-    "upload.premium_bulk": (
-        "Subir un perfil, lista o «me gusta» completos es solo para 💎 Premium.\n"
-        "Gratis puedes subir de una en una — envía el enlace de una pista concreta."
-    ),
+    "upload.premium_bulk": "Subir por enlace es solo para 💎 Premium.\nLos archivos de audio son gratis y sin límites — envía la pista como archivo.",
+    "upload.reading_link": "🔍 Leyendo el enlace…",
+    "upload.link_failed": "No se pudo abrir ese enlace. Compruébalo e inténtalo de nuevo.",
+    "upload.queued_link": "⏳ ¡Recibido! Descargamos la pista y la enviamos aquí — normalmente menos de un minuto.",
+    "upload.drm_service": "🔒 <b>{service}</b> solo entrega un flujo protegido — el archivo no está ahí.\n\nPero la lista de pistas sí se lee: «Transferencia» encontrará las mismas canciones en fuentes disponibles y las añadirá a tu biblioteca.",
+    "upload.go_transfer": "🔄 Transferir la lista",
     "upload.reading_playlist": "🔍 Leyendo la lista…",
     "upload.playlist_failed": "No pude leer esa lista. Revisa el enlace e inténtalo otra vez.",
     "upload.unavailable": "La importación no está disponible ahora — inténtalo más tarde.",

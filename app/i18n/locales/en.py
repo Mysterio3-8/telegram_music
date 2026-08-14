@@ -157,23 +157,16 @@ MESSAGES: dict[str, str] = {
     "player.results_finished": "✅ Results finished",
     "player.playing_results": "▶️ Playing the search results",
     "player.queue_stopped": "⏹ Queue stopped",
-    "upload.intro": (
-        "⬆️ <b>Upload music</b>\n\n"
-        "📎 <b>As a file</b> — send the track as an audio file. As many as you like, "
-        "your whole collection one by one — <b>free and unlimited</b>.\n\n"
-        "🔗 <b>By link</b> — YouTube Music or SoundCloud:\n"
-        "• a single track — <b>free</b>;\n"
-        "• a whole profile, playlist or likes in bulk — <b>💎 Premium</b>.\n\n"
-        "⚠️ Do name the artist — otherwise the track becomes «Unknown».\n\n"
-        "Send a file or a link 👇"
-    ),
+    "upload.intro": "⬆️ <b>Upload music</b>\n\n📎 <b>As an audio file</b> — send the track as a file. As many as you like, your whole collection one by one — <b>free and unlimited</b>.\n\n🔗 <b>By link</b> — from YouTube Music, SoundCloud and other platforms: requires <b>💎 Premium</b>.\n\n⚠️ Include the artist — otherwise the track becomes «Unknown».\n\nWaiting for a file or a link 👇",
     "upload.confirm_button": "✅ Upload",
     "upload.enter_title": "Type the title.",
     "upload.as_audio": "Send the file as audio (music), not as a document.",
-    "upload.premium_bulk": (
-        "Uploading a whole profile, playlist or likes is 💎 Premium only.\n"
-        "For free you can upload one track at a time — send a link to a single track."
-    ),
+    "upload.premium_bulk": "Uploading by link is for 💎 Premium only.\nAudio files are free and unlimited — just send the track as a file.",
+    "upload.reading_link": "🔍 Reading the link…",
+    "upload.link_failed": "Couldn't open that link. Check it and try again.",
+    "upload.queued_link": "⏳ Got it! We'll fetch the track and send it here — usually under a minute.",
+    "upload.drm_service": "🔒 <b>{service}</b> only serves a protected stream — the file itself isn't there.\n\nThe track list does read, though: «Transfer» will find the same songs in available sources and add them to your library.",
+    "upload.go_transfer": "🔄 Transfer the playlist",
     "upload.reading_playlist": "🔍 Reading the playlist…",
     "upload.playlist_failed": "Couldn't read that playlist. Check the link and try again.",
     "upload.unavailable": "Importing is unavailable right now — try later.",

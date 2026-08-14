@@ -159,23 +159,16 @@ MESSAGES: dict[str, str] = {
     "player.results_finished": "✅ Resultados terminados",
     "player.playing_results": "▶️ A tocar os resultados",
     "player.queue_stopped": "⏹ Fila parada",
-    "upload.intro": (
-        "⬆️ <b>Enviar música</b>\n\n"
-        "📎 <b>Como ficheiro</b> — envia a faixa como ficheiro de áudio. Tantas quantas "
-        "quiseres, a coleção toda uma a uma — é <b>grátis e sem limites</b>.\n\n"
-        "🔗 <b>Por link</b> — YouTube Music ou SoundCloud:\n"
-        "• uma faixa — <b>grátis</b>;\n"
-        "• um perfil, playlist ou gostos inteiros — <b>💎 Premium</b>.\n\n"
-        "⚠️ Indica o artista — senão a faixa fica «Desconhecido».\n\n"
-        "Espero um ficheiro ou um link 👇"
-    ),
+    "upload.intro": "⬆️ <b>Carregar música</b>\n\n📎 <b>Como ficheiro de áudio</b> — envie a faixa como ficheiro. Quantas quiser, toda a coleção uma a uma — <b>grátis e sem limites</b>.\n\n🔗 <b>Por link</b> — do YouTube Music, SoundCloud e outras plataformas: requer <b>💎 Premium</b>.\n\n⚠️ Indique o intérprete — caso contrário a faixa fica «Desconhecido».\n\nAguardo ficheiro ou link 👇",
     "upload.confirm_button": "✅ Enviar",
     "upload.enter_title": "Escreve o título.",
     "upload.as_audio": "Envia o ficheiro como áudio (música), não como documento.",
-    "upload.premium_bulk": (
-        "Enviar um perfil, playlist ou gostos inteiros é só para 💎 Premium.\n"
-        "De graça podes enviar uma de cada vez — manda o link de uma faixa concreta."
-    ),
+    "upload.premium_bulk": "Carregar por link é só para 💎 Premium.\nFicheiros de áudio são grátis e sem limites — envie a faixa como ficheiro.",
+    "upload.reading_link": "🔍 A ler o link…",
+    "upload.link_failed": "Não foi possível abrir esse link. Verifique-o e tente de novo.",
+    "upload.queued_link": "⏳ Recebido! Vamos buscar a faixa e enviá-la aqui — normalmente menos de um minuto.",
+    "upload.drm_service": "🔒 <b>{service}</b> só entrega um fluxo protegido — o ficheiro em si não está lá.\n\nA lista de faixas lê-se à mesma: «Transferência» encontra as mesmas músicas em fontes disponíveis e coloca-as na sua biblioteca.",
+    "upload.go_transfer": "🔄 Transferir a playlist",
     "upload.reading_playlist": "🔍 A ler a playlist…",
     "upload.playlist_failed": "Não consegui ler essa playlist. Verifica o link e tenta de novo.",
     "upload.unavailable": "A importação está indisponível — tenta mais tarde.",

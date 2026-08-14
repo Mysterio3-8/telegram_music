@@ -159,23 +159,16 @@ MESSAGES: dict[str, str] = {
     "player.results_finished": "✅ Résultats terminés",
     "player.playing_results": "▶️ Je lance les résultats",
     "player.queue_stopped": "⏹ File arrêtée",
-    "upload.intro": (
-        "⬆️ <b>Envoyer de la musique</b>\n\n"
-        "📎 <b>En fichier</b> — envoie le morceau en fichier audio. Autant que tu veux, "
-        "toute ta collection l'une après l'autre — c'est <b>gratuit et sans limite</b>.\n\n"
-        "🔗 <b>Par lien</b> — YouTube Music ou SoundCloud :\n"
-        "• un seul morceau — <b>gratuit</b> ;\n"
-        "• un profil, une playlist ou des favoris entiers — <b>💎 Premium</b>.\n\n"
-        "⚠️ Indique l'artiste — sinon le morceau deviendra « Inconnu ».\n\n"
-        "J'attends un fichier ou un lien 👇"
-    ),
+    "upload.intro": "⬆️ <b>Ajouter de la musique</b>\n\n📎 <b>En fichier audio</b> — envoyez le morceau en fichier. Autant que vous voulez, toute votre collection une par une — <b>gratuit et sans limite</b>.\n\n🔗 <b>Par lien</b> — depuis YouTube Music, SoundCloud et d'autres plateformes : nécessite <b>💎 Premium</b>.\n\n⚠️ Indiquez l'artiste — sinon le morceau restera « Inconnu ».\n\nJ'attends un fichier ou un lien 👇",
     "upload.confirm_button": "✅ Envoyer",
     "upload.enter_title": "Saisis le titre.",
     "upload.as_audio": "Envoie le fichier en audio (musique), pas en document.",
-    "upload.premium_bulk": (
-        "Envoyer un profil, une playlist ou des favoris entiers est réservé au 💎 Premium.\n"
-        "Gratuitement, c'est un morceau à la fois — envoie le lien d'un morceau précis."
-    ),
+    "upload.premium_bulk": "L'ajout par lien est réservé à 💎 Premium.\nLes fichiers audio restent gratuits et sans limite — envoyez le morceau en fichier.",
+    "upload.reading_link": "🔍 Je lis le lien…",
+    "upload.link_failed": "Impossible d'ouvrir ce lien. Vérifiez-le et réessayez.",
+    "upload.queued_link": "⏳ C'est noté ! On récupère le morceau et on l'envoie ici — moins d'une minute en général.",
+    "upload.drm_service": "🔒 <b>{service}</b> ne fournit qu'un flux protégé — le fichier lui-même n'y est pas.\n\nLa liste des morceaux se lit quand même : « Transfert » retrouvera les mêmes titres dans des sources disponibles et les ajoutera à votre bibliothèque.",
+    "upload.go_transfer": "🔄 Transférer la playlist",
     "upload.reading_playlist": "🔍 Je lis la playlist…",
     "upload.playlist_failed": "Je n'ai pas pu lire cette playlist. Vérifie le lien et réessaie.",
     "upload.unavailable": "L'import est indisponible pour l'instant — réessaie plus tard.",

@@ -12,7 +12,12 @@ from app.services.premium import is_premium_active
 from app.services.soundcloud import is_soundcloud_link, normalize_soundcloud_url, soundcloud_link_kind
 from app.services.uploads import AudioMeta, create_uploaded_track, find_duplicate, validate_audio
 from app.services.youtube.user_import import duration_error, extract_video_id, is_playlist_link
-from app.tasks import enqueue_enrich, enqueue_soundcloud_user_import, enqueue_user_import
+from app.tasks import (
+    enqueue_enrich,
+    enqueue_link_import,
+    enqueue_soundcloud_user_import,
+    enqueue_user_import,
+)
 from app.i18n import t
 
 router = Router()
@@ -93,7 +98,12 @@ async def process_document(message: Message) -> None:
 
 
 async def _require_premium_for_bulk(message: Message) -> bool:
-    """True — пользователь Premium (пачка разрешена). Иначе сообщает и возвращает False."""
+    """True — пользователь Premium. Иначе сообщает и возвращает False.
+
+    Решение владельца 14.08: подписка нужна на ЛЮБУЮ ссылку, не только на пачку.
+    Загрузка своим файлом остаётся бесплатной и без лимитов — там работу делает
+    Telegram, а по ссылке качаем и перекодируем мы, на единственном ядре.
+    """
     async with session_factory() as session:
         user = await ensure_user(session, message.from_user)
         if is_premium_active(user):
@@ -103,6 +113,51 @@ async def _require_premium_for_bulk(message: Message) -> bool:
         reply_markup=_cancel_keyboard(),
     )
     return False
+
+
+def _transfer_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=t("upload.go_transfer"), callback_data="menu:transfer")],
+            [InlineKeyboardButton(text=t("common.back_to_menu"), callback_data="menu:main")],
+        ]
+    )
+
+
+async def _process_generic_link(message: Message, state: FSMContext, url: str) -> None:
+    """Ссылка с площадки, для которой у нас нет специального пути.
+
+    yt-dlp понимает больше тысячи сайтов — Bandcamp, VK, Mixcloud, Audiomack,
+    Vimeo, личные страницы артистов. Раньше всё это получало ответ «жду файл или
+    ссылку», то есть выглядело поломкой.
+    """
+    from app.services.link_import import list_any_entries, looks_like_bulk
+
+    if looks_like_bulk(url):
+        scanning = await message.answer(t("upload.reading_link"))
+        entries = await asyncio.to_thread(list_any_entries, url)
+        if not entries:
+            await scanning.edit_text(t("upload.link_failed"), reply_markup=_cancel_keyboard())
+            return
+        batch = entries[: settings.playlist_import_limit] if settings.playlist_import_limit else entries
+        queued = sum(
+            enqueue_link_import(item.url, message.from_user.id, message.chat.id, quiet=True)
+            for item in batch
+        )
+        if queued == 0:
+            await scanning.edit_text(t("upload.unavailable"), reply_markup=_menu_keyboard())
+            return
+        await state.clear()
+        await scanning.edit_text(
+            t("upload.queued_videos", queued=queued), reply_markup=_menu_keyboard()
+        )
+        return
+
+    if not enqueue_link_import(url, message.from_user.id, message.chat.id):
+        await message.answer(t("upload.unavailable"), reply_markup=_menu_keyboard())
+        return
+    await state.clear()
+    await message.answer(t("upload.queued_link"), reply_markup=_menu_keyboard())
 
 
 async def _process_playlist_link(message: Message, state: FSMContext) -> None:
@@ -178,7 +233,8 @@ async def _process_soundcloud_bulk(message: Message, state: FSMContext, url: str
 
 
 async def _process_soundcloud_track(message: Message, state: FSMContext, url: str) -> None:
-    """Один трек SoundCloud — бесплатно."""
+    """Один трек SoundCloud. Подписку проверил вызывающий: с 14.08 она нужна на
+    любую ссылку, а не только на пачку."""
     if not enqueue_soundcloud_user_import(normalize_soundcloud_url(url), message.from_user.id, message.chat.id):
         await message.answer(
             t("upload.unavailable"), reply_markup=_menu_keyboard()
@@ -193,11 +249,34 @@ async def _process_soundcloud_track(message: Message, state: FSMContext, url: st
 
 @router.message(UploadTrack.waiting_file, F.text)
 async def process_link(message: Message, state: FSMContext) -> None:
-    """Импорт по ссылке: YouTube Music / SoundCloud. Один трек — бесплатно,
-    профиль/плейлист/лайки целиком — Premium."""
-    text = message.text.strip()
+    """Импорт по ссылке с любой площадки. Решение владельца 14.08: подписка нужна
+    на любую ссылку, а не только на пачку — качаем и перекодируем мы, на
+    единственном ядре. Загрузка своим файлом остаётся бесплатной."""
+    from app.services.link_import import drm_service_name, extract_url
 
-    # SoundCloud: определяем одиночный трек (бесплатно) vs пачку (Premium)
+    text = message.text.strip()
+    url = extract_url(text)
+    if url is None:
+        await message.answer(t("upload.waiting_file"), reply_markup=_cancel_keyboard())
+        return
+
+    # Площадки с DRM: файла там нет ни у нас, ни у yt-dlp — только зашифрованный
+    # поток. Зато список треков читается, и «Перенос» находит те же песни в
+    # доступных источниках. Отправлять человека с ошибкой туда, где у нас есть
+    # рабочий путь, — худшее, что можно сделать.
+    drm = drm_service_name(url)
+    if drm:
+        await message.answer(
+            t("upload.drm_service", service=drm),
+            parse_mode="HTML",
+            reply_markup=_transfer_keyboard(),
+        )
+        return
+
+    if not await _require_premium_for_bulk(message):
+        return
+
+    # SoundCloud: одиночный трек и пачка разбираются по-разному
     if is_soundcloud_link(text):
         kind = soundcloud_link_kind(text)
         if kind == "track":
@@ -211,10 +290,8 @@ async def process_link(message: Message, state: FSMContext) -> None:
         if is_playlist_link(text):
             await _process_playlist_link(message, state)
             return
-        await message.answer(
-            t("upload.waiting_file"),
-            reply_markup=_cancel_keyboard(),
-        )
+        # Всё остальное — общий путь через yt-dlp
+        await _process_generic_link(message, state, url)
         return
 
     checking = await message.answer(t("upload.checking_link"))

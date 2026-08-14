@@ -159,23 +159,16 @@ MESSAGES: dict[str, str] = {
     "player.results_finished": "✅ Ergebnisse zu Ende",
     "player.playing_results": "▶️ Ich spiele die Suchergebnisse",
     "player.queue_stopped": "⏹ Warteschlange gestoppt",
-    "upload.intro": (
-        "⬆️ <b>Musik hochladen</b>\n\n"
-        "📎 <b>Als Datei</b> — schick den Titel als Audiodatei. So viele du willst, "
-        "die ganze Sammlung nacheinander — <b>gratis und ohne Limit</b>.\n\n"
-        "🔗 <b>Per Link</b> — YouTube Music oder SoundCloud:\n"
-        "• ein einzelner Titel — <b>gratis</b>;\n"
-        "• ein ganzes Profil, eine Playlist oder Likes am Stück — <b>💎 Premium</b>.\n\n"
-        "⚠️ Gib den Interpreten an — sonst heißt der Titel «Unbekannt».\n\n"
-        "Ich warte auf Datei oder Link 👇"
-    ),
+    "upload.intro": "⬆️ <b>Musik hochladen</b>\n\n📎 <b>Als Audiodatei</b> — schick den Titel als Datei. So viele du willst, die ganze Sammlung nacheinander — <b>kostenlos und ohne Limit</b>.\n\n🔗 <b>Per Link</b> — von YouTube Music, SoundCloud und anderen Plattformen: erfordert <b>💎 Premium</b>.\n\n⚠️ Gib den Interpreten an — sonst heißt der Titel «Unbekannt».\n\nIch warte auf Datei oder Link 👇",
     "upload.confirm_button": "✅ Hochladen",
     "upload.enter_title": "Gib den Titel ein.",
     "upload.as_audio": "Schick die Datei als Audio (Musik), nicht als Dokument.",
-    "upload.premium_bulk": (
-        "Ein ganzes Profil, eine Playlist oder Likes hochzuladen ist nur mit 💎 Premium möglich.\n"
-        "Gratis geht es einzeln — schick den Link zu einem konkreten Titel."
-    ),
+    "upload.premium_bulk": "Hochladen per Link gibt es nur mit 💎 Premium.\nAudiodateien sind kostenlos und ohne Limit — schick den Titel einfach als Datei.",
+    "upload.reading_link": "🔍 Lese den Link…",
+    "upload.link_failed": "Dieser Link ließ sich nicht öffnen. Prüfe ihn und versuch es erneut.",
+    "upload.queued_link": "⏳ Angenommen! Wir laden den Titel und schicken ihn hierher — meist unter einer Minute.",
+    "upload.drm_service": "🔒 <b>{service}</b> liefert nur einen geschützten Stream — die Datei selbst gibt es dort nicht.\n\nDie Titelliste lässt sich aber lesen: «Übertragung» findet dieselben Songs in verfügbaren Quellen und legt sie in deine Bibliothek.",
+    "upload.go_transfer": "🔄 Playlist übertragen",
     "upload.reading_playlist": "🔍 Ich lese die Playlist…",
     "upload.playlist_failed": "Diese Playlist konnte ich nicht lesen. Prüf den Link und versuch es noch mal.",
     "upload.unavailable": "Der Import ist gerade nicht verfügbar — versuch es später.",
