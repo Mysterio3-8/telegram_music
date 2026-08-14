@@ -6,6 +6,7 @@
 уходит мгновенно и уже с правильными данными. Пользователь никогда не получает файл
 со старым названием, кроме случая, когда байты недоступны (файл >20 МБ без архива).
 """
+import asyncio
 import io
 import logging
 
@@ -107,7 +108,34 @@ async def send_track_audio(
 
     if message is not None:
         await record_event(session, user.id, track.id, event)
+        await _maybe_send_cover(bot, chat_id, user, track)
     return message
+
+
+async def _maybe_send_cover(bot: Bot, chat_id: int, user: User, track: Track) -> None:
+    """Обложка отдельной картинкой — по желанию человека (⚙️ Настройки).
+
+    Документом, а не фото: Telegram пережимает фотографии, и обложка приезжала
+    бы мыльной, тогда как смысл опции ровно в том, чтобы получить картинку
+    целиком для своей медиатеки.
+
+    Любая ошибка гасится: трек человек УЖЕ получил, и портить выдачу из-за
+    необязательной картинки нельзя.
+    """
+    if not getattr(user, "cover_as_file", False) or not track.cover_url:
+        return
+    try:
+        from app.services.youtube.downloader import fetch_thumbnail
+
+        data = await asyncio.to_thread(fetch_thumbnail, track.cover_url)
+        if not data:
+            return
+        await bot.send_document(
+            chat_id,
+            BufferedInputFile(data, filename=build_filename(track.artist, track.title, "jpg")),
+        )
+    except Exception:  # noqa: BLE001 — трек доставлен, обложка не обязана доехать
+        logger.warning("Обложка отдельным файлом не ушла, track=%s", track.id, exc_info=True)
 
 
 async def _load_instrumental_bytes(bot: Bot, instrumental: Instrumental) -> bytes | None:

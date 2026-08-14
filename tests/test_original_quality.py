@@ -292,3 +292,73 @@ def test_quality_keyboard_marks_current_choice():
 
     texts = [row[0].text for row in quality_keyboard(QUALITY_MP3, "ru").inline_keyboard]
     assert "✅" in texts[0] and "✅" not in texts[1]
+
+
+def test_settings_keyboard_keeps_back_last():
+    """«Назад» обязана оставаться последней: переключатель обложки вставляется
+    между ней и качеством, и лёгкая ошибка здесь загоняет выход в середину."""
+    from app.keyboards.settings import settings_keyboard
+
+    rows = settings_keyboard(QUALITY_MP3, cover_as_file=False, lang="ru").inline_keyboard
+    assert rows[-1][0].callback_data == "menu:main"
+    assert rows[-2][0].callback_data == "set:cover"
+
+
+@pytest.mark.asyncio
+async def test_cover_toggle_flips_and_persists(session):
+    from app.services.users import toggle_cover_as_file
+
+    user = _user(audio_quality=QUALITY_MP3)
+    session.add(user)
+    await session.commit()
+
+    assert await toggle_cover_as_file(session, user) is True
+    assert user.cover_as_file is True
+    assert await toggle_cover_as_file(session, user) is False
+
+
+@pytest.mark.asyncio
+async def test_cover_not_sent_when_disabled(session, track):
+    """Выключено — ни сети, ни лишнего сообщения."""
+    from app.handlers.delivery import _maybe_send_cover
+
+    track.cover_url = "https://cdn/cover.jpg"
+    user = _user(cover_as_file=False)
+    bot = FakeBot()
+
+    await _maybe_send_cover(bot, 777, user, track)
+    assert bot.sent == []
+
+
+@pytest.mark.asyncio
+async def test_cover_sent_as_document(session, track, monkeypatch):
+    """Документом, а не фото: Telegram пережимает фотографии, а смысл опции —
+    получить картинку целиком."""
+    from app.handlers import delivery
+    from app.services.youtube import downloader
+
+    track.cover_url = "https://cdn/cover.jpg"
+    user = _user(cover_as_file=True)
+    monkeypatch.setattr(downloader, "fetch_thumbnail", lambda url: b"JPEGDATA")
+    bot = FakeBot()
+
+    await delivery._maybe_send_cover(bot, 777, user, track)
+    assert [row[0] for row in bot.sent] == ["document"]
+    assert bot.sent[0][1] == 777
+
+
+@pytest.mark.asyncio
+async def test_cover_failure_never_breaks_delivery(session, track, monkeypatch):
+    """Трек человек уже получил. Падать из-за картинки нельзя."""
+    from app.handlers import delivery
+    from app.services.youtube import downloader
+
+    track.cover_url = "https://cdn/cover.jpg"
+    user = _user(cover_as_file=True)
+
+    def _boom(url):
+        raise RuntimeError("сеть отвалилась")
+
+    monkeypatch.setattr(downloader, "fetch_thumbnail", _boom)
+
+    await delivery._maybe_send_cover(FakeBot(), 777, user, track)  # не должно бросить

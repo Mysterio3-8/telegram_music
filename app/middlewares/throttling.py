@@ -39,6 +39,14 @@ RAPID_LIMIT = 20
 RAPID_WINDOW = 1.0
 RAPID_BLOCK_SECONDS = 60.0
 
+# Отдельный потолок на ГРУППУ (пункт 6 спеки). Лимиты по пользователю в общем
+# чате не защищают: десять человек по одному действию каждый — это десять
+# действий, и каждый в своём праве, а платит за них наш единственный воркер.
+# Потолок заметно выше личного: в живом чате нормально, когда музыку ищут
+# несколько человек подряд, и глушить их за это нельзя.
+CHAT_BURST_LIMIT = 30
+CHAT_BURST_WINDOW = 60.0
+CHAT_BLOCK_SECONDS = 30.0
 
 
 class ThrottlingMiddleware(BaseMiddleware):
@@ -47,6 +55,28 @@ class ThrottlingMiddleware(BaseMiddleware):
         self._history: dict[int, deque[float]] = defaultdict(deque)
         self._blocked_until: dict[int, float] = {}
         self._warned: set[int] = set()
+        # Счётчики по чату — только для групп; в личке чат и человек это одно и
+        # то же, и второй лимит там означал бы двойное наказание за то же самое.
+        self._chat_history: dict[int, deque[float]] = defaultdict(deque)
+        self._chat_blocked_until: dict[int, float] = {}
+
+    def _chat_is_flooding(self, chat_id: int, now: float) -> bool:
+        """Ведро на весь чат. True — группа шумит, пропускать не надо."""
+        history = self._chat_history[chat_id]
+        history.append(now)
+        while history and now - history[0] > CHAT_BURST_WINDOW:
+            history.popleft()
+
+        if now < self._chat_blocked_until.get(chat_id, 0.0):
+            return True
+        if len(history) > CHAT_BURST_LIMIT:
+            self._chat_blocked_until[chat_id] = now + CHAT_BLOCK_SECONDS
+            logger.warning(
+                "Флуд в чате %s: %s действий за минуту — пауза %s сек",
+                chat_id, len(history), int(CHAT_BLOCK_SECONDS),
+            )
+            return True
+        return False
 
     async def __call__(
         self,
@@ -60,6 +90,16 @@ class ThrottlingMiddleware(BaseMiddleware):
 
         user_id = tg_user.id
         now = time.monotonic()
+
+        # Групповой лимит проверяем ДО личного: в чате шумит не человек, а
+        # компания, и гасить надо её целиком. Молча, без предупреждения —
+        # писать в общий чат «вы флудите» значит добавить к шуму свой.
+        from app.chat_scope import is_group
+
+        if is_group(event, data):
+            chat = data.get("event_chat")
+            if chat is not None and self._chat_is_flooding(chat.id, now):
+                return None
 
         # Счётчик ведём ДО проверки блокировки: попытки заблокированного тоже
         # приходят на сервер, и именно по ним видно скрипт. Считай мы только

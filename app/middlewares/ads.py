@@ -35,6 +35,13 @@ class AdMiddleware(BaseMiddleware):
         result = await handler(event, data)
         if self._frequency <= 0:
             return result
+        # В группах рекламу не показываем (пункт 6 спеки): «купи Premium» в
+        # чужом чате — это спам от нашего имени, за который бота выгоняют, а не
+        # покупают подписку.
+        from app.chat_scope import is_private
+
+        if not is_private(event, data):
+            return result
         user: User | None = data.get("event_from_user")
         if user is None:
             return result

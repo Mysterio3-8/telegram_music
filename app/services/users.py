@@ -74,6 +74,13 @@ async def set_audio_quality(session: AsyncSession, user: User, choice: str) -> s
     return resolved
 
 
+async def toggle_cover_as_file(session: AsyncSession, user: User) -> bool:
+    """Переключает «обложку отдельной картинкой». Возвращает новое состояние."""
+    user.cover_as_file = not user.cover_as_file
+    await session.commit()
+    return user.cover_as_file
+
+
 def is_admin(telegram_id: int) -> bool:
     return telegram_id in settings.admin_id_set
 

@@ -37,6 +37,10 @@ class User(Base):
     # файл автора. Работает только у Premium и только там, где автор разрешил
     # скачивание; во всех остальных случаях молча остаётся mp3.
     audio_quality: Mapped[str] = mapped_column(String(16), default="mp3", server_default="mp3")
+    # Присылать обложку отдельной картинкой вслед за треком. По умолчанию нет:
+    # она и так вшита в файл и видна в плеере, а лишнее сообщение на каждый трек
+    # засоряет переписку. Нужна тем, кто складывает музыку в свою медиатеку.
+    cover_as_file: Mapped[bool] = mapped_column(default=False, server_default="0")
 
 
 class UserAchievement(Base):

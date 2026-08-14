@@ -5,6 +5,24 @@ from app.i18n import DEFAULT_LANGUAGE, t
 from app.services.original_audio import QUALITY_BEST, QUALITY_MP3
 
 
+def settings_keyboard(
+    current: str, cover_as_file: bool, lang: str = DEFAULT_LANGUAGE
+) -> InlineKeyboardMarkup:
+    """Весь экран настроек: качество плюс переключатель обложки."""
+    rows = list(quality_keyboard(current, lang).inline_keyboard)
+    back = rows.pop()  # «Назад» остаётся последней кнопкой
+    rows.append(
+        [
+            InlineKeyboardButton(
+                text=t("settings.cover_on" if cover_as_file else "settings.cover_off", lang),
+                callback_data="set:cover",
+            )
+        ]
+    )
+    rows.append(back)
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
 def quality_keyboard(current: str, lang: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
     """Выбор качества выдачи; текущее отмечено галочкой.
 

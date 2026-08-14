@@ -15,6 +15,10 @@ def main_menu_keyboard(lang: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
                 callback_data="menu:premium",
             )
         ],
+        # Плейлисты вернулись в меню 14.08. Подсистема всё это время была жива и
+        # покрыта тестами — при редизайне под VK Music убрали только кнопку, и
+        # экран стал недостижим ничем, кроме «Назад» из чужой карточки.
+        [InlineKeyboardButton(text=t("menu.playlists", lang), callback_data="menu:playlists")],
         [InlineKeyboardButton(text=t("menu.referral", lang), callback_data="menu:referral")],
         [InlineKeyboardButton(text=t("menu.settings", lang), callback_data="menu:settings")],
         [InlineKeyboardButton(text=t("menu.language", lang), callback_data="menu:lang")],

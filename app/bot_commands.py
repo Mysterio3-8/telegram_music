@@ -5,7 +5,12 @@ import logging
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError
-from aiogram.types import BotCommand, BotCommandScopeChat, BotCommandScopeDefault
+from aiogram.types import (
+    BotCommand,
+    BotCommandScopeAllGroupChats,
+    BotCommandScopeChat,
+    BotCommandScopeDefault,
+)
 
 from app.config import settings
 
@@ -20,6 +25,13 @@ ADMIN_COMMANDS = DEFAULT_COMMANDS + [BotCommand(command="admin", description="А
 
 async def setup_bot_commands(bot: Bot) -> None:
     await bot.set_my_commands(DEFAULT_COMMANDS, scope=BotCommandScopeDefault())
+    # В группах команд нет вовсе (пункт 6 спеки): /start и /settings — личные
+    # экраны, они там не работают, а предлагать в меню то, что молчит, хуже, чем
+    # не предлагать ничего. Способ позвать бота в чате один — упомянуть его.
+    try:
+        await bot.set_my_commands([], scope=BotCommandScopeAllGroupChats())
+    except TelegramAPIError:
+        logger.warning("Не удалось очистить команды для групп", exc_info=True)
     for admin_id in settings.admin_id_set:
         try:
             await bot.set_my_commands(ADMIN_COMMANDS, scope=BotCommandScopeChat(chat_id=admin_id))

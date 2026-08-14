@@ -10,6 +10,7 @@
 (мастера загрузки/поиска/админки со своими состояниями срабатывают раньше).
 """
 import logging
+import re
 import time
 from dataclasses import asdict
 
@@ -17,6 +18,7 @@ from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
+from app.config import settings
 from app.db.base import session_factory
 from app.handlers.common import ensure_user
 from app.handlers.cards import build_card_keyboard
@@ -106,9 +108,38 @@ async def _stored_candidates(state: FSMContext) -> tuple[str, list[Candidate]]:
     return data.get(_QUERY_KEY, ""), [Candidate(**row) for row in rows]
 
 
+def _query_from(message: Message) -> str | None:
+    """Текст запроса. None — сообщение адресовано не боту, отвечать не надо.
+
+    В личке боту адресовано всё. В группе — только прямое обращение: упоминание
+    `@muz_damn_bot трек` или ответ на его же сообщение. Иначе бот встревал бы в
+    каждую реплику чата и улетел бы оттуда в первый же день.
+
+    ⚠️ На это НЕЛЬЗЯ полагаться как на единственную защиту от посторонних
+    сообщений: сейчас у бота включён privacy mode, и Telegram сам присылает
+    только команды, упоминания и ответы. Выключи режим в BotFather — бот начнёт
+    получать всю переписку, и вот тогда работает уже эта проверка.
+    """
+    from app.chat_scope import is_private
+
+    text = (message.text or "").strip()
+    if is_private(message):
+        return text or None
+
+    mention = f"@{settings.bot_username}".lower()
+    if mention in text.lower():
+        # Убираем упоминание из запроса: искать «@muz_damn_bot кизару» бессмысленно
+        cleaned = re.sub(re.escape(mention), " ", text, flags=re.IGNORECASE).strip()
+        return cleaned or None
+    replied = message.reply_to_message
+    if replied is not None and replied.from_user is not None and replied.from_user.is_bot:
+        return text or None
+    return None
+
+
 @router.message(F.text & ~F.text.startswith("/"))
 async def quick_search(message: Message, state: FSMContext) -> None:
-    query = message.text.strip()
+    query = _query_from(message)
     if not query:
         return
     async with session_factory() as session:

@@ -1,7 +1,7 @@
 import asyncio
 import logging
 
-from aiogram import Bot, Dispatcher
+from aiogram import Bot, Dispatcher, F
 
 from app.bot_commands import setup_bot_commands
 from app.config import settings
@@ -74,6 +74,23 @@ async def main() -> None:
     ad_middleware = AdMiddleware(frequency=settings.ad_frequency)
     dp.message.middleware(ad_middleware)
     dp.callback_query.middleware(ad_middleware)
+
+    # Личный кабинет — только в личке (пункт 6 спеки 13.08). Всё это диалоговые
+    # мастера и персональные экраны: загрузка спрашивает название, потом
+    # исполнителя, а в общем чате следующее сообщение придёт от другого человека,
+    # и мастер соберёт из двух собеседников одну кашу. Плюс чужие настройки,
+    # плейлисты и админка в общем чате не нужны никому.
+    #
+    # Фильтр вешается тут, а не в каждом хендлере, сознательно: забыть его в
+    # одном из полутора десятков роутеров — вопрос времени, а последствие
+    # (админка, открытая из группы) слишком дорогое.
+    for personal in (
+        start, subscription, language, settings_screen, library, playlists, search,
+        upload, transfer, premium, referral, player, contests, admin, admin_broadcast,
+        admin_upload_minus, admin_youtube, admin_telegram_channel, track_actions, stubs,
+    ):
+        personal.router.message.filter(F.chat.type == "private")
+        personal.router.callback_query.filter(F.message.chat.type == "private")
 
     dp.include_routers(
         errors.router,  # глобальный обработчик — ловит исключения из любого хендлера ниже

@@ -33,6 +33,15 @@ class SubscriptionMiddleware(BaseMiddleware):
         if _is_exempt(event):
             return await handler(event, data)
 
+        # В группах гейт не применяется (пункт 6 спеки): бот отвечает всем
+        # участникам сразу, требовать подписку у каждого — значит сделать его
+        # немым. К тому же is_fully_subscribed работает fail-closed, и первая же
+        # ошибка Telegram API замолчала бы бота в чате целиком.
+        from app.chat_scope import is_private
+
+        if not is_private(event, data):
+            return await handler(event, data)
+
         tg_user = data.get("event_from_user")
         if tg_user is None:
             return await handler(event, data)
