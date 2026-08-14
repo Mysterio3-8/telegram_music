@@ -96,6 +96,45 @@ def _impersonate_target():
         return None
 
 
+def youtube_opts(sleep_requests: int = 1, direct: bool = False) -> dict:
+    """Настройки для запросов к YouTube. Отдельно от `_base_opts`, потому что
+    YouTube требует ровно двух вещей, которых не требует больше никто.
+
+    🔴 **Замер 14.08, прод.** С IP сервера YouTube отвечает «Sign in to confirm
+    you're not a bot» на ВСЕ десять клиентов (default, web_safari, mweb, tv,
+    tv_embedded, android_vr, ios, web_embedded, android, web_music) — то есть
+    блокировка по адресу, а не по клиенту. yt-dlp при этом свежайший.
+
+    Работает единственная комбинация: **VPN плюс `player_client=tv_embedded`**.
+    Проверено на трёх треках: без VPN не скачался ни один, через VPN — два из
+    трёх, включая «Blinding Lights», который раньше падал с DRM и на SoundCloud.
+    Порознь ни то ни другое не помогает: только VPN даёт 403 на самих медиа-URL,
+    только tv_embedded — тот же «Sign in».
+
+    ⚠️ Прокси для YouTube задаётся ОТДЕЛЬНОЙ настройкой `YOUTUBE_PROXY`, а не
+    общим `PROXY_LIST`. SoundCloud через тот же VPN работает ровно с той же
+    скоростью, что и напрямую (6.22 против 6.83 сек), то есть выигрыша нет, а
+    лишний сетевой узел на главном источнике есть.
+
+    direct=True — попытка в обход прокси. Нужна как запасной ход: если Xray лёг,
+    честнее попробовать напрямую и получить внятный отказ, чем молчать.
+    """
+    opts = _base_opts(sleep_requests=sleep_requests)
+    if settings.youtube_player_client:
+        opts["extractor_args"] = {
+            "youtube": {"player_client": [settings.youtube_player_client]}
+        }
+    if settings.youtube_proxy and not direct:
+        opts["proxy"] = settings.youtube_proxy
+    return opts
+
+
+def youtube_attempt_plan() -> list[bool]:
+    """Порядок попыток для YouTube: сначала через прокси, потом напрямую.
+    Без настроенного прокси — одна прямая попытка (как было до 14.08)."""
+    return [False, True] if settings.youtube_proxy else [False]
+
+
 def _base_opts(
     impersonate: bool = False, use_proxy: bool = False, sleep_requests: int = 1
 ) -> dict:
@@ -105,8 +144,8 @@ def _base_opts(
     по умолчанию выключена.
 
     use_proxy=True — запрос уходит через следующий прокси из PROXY_LIST (ротация
-    по кругу, services/proxies). Включаем только для SoundCloud-путей: массовая
-    закачка 24/7 не должна светить IP сервера."""
+    по кругу, services/proxies). Это про SoundCloud; у YouTube свой путь —
+    `youtube_opts`, см. замер там."""
     opts: dict = {
         "quiet": True,
         "no_warnings": True,
@@ -182,7 +221,7 @@ def _entry_thumbnail(node: dict) -> str:
 
 def fetch_video_info(video_id: str) -> VideoInfo | None:
     """Метаданные одного видео без скачивания — для проверки лимитов ДО загрузки."""
-    opts = {**_base_opts(), "skip_download": True, "noplaylist": True}
+    opts = {**youtube_opts(), "skip_download": True, "noplaylist": True}
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
     if info is None:
@@ -196,7 +235,7 @@ def fetch_video_info(video_id: str) -> VideoInfo | None:
 
 
 def list_videos(source_url: str) -> list[VideoEntry]:
-    opts = {**_base_opts(), "extract_flat": "in_playlist", "skip_download": True}
+    opts = {**youtube_opts(), "extract_flat": "in_playlist", "skip_download": True}
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(normalize_source_url(source_url), download=False)
     return _collect_entries(info)
@@ -221,7 +260,7 @@ def _read_supported(path: Path) -> tuple[bytes, str]:
 def search_videos(query: str, limit: int = 1, sleep_requests: int = 1) -> list[VideoEntry]:
     """Результаты поиска YouTube по свободному запросу, до limit штук."""
     opts = {
-        **_base_opts(sleep_requests=sleep_requests),
+        **youtube_opts(sleep_requests=sleep_requests),
         "extract_flat": "in_playlist",
         "skip_download": True,
     }
@@ -250,7 +289,7 @@ def search_music_titles(query: str, limit: int = 20) -> list[str]:
     """
     url = f"https://music.youtube.com/search?q={quote(query)}&sp={_YTM_SONGS_FILTER}"
     opts = {
-        **_base_opts(sleep_requests=0),
+        **youtube_opts(sleep_requests=0),
         "extract_flat": "in_playlist",
         "skip_download": True,
         "playlistend": max(1, limit),
@@ -278,14 +317,36 @@ def search_first_video(query: str) -> VideoEntry | None:
 
 def download_audio(video_id: str, as_mp3: bool = False) -> DownloadedAudio | None:
     """as_mp3=True — гарантированно mp3 (перекодирование ffmpeg): поисковый парсер
-    отдаёт пользователю mp3. Массовая закачка зовёт без флага (bestaudio)."""
+    отдаёт пользователю mp3. Массовая закачка зовёт без флага (bestaudio).
+
+    Попыток две: через прокси и напрямую (см. `youtube_attempt_plan`). Раньше
+    была одна прямая, и с 14.08 она означала гарантированный отказ — YouTube
+    блокирует IP сервера.
+    """
+    for direct in youtube_attempt_plan():
+        result = _download_audio_once(video_id, as_mp3=as_mp3, direct=direct)
+        if result is not None:
+            return result
+        logger.info(
+            "YouTube: %s не скачался (%s)", video_id, "напрямую" if direct else "через прокси"
+        )
+    return None
+
+
+def _download_audio_once(
+    video_id: str, as_mp3: bool = False, direct: bool = False
+) -> DownloadedAudio | None:
     from app.services.disk import enough_free_disk
 
     if not enough_free_disk():
         return None  # диск почти полон — не забиваем /tmp, бережём Redis/бота
     with tempfile.TemporaryDirectory() as tmp:
         opts = {
-            **_base_opts(),
+            **youtube_opts(direct=direct),
+            # У tv_embedded нет m4a-дорожек, там opus в webm. Жёсткое
+            # `bestaudio[ext=m4a]` на нём означает «Requested format is not
+            # available», то есть отказ на ровном месте — оставляем m4a
+            # предпочтением, но не требованием.
             "format": settings.youtube_audio_format,
             "outtmpl": str(Path(tmp) / "%(id)s.%(ext)s"),
             "noplaylist": True,
