@@ -64,11 +64,11 @@ async def set_user_language(session: AsyncSession, user: User, code: str) -> str
 
 async def set_audio_quality(session: AsyncSession, user: User, choice: str) -> str:
     """Запоминает формат выдачи. Неизвестное значение трактуем как mp3:
-    в callback_data может прийти что угодно, а молча дать оригинал бесплатно —
+    в callback_data может прийти что угодно, а молча выдать платное качество —
     это раздать Premium-функцию всем."""
-    from app.services.original_audio import QUALITY_MP3, QUALITY_ORIGINAL
+    from app.services.original_audio import QUALITY_BEST, QUALITY_MP3
 
-    resolved = QUALITY_ORIGINAL if choice == QUALITY_ORIGINAL else QUALITY_MP3
+    resolved = QUALITY_BEST if choice == QUALITY_BEST else QUALITY_MP3
     user.audio_quality = resolved
     await session.commit()
     return resolved

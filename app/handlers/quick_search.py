@@ -69,33 +69,35 @@ def _results_title(query: str) -> str:
     return t("quick.results_title", query=query)
 
 
-def _queue_original(user, track, candidate: Candidate, chat_id: int) -> None:
-    """Досылает оригинальное качество, если человек его выбрал и оплатил.
+def _queue_best_quality(user, track, candidate: Candidate, chat_id: int) -> bool:
+    """Ставит выдачу трека в платном качестве. True — обычный mp3 слать НЕ надо.
 
-    Ставится задачей, а не делается здесь: сорок мегабайт в памяти процесса бота
-    на боксе 961 МБ — это ровно тот OOM, который дважды ронял прод. Сам mp3 к
-    этому моменту уже ушёл, поэтому неудача очереди человека не задевает и
-    сообщать о ней нечего.
+    Задачей, а не здесь: несколько десятков мегабайт в памяти процесса бота на
+    боксе 961 МБ — это ровно тот OOM, который дважды ронял прод.
+
+    Откат на mp3 живёт внутри задачи, а не тут: качество может не выйти уже
+    после того, как мы решили его пробовать (DRM, обрыв сети), и решать судьбу
+    сообщения должен тот, кто знает исход.
     """
-    from app.services.original_audio import wants_original
+    from app.services.original_audio import wants_best_quality
 
-    if not wants_original(user):
-        return
-    # Ничего не найдётся — экономим и очередь, и закачку: оригинал спрашиваем,
-    # только если он либо уже заминчен, либо выдача сказала, что он доступен.
-    if not track.hq_file_id and not candidate.hq_available:
-        return
+    if not wants_best_quality(user):
+        return False
+    if track.hq_status == "none" and not track.hq_file_id:
+        return False  # у этого трека уже пробовали и не вышло — не гоняем впустую
     try:
-        from app.tasks.search_fetch import search_fetch_original
+        from app.tasks.search_fetch import search_fetch_best
 
-        search_fetch_original.delay(
+        search_fetch_best.delay(
             track_id=track.id,
             telegram_id=user.telegram_id,
             chat_id=chat_id,
             source_url=candidate.url,
         )
-    except Exception:  # noqa: BLE001 — брокер лёг; mp3 человек получил, этого достаточно
-        logger.warning("Оригинал: очередь недоступна, track=%s", track.id, exc_info=True)
+    except Exception:  # noqa: BLE001 — брокер лёг, отдаём обычный mp3 прямо сейчас
+        logger.warning("Лучшее качество: очередь недоступна, track=%s", track.id, exc_info=True)
+        return False
+    return True
 
 
 async def _stored_candidates(state: FSMContext) -> tuple[str, list[Candidate]]:
@@ -174,6 +176,13 @@ async def quick_search_send(callback: CallbackQuery, state: FSMContext) -> None:
             # Уже минтили — отдаём мгновенно по file_id, скачивать нечего.
             # С кнопками карточки: раз в библиотеку сам трек больше не падает,
             # добавить его должно быть чем.
+            # Подписчику с выбранным качеством трек уходит из воркера одним
+            # файлом. Отправить mp3 сейчас и качество следом — значит прислать
+            # одну и ту же песню дважды.
+            if _queue_best_quality(user, existing, candidate, callback.message.chat.id):
+                await callback.answer(t("quick.preparing_best"))
+                return
+
             await callback.answer(t("quick.sending"))
             in_library = await is_in_library(session, user.id, existing.id)
             keyboard = await build_card_keyboard(
@@ -183,7 +192,6 @@ async def quick_search_send(callback: CallbackQuery, state: FSMContext) -> None:
                 callback.bot, callback.message.chat.id, session, user, existing,
                 reply_markup=keyboard,
             )
-            _queue_original(user, existing, candidate, callback.message.chat.id)
             return
 
     # Скачивание уходит в воркер: ffmpeg на боксе 961 МБ дважды ронял прод по OOM

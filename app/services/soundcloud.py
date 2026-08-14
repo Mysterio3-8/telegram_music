@@ -255,22 +255,34 @@ def collect_soundcloud_entries(info: dict) -> list[SoundcloudEntry]:
     return entries
 
 
-# Форматы, в которых имеет смысл отдавать «оригинал»: это то, что авторы
-# заливают на SoundCloud исходником. Всё прочее (webm/opus и подобное) — уже
-# результат перекодирования на их стороне, отдавать такое как «оригинальное
-# качество» нечестно, и мы молча уходим на обычный mp3.
-ORIGINAL_FORMATS = frozenset({"wav", "flac", "aiff", "aif", "mp3", "m4a", "ogg"})
+# Форматы, которые принимаем в режиме «лучшее качество». WAV/FLAC/AIFF — это
+# исходник автора; m4a — поток AAC 160 kbps; mp3 — либо исходник, либо обычный
+# поток 128. Всё прочее (webm/opus и подобное) отбрасываем: за такое выдавать
+# повышенное качество нечестно, лучше молча остаться на обычном mp3.
+BEST_QUALITY_FORMATS = frozenset({"wav", "flac", "aiff", "aif", "mp3", "m4a", "ogg"})
+
+# Лестница «лучшего доступного», сверху вниз. Замер на проде 13.08 объясняет,
+# почему она именно такая:
+#
+# `download` — исходный файл автора. Разрешён у 6 треков из 601 (1%), да и те
+#   нашим анонимным client_id не всегда достаются. Держим первым, потому что
+#   когда он есть — это настоящий оригинал, и стоит он ровно столько же.
+# `hls_aac_160k` — 160 kbps AAC. Есть у КАЖДОГО не-DRM трека (проверено на
+#   выборке), играет в плеере Telegram нативно как m4a. Это и есть настоящая
+#   платная ценность: +0.66 сек и +0.5 МБ против нашего обычного mp3 128.
+# Дальше — привычный поток 128, чтобы режим никогда не оставлял человека ни с чем.
+BEST_QUALITY_FORMAT = "download/hls_aac_160k/http_mp3_128/bestaudio/best"
 
 
 def download_soundcloud_audio(
-    url: str, as_mp3: bool = False, original: bool = False
+    url: str, as_mp3: bool = False, best_quality: bool = False
 ) -> tuple[DownloadedAudio, str] | None:
     """Скачивает один трек. Возвращает (аудио, uploader) или None.
     as_mp3=True — гарантированный mp3 (перекодирование ffmpeg): поисковый парсер
     отдаёт пользователю только mp3. Массовая закачка 24/7 зовёт без флага —
     там перекодировать каждый трек дорого, храним исходный контейнер.
-    original=True — исходный файл автора вместо потока 128 kbps (см.
-    `_download_soundcloud_once`); as_mp3 при этом игнорируется.
+    best_quality=True — лучшее, что отдаёт источник (см. `BEST_QUALITY_FORMAT`);
+    as_mp3 при этом игнорируется, перекодировать нечего и незачем.
     Ошибка сети/прокси → повтор через следующий прокси; последняя ошибка наружу
     (вызывающая сторона различает постоянные отказы по тексту)."""
     from app.services.disk import enough_free_disk
@@ -281,7 +293,7 @@ def download_soundcloud_audio(
     for attempt, use_proxy in enumerate(attempt_plan(), start=1):
         try:
             result = _download_soundcloud_once(
-                url, as_mp3=as_mp3, use_proxy=use_proxy, original=original
+                url, as_mp3=as_mp3, use_proxy=use_proxy, best_quality=best_quality
             )
         except Exception as exc:  # noqa: BLE001 — сеть/прокси, пробуем следующую попытку
             last_error = exc
@@ -296,7 +308,7 @@ def download_soundcloud_audio(
 
 
 def _download_soundcloud_once(
-    url: str, as_mp3: bool = False, use_proxy: bool = True, original: bool = False
+    url: str, as_mp3: bool = False, use_proxy: bool = True, best_quality: bool = False
 ) -> tuple[DownloadedAudio, str] | None:
     with tempfile.TemporaryDirectory() as tmp:
         opts = {
@@ -312,13 +324,8 @@ def _download_soundcloud_once(
             "noplaylist": True,
             "retries": settings.youtube_max_retries,
         }
-        if original:
-            # `download` — формат-псевдоним yt-dlp для исходного файла, который
-            # автор загрузил сам. Он появляется у трека, только если разрешено
-            # скачивание и не выбрана месячная квота. Запасных вариантов здесь
-            # НЕТ намеренно: «оригинала не оказалось» должно быть отличимо от
-            # «скачали обычный поток и выдали его за оригинал».
-            opts["format"] = "download"
+        if best_quality:
+            opts["format"] = BEST_QUALITY_FORMAT
             # Ограничение на стороне yt-dlp: он оборвёт закачку, не дожидаясь
             # конца. Иначе получасовой WAV на 300 МБ был бы скачан целиком и
             # только потом выброшен — впустую трафик, диск и минуты ожидания.
@@ -334,10 +341,10 @@ def _download_soundcloud_once(
         files = [p for p in Path(tmp).glob("sc.*") if not p.name.endswith(".conv.m4a")]
         if not files:
             return None
-        if original:
+        if best_quality:
             file_format = files[0].suffix.lstrip(".").lower()
-            if file_format not in ORIGINAL_FORMATS:
-                logger.info("SoundCloud: оригинал в формате %s — не берём", file_format)
+            if file_format not in BEST_QUALITY_FORMATS:
+                logger.info("SoundCloud: формат %s под «лучшее качество» не берём", file_format)
                 return None
             data = files[0].read_bytes()
         else:

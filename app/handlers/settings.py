@@ -11,7 +11,7 @@ from app.db.base import session_factory
 from app.handlers.common import ensure_user
 from app.i18n import t
 from app.keyboards.settings import quality_keyboard
-from app.services.original_audio import QUALITY_ORIGINAL
+from app.services.original_audio import QUALITY_BEST
 from app.services.premium import is_premium_active
 from app.services.users import set_audio_quality, user_language
 
@@ -55,8 +55,8 @@ async def cb_set_quality(callback: CallbackQuery) -> None:
         lang = user_language(user)
         # Не-Premium выбор не сохраняем и честно объясняем почему. Сохранить
         # «на будущее» было бы хуже: человек ушёл бы с экрана в уверенности, что
-        # получает WAV, и не понял бы, почему приходит обычный mp3.
-        if choice == QUALITY_ORIGINAL and not is_premium_active(user):
+        # получает лучшее качество, и не понял бы, почему звучит как раньше.
+        if choice == QUALITY_BEST and not is_premium_active(user):
             await callback.answer(t("settings.quality_premium_only", lang), show_alert=True)
             return
         quality = await set_audio_quality(session, user, choice)
@@ -67,9 +67,9 @@ async def cb_set_quality(callback: CallbackQuery) -> None:
         parse_mode="HTML",
     )
     notice = (
-        t("settings.quality_saved_original", lang)
-        if quality == QUALITY_ORIGINAL
+        t("settings.quality_saved_best", lang)
+        if quality == QUALITY_BEST
         else t("settings.quality_saved_mp3", lang)
     )
-    await callback.answer(notice, show_alert=quality == QUALITY_ORIGINAL)
+    await callback.answer(notice, show_alert=quality == QUALITY_BEST)
 

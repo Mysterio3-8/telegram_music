@@ -43,40 +43,44 @@ async def _record_listen(session, telegram_id: int, track_id: int) -> None:
         await record_event(session, user.id, track_id, "listen")
 
 
-async def _maybe_send_original(session, bot, track, candidate, telegram_id: int, chat_id) -> None:
-    """Досылает оригинальное качество тем, кто его выбрал и оплатил.
+async def _try_best_quality(
+    session, bot, track, telegram_id: int, chat_id, source_url=None, caption=None
+) -> bool:
+    """Пытается отдать трек в платном качестве. False — зовите обычный mp3.
 
-    Отдельной функцией, а не строчкой в задаче, потому что зовётся из двух мест:
-    отсюда (трек только что скачан) и из задачи `search.fetch_original` (трек в
-    базе уже был, скачивать заново нечего).
+    Отдельной функцией, потому что зовётся из двух мест: отсюда (трек только что
+    скачан) и из задачи `search.fetch_best` (трек в базе уже был).
 
-    Любая ошибка здесь гасится: mp3 человек УЖЕ получил, и падать задаче из-за
-    необязательного бонуса нельзя — Celery начнёт её повторять и пришлёт трек
-    второй раз.
+    Любая ошибка гасится и превращается в False: платное качество — надстройка,
+    и падать из-за неё задаче нельзя. Celery начал бы её повторять и прислал бы
+    человеку тот же трек ещё раз.
     """
-    from app.services.original_audio import deliver_original, wants_original
+    from app.services.original_audio import deliver_best_quality, wants_best_quality
     from app.services.users import get_user_by_telegram_id
 
     if chat_id is None:
-        return  # «импортировать молча» — это Mini App, файлы в чат он не шлёт
+        return False  # «импортировать молча» — это Mini App, файлы в чат он не шлёт
     try:
         user = await get_user_by_telegram_id(session, telegram_id)
-        if user is None or not wants_original(user):
-            return
-        await deliver_original(
-            session, bot, track, chat_id,
-            source_url=candidate.url if candidate is not None else None,
-            hq_available=bool(candidate.hq_available) if candidate is not None else True,
+        if user is None or not wants_best_quality(user):
+            return False
+        return await deliver_best_quality(
+            session, bot, track, chat_id, source_url=source_url, caption=caption
         )
-    except Exception:  # noqa: BLE001 — трек уже доставлен, бонус не обязан удаться
-        logger.warning("Оригинал для track=%s не доехал", track.id, exc_info=True)
+    except Exception:  # noqa: BLE001 — откатимся на mp3, человек без трека не останется
+        logger.warning("Лучшее качество для track=%s не вышло", track.id, exc_info=True)
+        return False
 
 
-@celery_app.task(name="search.fetch_original", bind=True, max_retries=1, queue="youtube_user")
-def search_fetch_original(
+@celery_app.task(name="search.fetch_best", bind=True, max_retries=1, queue="youtube_user")
+def search_fetch_best(
     self, track_id: int, telegram_id: int, chat_id: int, source_url: str | None = None
 ) -> None:
-    """Оригинал для трека, который в базе уже есть (mp3 ушёл мгновенно по file_id).
+    """Платное качество для трека, который в базе уже есть.
+
+    Бот в этом случае НЕ шлёт mp3 заранее: подписчик должен получить один файл,
+    а не тот же трек дважды. Значит откат на mp3 — здесь же, иначе при неудаче
+    человек остался бы вообще без трека.
 
     Живёт в воркере по той же причине, что и остальные закачки: десятки
     мегабайт в памяти процесса бота на боксе 961 МБ — это OOM, ронявший прод.
@@ -89,29 +93,43 @@ def search_fetch_original(
             return
         bot = Bot(token=settings.bot_token)
         try:
-            await _maybe_send_original(
-                session, bot, track, _UrlOnly(source_url), telegram_id, chat_id
+            caption = f"✅ {track.artist} — {track.title}"
+            sent = await _try_best_quality(
+                session, bot, track, telegram_id, chat_id,
+                source_url=source_url, caption=caption,
             )
+            if not sent:
+                await _send_plain(session, bot, track, telegram_id, chat_id, caption)
+            await _record_listen(session, telegram_id, track.id)
         finally:
             await bot.session.close()
 
     try:
         asyncio.run(_with_session(_run))
-    except Exception as exc:  # noqa: BLE001 — mp3 человек получил, оригинал не критичен
-        logger.warning("Оригинал track=%s не удался: %s", track_id, exc)
+    except Exception as exc:  # noqa: BLE001 — одна попытка повтора, дальше сдаёмся
+        if self.request.retries >= self.max_retries:
+            logger.warning("Лучшее качество track=%s не удалось: %s", track_id, exc)
+            return
+        raise self.retry(exc=exc, countdown=30)
 
 
-class _UrlOnly:
-    """Заглушка кандидата для задачи: из выдачи сюда доезжает только ссылка.
+async def _send_plain(session, bot, track, telegram_id: int, chat_id: int, caption: str) -> None:
+    """Обычная выдача трека — то, что получают все. Через `send_track_audio`, а
+    не голым `send_audio`: там живёт лечение мёртвых file_id и актуальные теги."""
+    from app.handlers.delivery import send_track_audio
+    from app.keyboards.track_card import track_card_keyboard
+    from app.services.users import get_user_by_telegram_id
 
-    hq_available=True здесь не «мы уверены, что оригинал есть», а «спросить
-    источник разрешено» — решение принимает вызывающая сторона в боте, она и
-    видела флаг из выдачи."""
-
-    hq_available = True
-
-    def __init__(self, url: str | None) -> None:
-        self.url = url
+    user = await get_user_by_telegram_id(session, telegram_id)
+    if user is None:
+        return
+    await send_track_audio(
+        bot, chat_id, session, user, track,
+        caption=caption,
+        reply_markup=track_card_keyboard(
+            track, "srch", in_library=False, bot_username=settings.bot_username
+        ),
+    )
 
 
 @celery_app.task(name="search.fetch_candidate", bind=True, max_retries=2, queue="youtube_user")
@@ -152,6 +170,16 @@ def search_fetch_candidate(
             if chat_id is None:
                 return
             caption = f"✅ {track.artist} — {track.title}"
+
+            # Платное качество пробуем ДО обычной отправки: подписчик должен
+            # получить один файл, а не тот же трек дважды. Не вышло — ниже
+            # уходит обычный mp3, и человек ничего не теряет.
+            if await _try_best_quality(
+                session, bot, track, telegram_id, chat_id,
+                source_url=chosen.url, caption=caption,
+            ):
+                return
+
             if chat_id == settings.effective_archive_chat_id:
                 # Минт file_id — это реальная отправка файла в архивный чат. Если он
                 # не задан, архивом становится чат первого админа, и владелец получал
@@ -174,11 +202,6 @@ def search_fetch_candidate(
                 )
             else:
                 await bot.send_message(chat_id, f"{caption} — готов.")
-
-            # Оригинал — вторым сообщением и только после того, как mp3 уже у
-            # человека: сорок мегабайт заливаются в Telegram десятки секунд, и
-            # держать его всё это время без трека было бы хуже, чем сейчас.
-            await _maybe_send_original(session, bot, track, chosen, telegram_id, chat_id)
         finally:
             await bot.session.close()
 
