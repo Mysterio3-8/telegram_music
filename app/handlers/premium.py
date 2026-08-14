@@ -63,15 +63,55 @@ async def cb_premium(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
 
 
-@router.callback_query(F.data == "prem:stars")
+def _months_from(data: str) -> int:
+    """Срок тарифа из хвоста callback_data. Мусор и отсутствие — месяц."""
+    from app.services.premium import plan_valid
+
+    parts = data.split(":")
+    months = int(parts[2]) if len(parts) > 2 and parts[2].isdigit() else 1
+    return months if plan_valid(months) else 1
+
+
+@router.callback_query(F.data.startswith("prem:plan:"))
+async def cb_choose_method(callback: CallbackQuery) -> None:
+    """Тариф выбран — показываем, чем платить."""
+    from app.keyboards.premium import payment_method_keyboard
+    from app.services.premium import plan_price_rub, plan_price_stars
+
+    months = _months_from(callback.data)
+    await callback.message.edit_text(
+        t(
+            "premium.method_title",
+            label=plan_label(months),
+            price=plan_price_rub(months),
+            stars=plan_price_stars(months),
+        ),
+        parse_mode="HTML",
+        reply_markup=payment_method_keyboard(
+            months,
+            card_available=bool(settings.payment_provider_token),
+            yookassa_available=is_yookassa_configured(),
+        ),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("prem:stars"))
 async def cb_pay_stars(callback: CallbackQuery) -> None:
+    """Счёт в Telegram Stars. Срок едет в payload — без него оплата года
+    включала бы месяц, ровно как это было у карты до правки 02.08."""
+    from app.services.premium import plan_price_stars
+
+    months = _months_from(callback.data)
     try:
         await callback.message.answer_invoice(
-            title=f"Premium на {settings.premium_duration_days} дней",
+            title=t("premium.invoice_title", label=plan_label(months)),
             description=t("premium.invoice_description"),
-            payload=PAYLOAD_STARS,
+            payload=f"{PAYLOAD_STARS}:{months}",
             currency="XTR",
-            prices=[LabeledPrice(label="Premium", amount=settings.premium_price_stars)],
+            # Stars — единственная валюта Bot API без множителя 100: сумма
+            # указывается прямо в звёздах, а не в сотых долях.
+            prices=[LabeledPrice(label="Premium", amount=plan_price_stars(months))],
         )
     except TelegramBadRequest:
         logger.exception("Не удалось выставить счёт Stars user=%s", callback.from_user.id)
@@ -156,7 +196,10 @@ async def cb_pay_card(callback: CallbackQuery) -> None:
 @router.pre_checkout_query()
 async def cb_pre_checkout(pre_checkout_query: PreCheckoutQuery) -> None:
     payload = pre_checkout_query.invoice_payload or ""
-    ok = payload == PAYLOAD_STARS or payload.split(":")[0] == PAYLOAD_CARD
+    # Счета без срока в payload (`premium_stars`) выставлял код до 14.08. Такой
+    # счёт мог быть выписан до деплоя и оплачен после — отклонять его значит
+    # взять деньги и не дать подписку.
+    ok = payload.split(":")[0] in (PAYLOAD_STARS, PAYLOAD_CARD)
     if not ok:
         logger.warning(
             "Отклонён pre_checkout user=%s payload=%r",
@@ -182,10 +225,18 @@ async def cb_successful_payment(message: Message) -> None:
             session, user.id, payment_type, payment.telegram_payment_charge_id, months=months
         )
         until = updated.premium_until
-        # Лог выручки (блок E): карта в рублях (total_amount в копейках), Stars — 0 ₽
-        amount_rub = payment.total_amount // 100 if payment.currency != "XTR" else 0
+        # Лог выручки (блок E). Рубли приходят в копейках, Stars — целыми
+        # звёздами. Складывать их в одну колонку нельзя: курс звезды плавающий,
+        # и сумма «рубли + звёзды» не значила бы ничего. Поэтому две колонки, и
+        # админ-отчёт показывает две строки.
+        is_stars = payment.currency == "XTR"
         await record_payment(
-            session, user.id, amount_rub, payment_type, payment.telegram_payment_charge_id
+            session,
+            user.id,
+            0 if is_stars else payment.total_amount // 100,
+            payment_type,
+            payment.telegram_payment_charge_id,
+            amount_stars=payment.total_amount if is_stars else 0,
         )
     logger.info(
         "Premium activated user=%s type=%s charge=%s",

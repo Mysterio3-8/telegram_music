@@ -284,6 +284,10 @@ class Payment(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     amount_rub: Mapped[int] = mapped_column(default=0, server_default="0")
+    # Stars отдельной колонкой: складывать их с рублями нельзя — курс звезды
+    # плавающий, Telegram удерживает свою долю, и сумма двух валют в одном
+    # числе не означала бы ничего. У рублёвого платежа здесь 0, и наоборот.
+    amount_stars: Mapped[int] = mapped_column(default=0, server_default="0")
     source: Mapped[str] = mapped_column(String(16))  # yookassa | card | stars | ton
     charge_id: Mapped[str | None] = mapped_column(String(128))
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())

@@ -89,6 +89,14 @@ def _stats_text(stats: ProjectStats, revenue=None) -> str:
             f"├ За месяц: {revenue.month}",
             f"└ За всё время: {revenue.total} ({revenue.payments_total} платежей)",
         ]
+        # Звёзды отдельной строкой, а не в сумме: курс плавающий, Telegram
+        # удерживает свою долю, и «рубли + звёзды» одним числом ввели бы в
+        # заблуждение сильнее, чем отсутствие строки вовсе.
+        if revenue.stars_payments:
+            lines.append(
+                f"⭐ Stars: {revenue.stars_total} "
+                f"({revenue.stars_payments} платежей) — выводятся в Telegram"
+            )
     if stats.reclaimable_count > 0:
         lines.append(
             f"   └ 🧹 можно освободить: {stats.reclaimable_count} "

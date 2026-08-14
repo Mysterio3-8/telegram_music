@@ -42,6 +42,25 @@ def plan_price_rub(months: int, discount_pct: int = 0) -> int:
     return base * (100 - total_discount) // 100 if total_discount else base
 
 
+def plan_price_stars(months: int) -> int:
+    """Цена тарифа в Telegram Stars.
+
+    Считается по той же лестнице скидок, что и рубли, — иначе годовой тариф был
+    бы выгоден в одной валюте и невыгоден в другой, и человек ловил бы нас на
+    несоответствии. Персональной (реферальной) скидки здесь нет: Stars уходят
+    Telegram напрямую, и произвольную цену за них не выставить.
+
+    ⚠️ Курс Stars к рублю плавающий, поэтому суммы намеренно НЕ связаны
+    формулой с `premium_price_rub`: цену в звёздах владелец задаёт отдельно
+    (`PREMIUM_PRICE_STARS`), и она не должна прыгать вслед за курсом.
+    """
+    if is_forever(months):
+        return settings.premium_forever_price_stars
+    base = settings.premium_price_stars * months
+    discount = plan_discount_pct(months)
+    return max(1, base * (100 - discount) // 100) if discount else base
+
+
 def _utcnow() -> datetime:
     # Наивный UTC — SQLite хранит datetime без таймзоны, сравнения не должны падать на mix naive/aware
     return datetime.now(timezone.utc).replace(tzinfo=None)
