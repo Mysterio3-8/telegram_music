@@ -18,7 +18,7 @@
 - `soundcloud_imported` — дедуп уже скачанных ссылок
 
 **Статус (2026-07-25):** массовый парсер переведён на **SoundCloud-only** —
-`attach_source_for_artist` больше не заводит YouTube-источники ([artist_research.py](../app/services/artist_research.py)),
+`attach_source_for_artist` больше не заводит YouTube-источники ([artist_research.py](../../app/services/artist_research.py)),
 нет SC → `no_source`. Чистка прошлых research-YouTube: `python -m app.cli.research disable-youtube-sources`
 (отключает только автозаведённые, каналы владельца не трогает).
 
@@ -36,10 +36,10 @@
 - **Спрятан**: нигде в интерфейсе не показывается, не упоминается в текстах, не палится факт существования
 - В конце блока C — **проверить поисковый парсер вживую**
 
-**Статус (2026-07-25):** ядро поискового парсера готово — [search_download.py](../app/services/search_download.py)
+**Статус (2026-07-25):** ядро поискового парсера готово — [search_download.py](../../app/services/search_download.py)
 (`search_and_download`: SoundCloud → YouTube через yt-dlp, приоритет mp3;
 `fetch_track_by_query`: минт в базу + библиотеку). Celery-задача `search.fetch`
-([tasks/search_fetch.py](../app/tasks/search_fetch.py), очередь `youtube_user`).
+([tasks/search_fetch.py](../../app/tasks/search_fetch.py), очередь `youtube_user`).
 Живой прогон: `python -m app.cli.search_fetch "запрос" [--user tid]`. Осталось:
 спрятанная привязка к промаху поиска в Mini App (авто-дозагрузка) + VK/Яндекс.
 

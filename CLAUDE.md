@@ -1,9 +1,9 @@
 # Telegram Music Bot
 
 **Статус:** 🟢 прод (Этапы 1-5 задеплоены, Mini App живой на keybest.cc)
-**Что это:** Telegram-бот [@muz_damn_bot](https://t.me/muz_damn_bot) — музыкальная платформа: библиотека, плейлисты, поиск, загрузка треков, Premium. Полное ТЗ — в [SPEC.md](SPEC.md). Старый [@tgram_music_bot](https://t.me/tgram_music_bot) живёт указателем «мы переехали» ([app/moved_bot.py](app/moved_bot.py), юнит `tg-music-moved`).
+**Что это:** Telegram-бот [@muz_damn_bot](https://t.me/muz_damn_bot) — музыкальная платформа: библиотека, плейлисты, поиск, загрузка треков, Premium. Полное ТЗ — в [SPEC.md](docs/архив/SPEC.md). Старый [@tgram_music_bot](https://t.me/tgram_music_bot) живёт указателем «мы переехали» ([app/moved_bot.py](app/moved_bot.py), юнит `tg-music-moved`).
 
-**➡️ Новая сессия начинай с [NEXT_SESSION.md](NEXT_SESSION.md)** — приоритеты (бот не должен падать, деньги, поисковый парсер) и полный список забытого/отложенного.
+**➡️ Новая сессия начинай с [NEXT_SESSION.md](docs/архив/NEXT_SESSION.md)** — приоритеты (бот не должен падать, деньги, поисковый парсер) и полный список забытого/отложенного.
 
 ## Прод
 
@@ -127,7 +127,7 @@ $env:DATABASE_URL="sqlite+aiosqlite:///_tmp.db"; .\.venv\Scripts\python.exe -m a
 
 ## Известные грабли
 
-- 🔴 **keybest.cc: «Deceptive Website Warning» на iOS** (подтверждено владельцем 21.07, у ВСЕХ пользователей — iOS-аудитория отрезана от Mini App). 04.08 устранён найденный профиль фишингового сайта, **результат ждёт проверки на живом iPhone**. Чисты: Search Console, Transparency Report, Spamhaus DBL/SURBL/URIBL по домену, Spamhaus ZEN/SpamCop по IP. Версии «локальный кэш устройства» и «остаточная репутация от прошлого владельца» **закрыты** (проблема массовая; домен создан 27.04.2026, владелец первый — whois). ⚠️ **Главный урок: искать надо было не в контенте Mini App, а в поведении веб-сервера.** `try_files $uri /index.html` отдавал 200 и HTML на ЛЮБОЙ путь — в логах **2014 уникальных путей с 200**: `/apple-id/verify`, `/paypal`, `/.env`, `/.git/config`, `/actuator/heapdump`, полторы тысячи вебшеллов. Плюс пустой `<div id="app">` без JS при бренде Telegram = профиль клоакинга. Исправлено (коммит `e7b0ed7`): несуществующий путь → 404, в `#app` реальное описание сервиса, robots.txt/security.txt/nosniff. **План дальше (диагностика Safari vs Telegram → апелляция → переезд) — в [NEXT_SESSION.md](NEXT_SESSION.md), ПРИОРИТЕТ №0**; переезд одной командой: `bash deploy/migrate-domain.sh <домен>`. Живой статус: `https://transparencyreport.google.com/safe-browsing/search?url=keybest.cc`
+- 🔴 **keybest.cc: «Deceptive Website Warning» на iOS** (подтверждено владельцем 21.07, у ВСЕХ пользователей — iOS-аудитория отрезана от Mini App). 04.08 устранён найденный профиль фишингового сайта, **результат ждёт проверки на живом iPhone**. Чисты: Search Console, Transparency Report, Spamhaus DBL/SURBL/URIBL по домену, Spamhaus ZEN/SpamCop по IP. Версии «локальный кэш устройства» и «остаточная репутация от прошлого владельца» **закрыты** (проблема массовая; домен создан 27.04.2026, владелец первый — whois). ⚠️ **Главный урок: искать надо было не в контенте Mini App, а в поведении веб-сервера.** `try_files $uri /index.html` отдавал 200 и HTML на ЛЮБОЙ путь — в логах **2014 уникальных путей с 200**: `/apple-id/verify`, `/paypal`, `/.env`, `/.git/config`, `/actuator/heapdump`, полторы тысячи вебшеллов. Плюс пустой `<div id="app">` без JS при бренде Telegram = профиль клоакинга. Исправлено (коммит `e7b0ed7`): несуществующий путь → 404, в `#app` реальное описание сервиса, robots.txt/security.txt/nosniff. **План дальше (диагностика Safari vs Telegram → апелляция → переезд) — в [NEXT_SESSION.md](docs/архив/NEXT_SESSION.md), ПРИОРИТЕТ №0**; переезд одной командой: `bash deploy/migrate-domain.sh <домен>`. Живой статус: `https://transparencyreport.google.com/safe-browsing/search?url=keybest.cc`
 
 - SQLite `ilike` нечувствителен к регистру только для ASCII — кириллический поиск станет регистронезависимым на PostgreSQL (`ILIKE`); на dev-SQLite это ожидаемое ограничение
 - Схема БД — через Alembic. При адаптации существующей БД без `alembic_version`: `alembic stamp <ревизия-соответствующая-текущей-схеме>`, затем `upgrade head` (так приняли прод: stamp d01cfc648f91 → upgrade добавил tg_file_id)
@@ -350,7 +350,7 @@ yourself» падали, теперь оба доезжают.
 первый порог давал `int(1 * 0.25) = 0` дней. У достижений множитель остался.
 Верхний порог показывается словом «навсегда», а не «36500 дней».
 
-**Мультиязычность — заготовка.** [app/i18n.py](app/i18n.py) и
+**Мультиязычность — заготовка.** [app/i18n/](app/i18n/) и
 [miniapp/src/i18n.js](miniapp/src/i18n.js) — зеркальные словари, цепочка
 «выбранный язык → английский → русский → сам ключ». Русский и английский
 переведены, `es/de/fr/pt/tr` заведены **пустыми словарями**: уже выбираются,
@@ -379,7 +379,7 @@ ka mn`) → русский, пустой код → русский (ядро а�
 
 Владелец подтвердил, что из старой спеки осталась одна незакрытая тема —
 предупреждение Safari на iOS. Взялись за неё, спека переписана заново
-([NEXT_SESSION.md](NEXT_SESSION.md)).
+([NEXT_SESSION.md](docs/архив/NEXT_SESSION.md)).
 
 **Две прошлые сессии искали не там.** Проверяли контент Mini App и базы Google —
 обе чистые, и расследование на этом вставало. Похож на фишинг-кит был не
@@ -719,7 +719,7 @@ soundcloud-воркер concurrency 3→1** (коммит `0a5b411`), защит
 - **Блок B — подписка 2.0 (коммит `653b89e`):** фикс бага ОП ([subscription.py](app/services/subscription.py) `is_bot_admin_of_channel` — при добавлении канала проверяем, что БОТ админ, а не подписку владельца-админа); Premium снимает ОП (`is_fully_subscribed` + гейт в Mini App: [subgate.js](miniapp/src/screens/subgate.js), `GET /subscription/status`, «Я подписался» force-recheck, «Убрать подписки — Premium»); статистика каналов для рекламы (`channel_ad_stats`: подписчики=охват + клики; `click_count` миграция `fba9cf9d09e3`; `POST /subscription/click`; видно в админке). Второй админ 7446911479 добавлен в ADMIN_IDS на VPS.
 - **Блок C — парсеры (коммиты `26b69e1` + наследие):** ⚠️ рабочее дерево пришло с готовой работой ПРОШЛОЙ сессии (search_download.py, track_lookup/, tasks/search_fetch.py, cli/search_fetch.py, конкурсы). Свой дубликат track_finder.py/tasks/search.py удалил, взял готовую реализацию.
   - **Поисковый парсер #2 (скрытый):** [search_download.py](app/services/search_download.py) `search_and_download` (SoundCloud→YouTube, приоритет mp3 `bestaudio[ext=mp3]/...`) + `fetch_track_by_query` (минт+библиотека). [track_lookup/](app/services/track_lookup/) — транслит/ранжирование (пока не в download-пути). Celery `search.fetch` ([tasks/search_fetch.py](app/tasks/search_fetch.py), очередь youtube_user). Фолбэк: бот (пустой поиск → `_fetch_from_web` в [search.py](app/handlers/search.py)), Mini App (кнопка «Поискать ещё» → `POST /search/fetch`). **Проверено вживую на VPS:** «kizaru fake id»→Fake ID mp3, «элджей розовое вино»→Розовое вино feat FEDUK mp3. CLI теста: `python -m app.cli.search_fetch "запрос" [--user tid]`
-  - **Массовый парсер #1 — только SoundCloud:** [artist_research.py](app/services/artist_research.py) `attach_source_for_artist` не заводит YouTube (нет SC → no_source); `python -m app.cli.research disable-youtube-sources` чистит прошлые. Автодискавери до 10k артистов/1M треков — операционный прогон на VPS ([docs/BLOCK-C-PARSER-GOALS.md](docs/BLOCK-C-PARSER-GOALS.md))
+  - **Массовый парсер #1 — только SoundCloud:** [artist_research.py](app/services/artist_research.py) `attach_source_for_artist` не заводит YouTube (нет SC → no_source); `python -m app.cli.research disable-youtube-sources` чистит прошлые. Автодискавери до 10k артистов/1M треков — операционный прогон на VPS ([docs/BLOCK-C-PARSER-GOALS.md](docs/архив/BLOCK-C-PARSER-GOALS.md))
   - **Конкурсы** (наследие, срез 0, коммит отдельный): модели contests+contest_participants (миграция `a367a749c438`), [contests.py](app/services/contests.py). API/экран/кнопка/рассылка/CLI розыгрыша — НЕ доделаны
 - Прод на **SQLite** (миграции идут). Все сервисы active. `фон.png` в корне не коммитил (заменён на miniapp/assets/mix-bg.jpg)
 
@@ -733,12 +733,12 @@ soundcloud-воркер concurrency 3→1** (коммит `0a5b411`), защит
   - **Фон микса** — `фон.png` владельца (1024²) сконвертирован в `miniapp/assets/mix-bg.jpg` (30 КБ), лёг под градиент первого hero-слайда + затемняющий слой. `фон.png` не коммитил (заменён)
   - **TG Микс переписан** ([recommendations.py](app/services/recommendations.py)): профиль вкуса (прослушивания×3/библиотека×2/подписки×4), состав 50/30/20 (любимые/соседи по жанру/открытия), ≤2 трека артиста подряд (`_spread_artists`), антиповтор `mix_history` 7 дней (миграция `6df6e521a5de`), фильтр не-музыки ([title_quality.py](app/services/title_quality.py) `is_probably_junk`), выборки SQL с лимитом вместо всего каталога. `build_mix` теперь принимает `user_id`. Новичку — свежее каталога
   - Тесты **268 passed** (+новые в test_recommendations). Прод: миграция применена, bot+worker+api active, mix-bg.jpg отдаётся 200
-- **Цели парсера SoundCloud 24/7** зафиксированы в [docs/BLOCK-C-PARSER-GOALS.md](docs/BLOCK-C-PARSER-GOALS.md): 1 млн треков (топ→андеграунд), 10k артистов, только SC, автодискавери профилей без владельца, треки+альбомы+плейлисты. + поисковый парсер #2 (спрятанный, YT Music→SC→VK/Яндекс, только mp3)
+- **Цели парсера SoundCloud 24/7** зафиксированы в [docs/BLOCK-C-PARSER-GOALS.md](docs/архив/BLOCK-C-PARSER-GOALS.md): 1 млн треков (топ→андеграунд), 10k артистов, только SC, автодискавери профилей без владельца, треки+альбомы+плейлисты. + поисковый парсер #2 (спрятанный, YT Music→SC→VK/Яндекс, только mp3)
 - **Осталось по плану:** B подписка 2.0 (баг ОП: [admin.py:231](app/handlers/admin.py:231) проверяет подписку админа вместо «бот — админ канала»; 2-й админ 7446911479; гейт в Mini App; Premium снимает ОП; статистика каналов для рекламы), C парсеры, D модерация+антидубли, E деньги (49₽+автосписание, урезать раздачу премиума, антинакрутка, статистика выручки, юр.доки; владелец — самозанятый), F поддержка (@suptgmusic_bot, токен в память сохранён), G надёжность (бэкап БД, PostgreSQL, 1млн, ускорение). Прод пока на **SQLite** (видно в логах alembic)
 
 ## Checkpoint (2026-07-26) — SPEC-2.0: две ветки каталога + конкурсы
 
-Владелец дал 33 раздела требований → [SPEC-2.0.md](SPEC-2.0.md) (9 срезов, инварианты, риски).
+Владелец дал 33 раздела требований → [SPEC-2.0.md](docs/архив/SPEC-2.0.md) (9 срезов, инварианты, риски).
 Решения владельца: PostgreSQL сейчас, первым срезом UI/UX+баги+скорость, иконки владелец
 генерирует по промтам, новые подсистемы — все.
 
@@ -804,7 +804,7 @@ soundcloud-воркер concurrency 3→1** (коммит `0a5b411`), защит
 
 ## Checkpoint (2026-07-23, вечер) — МИРОВОЙ КАТАЛОГ: жанры, карточки артистов, MusicBrainz-исследователь
 
-Исполнение [SPEC-КАТАЛОГ.md](SPEC-КАТАЛОГ.md), срезы 1-4 + Mini App. Папки `проверка/` со скринами ещё нет — дизайн карточки сделан по здравому смыслу, сверить когда владелец скинет.
+Исполнение [SPEC-КАТАЛОГ.md](docs/архив/SPEC-КАТАЛОГ.md), срезы 1-4 + Mini App. Папки `проверка/` со скринами ещё нет — дизайн карточки сделан по здравому смыслу, сверить когда владелец скинет.
 - **Жанры (срез 1)**: таблицы `genres` (иерархия ≤3 уровней, parent_id) + `artist_genres` (M2M), миграция `66dd24c3fa53`; сид **324 жанров** из курируемого дерева [genres_seed.py](app/data/genres_seed.py) (`python -m app.cli.genres seed`, идемпотентен). Треки наследуют жанры артиста через `lower(trim(tracks.artist))` ↔ `artists.normalized_name`. API: `GET /genres` (дерево), `GET /genres/{slug}/tracks` (включая поджанры). Слаги — транслитом ([genres.py](app/services/genres.py) slugify): «Хип-хоп»→`hip-hop` — англ. теги MusicBrainz ложатся в русское дерево сами
 - **Карточка артиста (срез 2)**: `artists` += banner_url, country, aliases (json), mbid (uq), deezer_id, youtube_url, source_status. `GET /artist-card?name=` ([artist_card.py](app/services/artist_card.py)): фото/баннер/жанры/описание + топ-10 треков по прослушиваниям (добивается свежими) + альбомы из `tracks.album` с обложками. Карточка живёт даже без записи в artists (по одним трекам)
 - **Исследователь MusicBrainz (срез 3)**: [musicbrainz.py](app/services/musicbrainz.py) (троттлинг 1.1 сек вшит в клиент — обойти нельзя, UA обязателен) + [deezer.py](app/services/deezer.py) (фото picture_xl, только точное совпадение имени) + [artist_research.py](app/services/artist_research.py) (upsert по mbid→имени; **данные владельца не перетираются**). CLI: `python -m app.cli.research country RU --limit 1000` / `search "запрос"` / `stats`. Темп ~25 артистов/мин (2 req/артист). Проверено вживую: kizaru → mbid, страна, SoundCloud+YouTube ссылки, фото Deezer, жанры легли в дерево
@@ -823,8 +823,8 @@ soundcloud-воркер concurrency 3→1** (коммит `0a5b411`), защит
 - **Обложки**: импорт тянет thumbnail источника → вшивается в файл (`embed_cover`: APIC/covr в [track_meta.py](app/services/track_meta.py)) + `tracks.cover_url` для Mini App (`cover.js` показывает `<img>` с фолбэком на градиент). `album` из метаданных источника
 - **Аватары артистов**: `python -m app.cli.artists fetch-photos` (og:image профиля SoundCloud), 300+ уже собрано; CLI: seed / add-sources / fetch-photos / stats
 - **DRM-скип быстрый**: полная анти-бан-пауза (5-60с) только после реальных скачиваний, отказ Go+/DRM скипается за 1-3с (профиль мейджора из сотен DRM-треков не жрёт сутки)
-- Также в этой сессии: тариф «навсегда» 10000₽ + подробные плюшки (бот+Mini App), 97 достижений, антинакрутка listen (30с дедуп), честный premium_active, составные индексы событий, «ОП на ботов» (`required_channels.kind`), онбординг-фикс (CloudStorage + флаг при показе), подтверждение закрытия + отключены vertical swipes, 10 постов с картинками ([посты/](посты/)), фикс бесконечного 401
-- Тесты: **241 passed**. ⏳ Ждём от владельца: ~~PROXY_LIST~~ ✅ (7 прокси включены 23.07), TON-кошелёк (если нужна TON-оплата), картинки по [ICONS.md](ICONS.md)
+- Также в этой сессии: тариф «навсегда» 10000₽ + подробные плюшки (бот+Mini App), 97 достижений, антинакрутка listen (30с дедуп), честный premium_active, составные индексы событий, «ОП на ботов» (`required_channels.kind`), онбординг-фикс (CloudStorage + флаг при показе), подтверждение закрытия + отключены vertical swipes, 10 постов с картинками ([посты/](docs/посты/)), фикс бесконечного 401
+- Тесты: **241 passed**. ⏳ Ждём от владельца: ~~PROXY_LIST~~ ✅ (7 прокси включены 23.07), TON-кошелёк (если нужна TON-оплата), картинки по [ICONS.md](docs/архив/ICONS.md)
 
 ## Checkpoint (2026-07-21, вторая волна) — перенос из сервисов, скорость, конверсия
 
@@ -844,7 +844,7 @@ soundcloud-воркер concurrency 3→1** (коммит `0a5b411`), защит
 - **Новые функции со скринов** (запрос владельца «пару новых функций»): эквалайзер (Web Audio, 7 полос [50…15к Гц], 20 пресетов, [equalizer.js](miniapp/src/equalizer.js) — граф лениво, при недоступном AudioContext плеер живёт без EQ; `audio.crossOrigin="anonymous"` для CORS); акцентные цвета интерфейса (Настройки → Интерфейс, `[data-accent]`-токены в tokens.css) + тактильная обратная связь (Telegram HapticFeedback); шит «…» в Моих треках: «Скачать всё» (офлайн всей библиотеки, Premium), «Удалить скачанные»; экран «Память устройства»
 - **P3 дизайн по скринам** (`копи/` — скрины ВК Музыки): главная = VK Микс (волновой сине-розовый hero, подсказка свайпа со стрелками — кликабельны на ПК, плитки с иконкой слева, лента «Какой сейчас вайб?» → `/mix?mood=`), поиск с «Историей прослушивания», hover-состояния при `pointer:fine`. Проверено в dev-браузере 375/1280 (скриншоты таймаутят — DOM-проверки). «Мои треки» уже соответствовали скринам
 - **P6 рассылка**: `/admin` → «📣 Рассылка» (текст/фото → предпросмотр → подтверждение), Celery `broadcast.send` ~25 msg/sec, отчёт админу; `users.bot_blocked` (миграция `9f2c2ce7f891`) по TelegramForbiddenError
-- **P7**: план масштабирования — [SCALING.md](SCALING.md) (шаг №1 — PostgreSQL). **P8**: 4 поста в [NEWS.md](NEWS.md)
+- **P7**: план масштабирования — [SCALING.md](docs/архив/SCALING.md) (шаг №1 — PostgreSQL). **P8**: 4 поста в [NEWS.md](NEWS.md)
 - ⚠️ Грабля dev-браузера: `scrollBy({behavior:"smooth"})` — no-op; скроллить без smooth
 - Тесты: **212 passed**
 
