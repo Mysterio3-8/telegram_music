@@ -172,9 +172,40 @@ def _base_opts(
         proxy = next_proxy()
         if proxy:
             opts["proxy"] = proxy
-    if settings.youtube_cookies_path and Path(settings.youtube_cookies_path).exists():
-        opts["cookiefile"] = settings.youtube_cookies_path
+    cookies = _cookie_file()
+    if cookies:
+        opts["cookiefile"] = cookies
     return opts
+
+
+_cookie_warned = False
+
+
+def _cookie_file() -> str | None:
+    """Путь к файлу куки YouTube, если он настроен и реально существует.
+
+    Отдельной функцией ради предупреждения: путь, указанный в `.env` с опечаткой
+    или файл, который не доехал на сервер, раньше просто молча игнорировались —
+    yt-dlp работал без авторизации, а человек был уверен, что она включена, и
+    искал причину отказов не там. Ругаемся ОДИН раз на процесс: это настройка,
+    а не событие, и повторять её в каждой строке лога незачем.
+    """
+    global _cookie_warned
+
+    configured = settings.youtube_cookies_path
+    if not configured:
+        return None
+    path = Path(configured)
+    if path.exists():
+        return configured
+    if not _cookie_warned:
+        _cookie_warned = True
+        logger.warning(
+            "YOUTUBE_COOKIES_PATH=%s указан, но файла нет — YouTube идёт без "
+            "авторизации, треки с возрастным ограничением скачиваться не будут",
+            configured,
+        )
+    return None
 
 
 def normalize_source_url(url: str) -> str:

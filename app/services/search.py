@@ -6,6 +6,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.db.models import Artist, Instrumental, Playlist, Track
 
+# Сколько строк тянем под ранжирование. 200 — это заведомо больше, чем человек
+# пролистает (страница по 5, инлайн отдаёт 10), и заведомо дёшево прочитать.
+_RANK_POOL = 200
+
 
 def _track_filter(query: str):
     """Поиск по автору, названию и любому их сочетанию — вплоть до одной буквы.
@@ -77,17 +81,27 @@ async def search_tracks(
 
     page_size переопределяется только Mini App (пачки до 100); бот всегда на дефолте.
     """
+    from app.services.track_ranking import rank_tracks
+
     size = page_size or settings.page_size
     where = _track_filter(query)
     total = await session.scalar(select(func.count()).select_from(Track).where(where)) or 0
-    stmt = (
-        select(Track)
-        .where(where)
-        .order_by(Track.artist, Track.title)
-        .offset((page - 1) * size)
-        .limit(size)
+
+    # Берём пул и ранжируем в Python, а не сортируем в SQL.
+    #
+    # 🔴 Раньше здесь стоял `ORDER BY artist, title` — сортировка по алфавиту. По
+    # запросу «kizaru» первым шёл «044ROSE — STOP XANAX ДЭМО ДЛЯ КИЗАРУ», просто
+    # потому что ноль стоит раньше букв. Это и была жалоба на инлайн-выдачу.
+    #
+    # ⚠️ Пул ограничен: запрос из одной буквы находит тысячи строк, и тянуть их
+    # все ради сортировки нельзя. Значит порядок точен внутри пула, а не по всей
+    # базе — для выдачи, где человек смотрит первую страницу, этого достаточно.
+    pool = list(
+        (await session.scalars(select(Track).where(where).limit(_RANK_POOL))).all()
     )
-    return list((await session.scalars(stmt)).all()), total
+    ranked = rank_tracks(query, pool)
+    start = (page - 1) * size
+    return ranked[start : start + size], total
 
 
 def _instrumental_filter(query: str):

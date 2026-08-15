@@ -66,7 +66,15 @@ notify() {
     echo "$(date -Is) $text" >>"$STATE_DIR/history.log"
 
     local token; token=$(env_value BOT_TOKEN)
-    local admins; admins=$(env_value ADMIN_IDS)
+    # Кому шлём. По умолчанию — ВСЕ админы из ADMIN_IDS, но владелец 15.08
+    # попросил не звать его на каждое срабатывание: сторож поднимает упавшее сам,
+    # и большая часть сообщений — это отчёт об уже починенном, а не просьба
+    # вмешаться. HEALTH_ALERT_CHAT в .env перенаправляет их дежурному админу.
+    #
+    # ⚠️ Совсем выключать не стали намеренно: 11.08 воркеры стояли сутки, и
+    # никто не знал именно потому, что сообщать было некому.
+    local admins; admins=$(env_value HEALTH_ALERT_CHAT)
+    [ -n "$admins" ] || admins=$(env_value ADMIN_IDS)
     [ -n "$token" ] && [ -n "$admins" ] || return 0
 
     local host; host=$(hostname)
