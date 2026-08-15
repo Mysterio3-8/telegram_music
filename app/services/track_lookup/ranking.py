@@ -334,7 +334,17 @@ _OFFICIAL_BONUS = 0.25
 
 # Прибавка за попадание в название. Должна перебивать официальность: официальный
 # релиз ДРУГОЙ песни того же артиста — это не то, что просили.
-_TITLE_BONUS = 0.3
+_TITLE_BONUS = 0.25
+
+# Прибавка за попадание в имя исполнителя. ВЫШЕ, чем за название, и это
+# важно: когда песни в источниках нет вовсе, правильный артист полезнее
+# чужого трека с похожим названием. По «нурминский вечно молодой» без
+# этого перевеса первым вставал «Face — на вечно молодой».
+#
+# Обе цифры подобраны прогоном 25 размеченных запросов по сетке
+# artist 0.2-0.5 x title 0.15-0.3: 25 из 25 держатся на всём участке
+# artist >= 0.3 при title >= 0.25. Взята середина участка, а не край.
+_ARTIST_BONUS = 0.35
 
 
 def rank_candidates(query: str, candidates: list[Candidate]) -> list[Candidate]:
@@ -364,7 +374,7 @@ def rank_candidates(query: str, candidates: list[Candidate]) -> list[Candidate]:
         else:
             relevance = score * 0.9
         relevance += (
-            artist_affinity(query, candidate) * 0.2
+            artist_affinity(query, candidate) * _ARTIST_BONUS
             # Название решает отдельно от общего счёта — см. title_hit о том,
             # почему без этого «Вдох» обходил «Всю ночь тобой дышать».
             + title_hit(query, candidate) * _TITLE_BONUS
