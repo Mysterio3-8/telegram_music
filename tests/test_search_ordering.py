@@ -71,6 +71,41 @@ def test_unparsed_artist_falls_back_to_title_and_channel():
     assert artist_affinity("зиверт", yt) == 0.0
 
 
+# --- название решает отдельно от общего счёта ---------------------------------
+
+
+def test_official_wrong_song_loses_to_right_song():
+    """Живой случай: по «три дня дождя дышать» первым шёл «Три дня дождя — Вдох»
+    (0.78, официальный, 1.28 млн), а «Всю ночь тобой дышать» (0.92) стоял
+    ТРИНАДЦАТЫМ. Три слова из четырёх совпадали у обоих — это имя группы, — и
+    решающее слово «дышать» тонуло в общем счёте."""
+    from app.services.track_lookup.ranking import title_hit
+
+    wrong = _c("Вдох", artist="Три дня дождя", official=True, popularity=1_282_293)
+    right = _c("Всю ночь тобой дышать", artist="Три дня дождя", popularity=156_220)
+
+    assert title_hit("три дня дождя дышать", wrong) == 0.0
+    assert title_hit("три дня дождя дышать", right) == 1.0
+    assert rank_candidates("три дня дождя дышать", [wrong, right])[0] is right
+
+
+def test_bare_artist_query_not_punished():
+    """В запросе «кизару» названия нет вовсе — спрашивать с кандидата нечего."""
+    from app.services.track_lookup.ranking import title_hit
+
+    assert title_hit("кизару", _c("Яд", artist="KIZARU")) == 1.0
+    assert title_hit("", _c("Яд", artist="KIZARU")) == 1.0
+
+
+def test_official_still_wins_when_titles_match_equally():
+    """Официальность не обесценена: при одинаковом попадании в название она
+    по-прежнему решает."""
+    official = _c("Вечеринка", artist="Скриптонит", official=True, popularity=1000)
+    reupload = _c("Вечеринка", artist="Скриптонит", popularity=1000)
+
+    assert rank_candidates("скриптонит вечеринка", [reupload, official])[0] is official
+
+
 # --- неизвестная популярность не приговор -------------------------------------
 
 

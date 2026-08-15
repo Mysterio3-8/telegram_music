@@ -248,6 +248,33 @@ def artist_hit(query: str, candidate: Candidate) -> bool:
     return bool(normalized) and bool(artist) and normalized in artist
 
 
+def title_hit(query: str, candidate: Candidate) -> float:
+    """Попала ли в НАЗВАНИЕ та часть запроса, которая не является именем артиста.
+
+    🔴 Зачем отдельный признак. `match_score` сравнивает запрос со строкой
+    «артист + название», поэтому имя артиста накачивает счёт ВСЕМ его трекам, а
+    само название почти не решает. Живой случай 14.08: по «три дня дождя дышать»
+    первым шёл «Три дня дождя — Вдох» (0.78), а «Три дня дождя — Всю ночь тобой
+    дышать» (0.92) стоял ТРИНАДЦАТЫМ. Три слова из четырёх совпадали у обоих —
+    это имя группы, — и решающее слово «дышать» тонуло в общем счёте.
+
+    Считаем долю слов запроса, которых НЕТ в имени исполнителя, но которые есть
+    в названии. Для «Вдох» это ноль, для «Всю ночь тобой дышать» — единица.
+
+    Запрос без названия («кизару») даёт 1.0: спрашивать с кандидата нечего, и
+    занижать его за это неправильно.
+    """
+    words = [phonetic(w) for w in normalize_query(query).split() if len(w) > 1]
+    if not words:
+        return 1.0
+    artist_words = {phonetic(w) for w in normalize_query(candidate.artist or "").split()}
+    rest = [w for w in words if w not in artist_words]
+    if not rest:
+        return 1.0  # запрос целиком про артиста — названия в нём и не было
+    title_words = {phonetic(w) for w in normalize_query(candidate.title or "").split()}
+    return sum(1 for w in rest if w in title_words) / len(rest)
+
+
 def artist_affinity(query: str, candidate: Candidate) -> float:
     """Насколько запрос указывает на ЭТОГО исполнителя, 0.0—1.0.
 
@@ -305,6 +332,10 @@ def artist_affinity(query: str, candidate: Candidate) -> float:
 # у реаплоада, но не у явно более точного совпадения.
 _OFFICIAL_BONUS = 0.25
 
+# Прибавка за попадание в название. Должна перебивать официальность: официальный
+# релиз ДРУГОЙ песни того же артиста — это не то, что просили.
+_TITLE_BONUS = 0.3
+
 
 def rank_candidates(query: str, candidates: list[Candidate]) -> list[Candidate]:
     """Кандидаты от лучшего к худшему. Мусор и нулевые совпадения отброшены.
@@ -334,6 +365,9 @@ def rank_candidates(query: str, candidates: list[Candidate]) -> list[Candidate]:
             relevance = score * 0.9
         relevance += (
             artist_affinity(query, candidate) * 0.2
+            # Название решает отдельно от общего счёта — см. title_hit о том,
+            # почему без этого «Вдох» обходил «Всю ночь тобой дышать».
+            + title_hit(query, candidate) * _TITLE_BONUS
             # Официальность — СЛАГАЕМОЕ, а не старший ключ. Старшим она была до
             # 14.08, и замер показал, чем это кончается: по «кизару фейк айди»
             # первой стояла пародия «neejvz — кизяка фейк айди» с 41
