@@ -30,7 +30,13 @@ class Settings(BaseSettings):
     # Отдельно от PROXY_LIST сознательно: тот про SoundCloud, а SoundCloud через
     # прокси работает с той же скоростью, что и напрямую — лишний узел на
     # главном источнике не нужен. Пусто — YouTube ходит напрямую, как раньше.
+    # Через запятую — несколько выходов VPN. Отказы YouTube плавают по узлам:
+    # трек, который через один выход даёт 403, через соседний скачивается.
     youtube_proxy: str = ""
+    # Сколько разных выходов пробовать, прежде чем сдаться. Не все пять: ответа
+    # ждёт живой человек, а каждая неудачная попытка это несколько секунд.
+    # После них идёт ещё одна прямая — на случай, если Xray лёг целиком.
+    youtube_proxy_attempts: int = 3
     # У tv_embedded нет m4a-дорожек (там opus в webm), поэтому жёсткое
     # bestaudio[ext=m4a] на нём означает отказ «Requested format is not
     # available». Пусто — клиент по умолчанию, то есть поведение до 14.08.
@@ -205,6 +211,13 @@ class Settings(BaseSettings):
     @property
     def proxy_list_items(self) -> list[str]:
         return [p.strip() for p in self.proxy_list.split(",") if p.strip()]
+
+    @property
+    def youtube_proxy_items(self) -> list[str]:
+        """Выходы VPN для YouTube. Их несколько намеренно: отказы YouTube плавают
+        по конкретным выходным узлам — один и тот же трек через один выход даёт
+        403, через соседний скачивается. Перебор соседей и есть лечение."""
+        return [p.strip() for p in self.youtube_proxy.split(",") if p.strip()]
 
     # Личный Telegram-канал: импорт своих аудиопостов через MTProto (Telethon).
     # api_id/api_hash — на my.telegram.org. session_path — файл входа, вне git,

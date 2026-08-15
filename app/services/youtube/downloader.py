@@ -96,7 +96,7 @@ def _impersonate_target():
         return None
 
 
-def youtube_opts(sleep_requests: int = 1, direct: bool = False) -> dict:
+def youtube_opts(sleep_requests: int = 1, proxy: str | None | bool = False) -> dict:
     """Настройки для запросов к YouTube. Отдельно от `_base_opts`, потому что
     YouTube требует ровно двух вещей, которых не требует больше никто.
 
@@ -116,23 +116,30 @@ def youtube_opts(sleep_requests: int = 1, direct: bool = False) -> dict:
     скоростью, что и напрямую (6.22 против 6.83 сек), то есть выигрыша нет, а
     лишний сетевой узел на главном источнике есть.
 
-    direct=True — попытка в обход прокси. Нужна как запасной ход: если Xray лёг,
-    честнее попробовать напрямую и получить внятный отказ, чем молчать.
+    proxy=False (по умолчанию) — взять следующий выход из ротации.
+    proxy=None — идти напрямую, минуя VPN.
+    proxy="socks5://…" — конкретный выход (так работает перебор при скачивании).
     """
     opts = _base_opts(sleep_requests=sleep_requests)
     if settings.youtube_player_client:
         opts["extractor_args"] = {
             "youtube": {"player_client": [settings.youtube_player_client]}
         }
-    if settings.youtube_proxy and not direct:
-        opts["proxy"] = settings.youtube_proxy
+    if proxy is False:
+        from app.services.proxies import youtube_proxy_chain
+
+        proxy = youtube_proxy_chain()[0]
+    if proxy:
+        opts["proxy"] = proxy
     return opts
 
 
-def youtube_attempt_plan() -> list[bool]:
-    """Порядок попыток для YouTube: сначала через прокси, потом напрямую.
-    Без настроенного прокси — одна прямая попытка (как было до 14.08)."""
-    return [False, True] if settings.youtube_proxy else [False]
+def youtube_attempt_plan() -> list[str | None]:
+    """Выходы, через которые пробуем скачать: несколько разных, в конце прямое
+    соединение. Подробности выбора — в `services/proxies.youtube_proxy_chain`."""
+    from app.services.proxies import youtube_proxy_chain
+
+    return youtube_proxy_chain()
 
 
 def _base_opts(
@@ -319,22 +326,26 @@ def download_audio(video_id: str, as_mp3: bool = False) -> DownloadedAudio | Non
     """as_mp3=True — гарантированно mp3 (перекодирование ffmpeg): поисковый парсер
     отдаёт пользователю mp3. Массовая закачка зовёт без флага (bestaudio).
 
-    Попыток две: через прокси и напрямую (см. `youtube_attempt_plan`). Раньше
-    была одна прямая, и с 14.08 она означала гарантированный отказ — YouTube
-    блокирует IP сервера.
+    Пробуем несколько РАЗНЫХ выходов VPN подряд, в конце прямое соединение:
+    отказы YouTube плавают по узлам, и трек, который через один выход отдал 403,
+    через соседний скачивается. Раньше попытка была одна прямая, и с 14.08 она
+    означала гарантированный отказ — YouTube блокирует IP сервера.
     """
-    for direct in youtube_attempt_plan():
-        result = _download_audio_once(video_id, as_mp3=as_mp3, direct=direct)
+    for attempt, proxy in enumerate(youtube_attempt_plan(), start=1):
+        result = _download_audio_once(video_id, as_mp3=as_mp3, proxy=proxy)
         if result is not None:
+            if attempt > 1:
+                logger.info("YouTube: %s скачался с %s попытки", video_id, attempt)
             return result
         logger.info(
-            "YouTube: %s не скачался (%s)", video_id, "напрямую" if direct else "через прокси"
+            "YouTube: %s не скачался (попытка %s, %s)",
+            video_id, attempt, proxy or "напрямую",
         )
     return None
 
 
 def _download_audio_once(
-    video_id: str, as_mp3: bool = False, direct: bool = False
+    video_id: str, as_mp3: bool = False, proxy: str | None = None
 ) -> DownloadedAudio | None:
     from app.services.disk import enough_free_disk
 
@@ -342,7 +353,7 @@ def _download_audio_once(
         return None  # диск почти полон — не забиваем /tmp, бережём Redis/бота
     with tempfile.TemporaryDirectory() as tmp:
         opts = {
-            **youtube_opts(direct=direct),
+            **youtube_opts(proxy=proxy),
             # У tv_embedded нет m4a-дорожек, там opus в webm. Жёсткое
             # `bestaudio[ext=m4a]` на нём означает «Requested format is not
             # available», то есть отказ на ровном месте — оставляем m4a
