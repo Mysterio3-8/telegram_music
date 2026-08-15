@@ -77,6 +77,40 @@ async def _load_track_bytes(track: Track) -> bytes | None:
     return await _load_audio_bytes(f"tracks/{track.id}", track.storage_path, track.tg_file_id)
 
 
+async def _heal_dead_file_id(track_id: int) -> None:
+    """Гасит мёртвый file_id и ставит восстановление трека в очередь.
+
+    🔴 Зачем. `file_id` принадлежит боту, который загрузил файл. После переезда
+    на @muz_damn_bot (05.08) идентификаторы всего старого каталога стали чужими,
+    и Telegram отвечает «wrong file_id or the file is temporarily unavailable».
+
+    В боте самолечение было с самого переезда (`handlers/delivery.py`), а здесь
+    его не было: API просто отдавал 404. Mini App на 404 переходит к следующему
+    треку — у которого id точно так же мёртв, — и получается бесконечное
+    «не удалось запустить трек, пропускаю». Именно это владелец увидел 15.08.
+
+    Лечим тем же способом: помечаем id мёртвым и просим воркер переминтить трек
+    из источника. Текущий запрос всё равно вернёт 404 — байтов сейчас нет
+    физически, — но через несколько секунд трек оживает уже для всех.
+    """
+    from app.db.models import Track as TrackModel
+
+    try:
+        async with session_factory() as session:
+            track = await session.get(TrackModel, track_id)
+            if track is None or not track.tg_file_id:
+                return  # уже вылечен параллельным запросом
+            track.tg_file_id = None
+            track.meta_synced = False
+            await session.commit()
+        from app.tasks.search_fetch import repair_track
+
+        repair_track.delay(track_id=track_id)
+        logger.warning("Мёртвый file_id у track=%s — поставил восстановление", track_id)
+    except Exception:  # noqa: BLE001 — брокер лёг: вылечим при следующем обращении
+        logger.warning("Не удалось поставить восстановление track=%s", track_id, exc_info=True)
+
+
 def _range_response(data: bytes, range_header: str, media_type: str) -> Response:
     """Единственный диапазон bytes=start-end поверх байтов в памяти (файлы ≤ 50 МБ)."""
     try:
@@ -124,6 +158,10 @@ async def stream_track_audio(
 
     data = await _load_track_bytes(track)
     if data is None:
+        # Байтов нет и архива нет — почти наверняка мёртвый file_id от старого
+        # бота. Ставим восстановление, чтобы следующий человек получил трек.
+        if track.tg_file_id and not track.storage_path:
+            await _heal_dead_file_id(track.id)
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Файл трека недоступен")
 
     media_type = _media_type(track)
