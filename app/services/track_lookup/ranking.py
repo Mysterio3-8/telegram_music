@@ -242,6 +242,12 @@ def artist_hit(query: str, candidate: Candidate) -> bool:
     return bool(normalized) and bool(artist) and normalized in artist
 
 
+# Прибавка за официальность. Сопоставима с весом прослушиваний (0.3) и заметно
+# больше попадания в имя артиста (0.1): релиз правообладателя должен выигрывать
+# у реаплоада, но не у явно более точного совпадения.
+_OFFICIAL_BONUS = 0.25
+
+
 def rank_candidates(query: str, candidates: list[Candidate]) -> list[Candidate]:
     """Кандидаты от лучшего к худшему. Мусор и нулевые совпадения отброшены.
 
@@ -258,12 +264,18 @@ def rank_candidates(query: str, candidates: list[Candidate]) -> list[Candidate]:
             score * 0.6
             + popularity_weight(candidate.popularity) * 0.3
             + (0.1 if artist_hit(query, candidate) else 0.0)
+            # Официальность — СЛАГАЕМОЕ, а не старший ключ. Старшим она была до
+            # 14.08, и замер показал, чем это кончается: по «кизару фейк айди»
+            # первой стояла пародия «neejvz — кизяка фейк айди» с 41
+            # прослушиванием, потому что заливщик заполнил publisher_metadata и
+            # получил official=True. Признак официальности ставит сам загрузчик,
+            # то есть подделывается тривиально, и делать его неоспоримым нельзя.
+            #
+            # Вес подобран так, чтобы официальный релиз выигрывал у реаплоада с
+            # похожим названием, но проигрывал явно более точному совпадению.
+            + (_OFFICIAL_BONUS if candidate.official else 0.0)
         )
-        # Официальность — СТАРШИЙ ключ, а не слагаемое (решение владельца):
-        # релиз правообладателя обязан стоять выше любого реаплоада, даже если
-        # у реаплоада название ближе к запросу. Внутри каждой группы порядок
-        # обычный — похожесть, прослушивания, имя артиста.
-        return (0 if candidate.official else 1, -relevance)
+        return (0, -relevance)
 
     return [item for score, item in sorted(scored, key=order) if score > 0]
 

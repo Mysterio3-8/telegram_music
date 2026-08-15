@@ -159,11 +159,16 @@ def _same_name(left: str, right: str) -> bool:
 
 
 def _to_candidate(item: dict) -> Candidate | None:
+    from app.services.mojibake import repair
+
     url = item.get("permalink_url")
-    title = (item.get("title") or "").strip()
+    # Часть старых загрузок приезжает с кириллицей в битой кодировке:
+    # «Ðÿäîì áûòü» вместо «Рядом быть». Чиним на входе, до всего остального —
+    # иначе битый текст попадает и в сопоставление, и в кнопку, и в теги файла.
+    title = repair((item.get("title") or "").strip())
     if not url or not title:
         return None
-    uploader = ((item.get("user") or {}).get("username") or "").strip()
+    uploader = repair(((item.get("user") or {}).get("username") or "").strip())
     artwork = item.get("artwork_url") or ""
 
     # Кто исполнитель, по убыванию доверия:

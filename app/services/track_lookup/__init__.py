@@ -137,7 +137,7 @@ async def search_candidates(query: str, limit: int | None = None) -> list[Candid
     if russian:
         soundcloud = await _search_soundcloud_variants(query, per_source)
         if _confident_count(query, soundcloud) >= settings.youtube_fallback_min_results:
-            return soundcloud
+            return _ordered(query, soundcloud)
         youtube = await asyncio.to_thread(_safe_search, search_youtube, query, per_source)
     else:
         # Латиница — западный репертуар: оба источника сразу и параллельно, время
@@ -148,7 +148,28 @@ async def search_candidates(query: str, limit: int | None = None) -> list[Candid
             asyncio.to_thread(_safe_search, search_youtube, query, per_source),
         )
     music = [item for item in _visible_candidates(query, youtube) if looks_like_music(item)]
-    return merge_candidates(soundcloud, music)
+    return _ordered(query, merge_candidates(soundcloud, music))
+
+
+def _ordered(query: str, candidates: list[Candidate]) -> list[Candidate]:
+    """Порядок выдачи для человека.
+
+    🔴 До 14.08 здесь не было ничего: список уходил в бот ровно таким, каким его
+    отдал SoundCloud, а весь модуль ranking (фонетика, популярность,
+    официальность, штрафы за slowed/reverb и биты) работал ТОЛЬКО на пути
+    «найди один лучший трек». То есть починки ранжирования, сделанные 12–13.08,
+    человек в списке не видел вовсе.
+
+    Как это выглядело на замере: по «мияги там ямакаси» первым стоял чужой
+    реаплоад с битой кодировкой в названии, а «Miyagi & Andy Panda — Yamakasi» с
+    16.7 млн прослушиваний — шестым.
+
+    Пустой результат ранжирования отдаём как есть, неотсортированным: приоритет
+    владельца — охват. Лучше показать сомнительное, чем пустой экран (то же
+    решение, что и в `find_track`).
+    """
+    ranked = rank_candidates(query, candidates)
+    return ranked or candidates
 
 
 async def _search_soundcloud_variants(query: str, limit: int) -> list[Candidate]:
