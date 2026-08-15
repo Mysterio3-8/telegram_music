@@ -100,26 +100,61 @@ def looks_like_music(candidate: Candidate) -> bool:
     """
     if (candidate.uploader or "").strip().endswith(_TOPIC_CHANNEL_SUFFIX):
         return True
+    # ⚠️ Разобранный исполнитель — это и есть признак «заголовок был подписан
+    # „Артист - Название“». Проверять тире в самом названии больше нельзя: с
+    # 14.08 мы это тире срезаем при разборе, и условие по title стало бы всегда
+    # ложным — YouTube выпал бы из выдачи целиком.
+    if candidate.artist:
+        return True
     return " - " in _DASH_RE.sub("-", candidate.title)
+
+
+def youtube_candidate_fields(title: str) -> tuple[str | None, str]:
+    """(исполнитель, название) для ролика YouTube — разбором ЗАГОЛОВКА.
+
+    Имя канала сюда не пускаем принципиально: у YouTube это «GOLDEN SOUND» или
+    «Sueta music», то есть заливщик, а не артист. Пусти мы его в `artist`,
+    сломался бы дедуп с SoundCloud — один трек считался бы двумя.
+
+    Зато сам заголовок почти всегда подписан «Kizaru - FAKE ID», и это
+    настоящий исполнитель. Без разбора он оставался пустым, и человек видел в
+    списке «Исполнитель — Kizaru - FAKE ID ❤️» вместо «Kizaru — FAKE ID».
+    """
+    from app.services.title_parser import parse_title
+
+    artist, clean = parse_title(title, "")
+    # ⚠️ parse_title без разделителя отдаёт не пустую строку, а «Unknown» — так
+    # он устроен для импорта, где исполнитель обязан быть чем-то заполнен. Нам
+    # нужно обратное: нет разделителя, значит исполнителя в заголовке не было, и
+    # выдумывать его не из чего. Пусто честнее, чем «Unknown» в кнопке.
+    if artist == "Unknown":
+        artist = ""
+    return (artist or None), (clean or title)
+
+
+def _youtube_candidate(entry) -> Candidate:
+    artist, title = youtube_candidate_fields(entry.title)
+    return Candidate(
+        source=SOURCE_YOUTUBE,
+        url=_WATCH_URL.format(video_id=entry.video_id),
+        title=title,
+        artist=artist,
+        duration=entry.duration,
+        # Канал — только в uploader: в artist его пускать нельзя, иначе имя
+        # канала попадёт в сопоставление и сломает дедуп с SoundCloud
+        uploader=entry.uploader or None,
+        cover_url=entry.cover_url or None,
+        # «Исполнитель - Topic» — автоматический канал, который YouTube
+        # заводит по поставке от дистрибьютора. Это официальный релиз по
+        # определению, в отличие от перезалива на обычном канале.
+        official=(entry.uploader or "").strip().endswith(_TOPIC_CHANNEL_SUFFIX),
+    )
 
 
 def search_youtube(query: str, limit: int = 5) -> list[Candidate]:
     """Кандидаты YouTube и YouTube Music (общая поисковая выдача yt-dlp)."""
     return [
-        Candidate(
-            source=SOURCE_YOUTUBE,
-            url=_WATCH_URL.format(video_id=entry.video_id),
-            title=entry.title,
-            duration=entry.duration,
-            # Канал — только в uploader: в artist его пускать нельзя, иначе имя
-            # канала попадёт в сопоставление и сломает дедуп с SoundCloud
-            uploader=entry.uploader or None,
-            cover_url=entry.cover_url or None,
-            # «Исполнитель - Topic» — автоматический канал, который YouTube
-            # заводит по поставке от дистрибьютора. Это официальный релиз по
-            # определению, в отличие от перезалива на обычном канале.
-            official=(entry.uploader or "").strip().endswith(_TOPIC_CHANNEL_SUFFIX),
-        )
+        _youtube_candidate(entry)
         for entry in search_videos(query, limit=limit, sleep_requests=0)
     ]
 

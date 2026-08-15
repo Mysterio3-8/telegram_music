@@ -274,7 +274,22 @@ def artist_affinity(query: str, candidate: Candidate) -> float:
         phonetic(w) for w in normalize_query(candidate.artist or "").split() if len(w) > 1
     ]
     if artist_words:
-        return sum(1 for w in artist_words if w in words) / len(artist_words)
+        # Берём ЛУЧШЕЕ из двух направлений, и это важно.
+        #
+        # Только «сколько слов артиста в запросе» наказывает длинные имена: по
+        # запросу «тейп» у «Big Baby Tape» совпадает одно слово из трёх (0.33),
+        # а у никому не известного артиста с именем ровно «Teyp» — одно из
+        # одного (1.0), и он выигрывает. Ровно это я и сломал первой версией.
+        #
+        # Только «сколько слов запроса в имени артиста» наказывает запросы с
+        # названием: по «макан назови её» у MACAN совпадает одно слово из трёх.
+        #
+        # Максимум из двух покрытий даёт единицу в обоих случаях, а спор двух
+        # одинаково подходящих артистов честно уходит к прослушиваниям.
+        artist_set = set(artist_words)
+        artist_side = sum(1 for w in artist_words if w in words) / len(artist_words)
+        query_side = sum(1 for w in words if w in artist_set) / len(words)
+        return max(artist_side, query_side)
 
     # Артист не разобран (частый случай у YouTube): ищем ведущее слово запроса в
     # названии и имени канала. Это догадка, а не факт, поэтому вес половинный.

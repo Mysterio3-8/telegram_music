@@ -35,12 +35,30 @@ def test_wrong_artist_loses_despite_perfect_title_match():
     assert rank_candidates("макан назови её", [stranger, wanted])[0] is wanted
 
 
+def test_long_artist_name_not_punished():
+    """Регресс, который я сам внёс первой версией: по «тейп» никому не
+    известный артист с именем ровно «Teyp» обходил Big Baby Tape, потому что у
+    того совпадало одно слово из трёх. Спор одинаково подходящих артистов должен
+    решаться прослушиваниями, а не длиной имени."""
+    from app.services.track_lookup.ranking import artist_affinity
+
+    bbt = _c("Gimme The Loot", artist="Big Baby Tape", popularity=3_000_000)
+    obscure = _c("Circles", artist="Teyp", popularity=300)
+
+    assert artist_affinity("тейп", bbt) == 1.0
+    assert artist_affinity("тейп", obscure) == 1.0
+    assert rank_candidates("тейп", [obscure, bbt])[0] is bbt
+
+
 def test_partial_artist_match_counts_partially():
     from app.services.track_lookup.ranking import artist_affinity
 
     band = _c("Дышать", artist="Три дня дождя")
     assert artist_affinity("три дня дождя дышать", band) == 1.0
-    assert 0 < artist_affinity("три дождя", band) < 1.0
+    # Запрос целиком укладывается в имя артиста — это тоже полное попадание
+    assert artist_affinity("три дождя", band) == 1.0
+    # А вот чужой артист не должен получать ничего
+    assert artist_affinity("три дня дождя дышать", _c("Дышать", artist="Zivert")) == 0.0
 
 
 def test_unparsed_artist_falls_back_to_title_and_channel():
