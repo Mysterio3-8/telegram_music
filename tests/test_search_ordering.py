@@ -9,11 +9,61 @@ from app.services.track_lookup import _ordered
 from app.services.track_lookup.ranking import Candidate, rank_candidates
 
 
-def _c(title, artist=None, official=False, popularity=0, duration=180, source="soundcloud"):
+def _c(title, artist=None, official=False, popularity=0, duration=180, source="soundcloud",
+       uploader=None):
     return Candidate(
         source=source, url=f"https://x/{title}", title=title, duration=duration,
-        artist=artist, official=official, popularity=popularity,
+        artist=artist, official=official, popularity=popularity, uploader=uploader,
     )
+
+
+# --- имя исполнителя в запросе ------------------------------------------------
+
+
+def test_wrong_artist_loses_despite_perfect_title_match():
+    """Живой случай: по «макан назови её» первым стоял «Вадим Мулерман — Ты
+    назови её Мариной». Текстово он подходит отлично, а то, что исполнитель
+    совсем чужой, не учитывалось никак: artist_hit требует, чтобы ВЕСЬ запрос
+    был подстрокой имени артиста, и на запросах «артист + название» он молчит."""
+    from app.services.track_lookup.ranking import artist_affinity
+
+    stranger = _c("Марина (Ты назови её Мариной)", artist="Вадим Мулерман", official=True)
+    wanted = _c("Назови её", artist="MACAN", popularity=500_000)
+
+    assert artist_affinity("макан назови её", stranger) == 0.0
+    assert artist_affinity("макан назови её", wanted) == 1.0
+    assert rank_candidates("макан назови её", [stranger, wanted])[0] is wanted
+
+
+def test_partial_artist_match_counts_partially():
+    from app.services.track_lookup.ranking import artist_affinity
+
+    band = _c("Дышать", artist="Три дня дождя")
+    assert artist_affinity("три дня дождя дышать", band) == 1.0
+    assert 0 < artist_affinity("три дождя", band) < 1.0
+
+
+def test_unparsed_artist_falls_back_to_title_and_channel():
+    """У кандидатов YouTube исполнитель часто не разобран. Ведущее слово запроса
+    в названии или канале — это догадка, поэтому вес половинный."""
+    from app.services.track_lookup.ranking import artist_affinity
+
+    yt = _c("Macan - Плачь, но не звони", uploader="GOLDEN SOUND")
+    assert artist_affinity("макан плачь", yt) == 0.5
+    assert artist_affinity("зиверт", yt) == 0.0
+
+
+# --- неизвестная популярность не приговор -------------------------------------
+
+
+def test_unknown_popularity_does_not_punish_youtube():
+    """YouTube прослушивания не отдаёт вовсе: ноль там значит «неизвестно», а не
+    «никто не слушал». Считая его настоящим нулём, мы отнимали у каждого
+    кандидата YouTube треть веса — выше 0.6 он не поднимался в принципе."""
+    exact_yt = _c("Fake ID", artist="Kizaru", source="youtube", popularity=0)
+    parody_sc = _c("кизяка фейк айди", artist="neejvz", official=True, popularity=41)
+
+    assert rank_candidates("кизару фейк айди", [parody_sc, exact_yt])[0] is exact_yt
 
 
 # --- официальность больше не неоспорима ------------------------------------------
