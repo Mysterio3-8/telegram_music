@@ -21,7 +21,6 @@ from app.services.track_lookup.providers import (
 )
 from app.services.title_quality import is_probably_junk
 from app.services.track_lookup.ranking import (
-    artist_affinity,
     Candidate,
     best_match,
     is_track_duration,
@@ -153,8 +152,21 @@ async def search_candidates(query: str, limit: int | None = None) -> list[Candid
     return _ordered(query, merge_candidates(soundcloud, music))
 
 
-# Насколько сильно имя артиста должно совпасть, чтобы считать «он в выдаче есть».
-_ARTIST_PRESENT = 0.9
+def _artist_named_in(candidate: Candidate, lead: str) -> bool:
+    """Есть ли в имени исполнителя кандидата то самое слово, которым человек
+    назвал артиста.
+
+    ⚠️ Проверять через `artist_affinity` нельзя, и это стоило мне одного
+    промаха: она симметрична и считает попаданием ЛЮБОЕ пересечение с запросом.
+    По «нурминский вечно молодой» среди 60 кандидатов нашёлся артист, чьё имя
+    совпало со словом из НАЗВАНИЯ, — проверка решила, что артист в выдаче есть,
+    и доспрос не сработал. Нужен именно названный человеком корень.
+    """
+    from app.services.track_lookup.ranking import normalize_query, phonetic
+
+    target = phonetic(normalize_query(lead))
+    artist_words = {phonetic(w) for w in normalize_query(candidate.artist or "").split()}
+    return bool(target) and target in artist_words
 
 
 async def _add_artist_fallback(
@@ -183,7 +195,7 @@ async def _add_artist_fallback(
     lead = words[0]
     if len(lead) < 4:
         return found  # «the», «dj», «на» — не имя, а шум
-    if any(artist_affinity(query, item) >= _ARTIST_PRESENT for item in found):
+    if any(_artist_named_in(item, lead) for item in found):
         return found  # артист в выдаче есть, доспрашивать нечего
 
     extra = await _search_soundcloud_variants(lead, limit)
