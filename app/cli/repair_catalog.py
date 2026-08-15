@@ -61,10 +61,15 @@ async def _summary(session) -> None:
     waiting = await session.scalar(
         select(func.count()).select_from(Track).where(Track.tg_file_id.is_(None))
     ) or 0
-    print(f"всего треков:                 {total}")
-    print(f"минтил старый бот (мертвы):   {suspect}")
-    print(f"минтил нынешний бот (живы):   {alive}")
-    print(f"id уже погашен, ждут ремонта: {waiting}")
+    # ⚠️ «Заведены до переезда», а не «мертвы»: восстановленный трек сохраняет
+    # свой created_at, и отличить его от нетронутого по базе нельзя. Поэтому
+    # число здесь не убывает по ходу ремонта — это счётчик подозрений, а не
+    # поломок. Настоящую живость показывает только get_file, и она проверяется
+    # у каждого трека перед скачиванием.
+    print(f"всего треков:                  {total}")
+    print(f"заведены до переезда:          {suspect}  (живость проверяем поштучно)")
+    print(f"заведены нынешним ботом:       {alive}")
+    print(f"id погашен, ждут ремонта:      {waiting}")
 
 
 async def _is_dead(bot: Bot, file_id: str) -> bool:
