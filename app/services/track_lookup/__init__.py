@@ -21,6 +21,7 @@ from app.services.track_lookup.providers import (
 )
 from app.services.title_quality import is_probably_junk
 from app.services.track_lookup.ranking import (
+    artist_affinity,
     Candidate,
     best_match,
     is_track_duration,
@@ -136,6 +137,7 @@ async def search_candidates(query: str, limit: int | None = None) -> list[Candid
     russian = is_russian_repertoire(query)
     if russian:
         soundcloud = await _search_soundcloud_variants(query, per_source)
+        soundcloud = await _add_artist_fallback(query, soundcloud, per_source)
         if _confident_count(query, soundcloud) >= settings.youtube_fallback_min_results:
             return _ordered(query, soundcloud)
         youtube = await asyncio.to_thread(_safe_search, search_youtube, query, per_source)
@@ -149,6 +151,46 @@ async def search_candidates(query: str, limit: int | None = None) -> list[Candid
         )
     music = [item for item in _visible_candidates(query, youtube) if looks_like_music(item)]
     return _ordered(query, merge_candidates(soundcloud, music))
+
+
+# Насколько сильно имя артиста должно совпасть, чтобы считать «он в выдаче есть».
+_ARTIST_PRESENT = 0.9
+
+
+async def _add_artist_fallback(
+    query: str, found: list[Candidate], limit: int
+) -> list[Candidate]:
+    """Доспрашивает источник по ОДНОМУ имени артиста, если его в выдаче нет.
+
+    🔴 Живой случай 14.08: по «нурминский вечно молодой» приходило 60 кандидатов
+    и НИ ОДНОГО Нурминского — первым стоял «Face — на вечно молодой». По одному
+    же слову «нурминский» источник отдаёт 86 его треков. То есть трек мы теряли
+    не на ранжировании, а на самом поиске: SoundCloud ищет буквально, и пара
+    «артист + название», которой у него нет ровно в таком виде, не находит
+    ничего от этого артиста вовсе.
+
+    Стоит это одного дополнительного запроса (около 0.2 сек) и платится ТОЛЬКО в
+    промахе: если артист в выдаче уже есть, мы сюда не заходим.
+
+    ⚠️ Первое слово считаем именем артиста не потому, что это правило языка, а
+    потому, что так пишут люди: «нурминский вечно молодой», «макан назови её»,
+    «кизару фейк айди». Ошибиться не страшно — лишние кандидаты просто уйдут вниз
+    при ранжировании.
+    """
+    words = query.split()
+    if len(words) < 2:
+        return found  # запрос из одного слова и так ищется как артист
+    lead = words[0]
+    if len(lead) < 4:
+        return found  # «the», «dj», «на» — не имя, а шум
+    if any(artist_affinity(query, item) >= _ARTIST_PRESENT for item in found):
+        return found  # артист в выдаче есть, доспрашивать нечего
+
+    extra = await _search_soundcloud_variants(lead, limit)
+    if not extra:
+        return found
+    logger.info("Поиск «%s»: артиста не было в выдаче, добрал по «%s»", query, lead)
+    return merge_candidates(found, extra)
 
 
 def _ordered(query: str, candidates: list[Candidate]) -> list[Candidate]:

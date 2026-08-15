@@ -18,7 +18,6 @@ def track_card_keyboard(
     ctx: str,
     in_library: bool,
     bot_username: str,
-    is_admin: bool = False,
 ) -> InlineKeyboardMarkup:
     """ctx — откуда открыта карточка: lib.{page} | pl.{playlist_id}.{page} | srch.
 
@@ -47,10 +46,10 @@ def track_card_keyboard(
     # а его Telegram сохраняет своими средствами — кнопка дублировала клиент.
     # Обработчик ta:file оставлен рабочим ради кнопок в старых сообщениях.
     rows.append([InlineKeyboardButton(text=t("card.share"), url=share_url(track, bot_username))])
-    if is_admin:
-        rows.append(
-            [InlineKeyboardButton(text=t("card.edit_admin"), callback_data=f"ta:edit:{track.id}:{ctx}")]
-        )
+    # «Редактировать (админ)» убрана 14.08 (решение владельца): метаданные и так
+    # приходят разобранными из источника, а править их вручную по одному треку
+    # смысла нет. Обработчик ta:edit оставлен рабочим ради кнопок в старых
+    # сообщениях — тем же способом, что «Скачать» и «Назад» выше.
     # «Назад» убрана (решение владельца 11.08): карточка — это само аудиосообщение
     # в ленте чата, возвращаться из него некуда, а кнопка лишь удаляла присланный
     # трек. Обработчик back:del оставлен рабочим ради кнопок в старых сообщениях.

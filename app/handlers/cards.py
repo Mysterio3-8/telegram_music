@@ -11,7 +11,6 @@ from app.db.models import Track, User
 from app.handlers.common import format_duration
 from app.handlers.delivery import send_track_audio
 from app.keyboards.track_card import track_card_keyboard
-from app.services.users import is_admin
 
 
 def build_track_card_text(track: Track) -> str:
@@ -22,9 +21,14 @@ def build_track_card_text(track: Track) -> str:
     )
 
 
-async def build_card_keyboard(message: Message, track: Track, ctx: str, in_library: bool, telegram_id: int):
+async def build_card_keyboard(
+    message: Message, track: Track, ctx: str, in_library: bool, telegram_id: int | None = None
+):
+    """telegram_id больше не нужен: единственной кнопкой, зависевшей от
+    пользователя, была админская правка трека, убранная 14.08. Параметр
+    оставлен, чтобы не переписывать пять мест вызова ради ничего."""
     me = await message.bot.me()
-    return track_card_keyboard(track, ctx, in_library, me.username, is_admin(telegram_id))
+    return track_card_keyboard(track, ctx, in_library, me.username)
 
 
 async def show_track_card(
