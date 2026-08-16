@@ -11,6 +11,7 @@ import asyncio
 import logging
 
 from aiogram import Bot, Dispatcher, F
+from aiogram.exceptions import TelegramUnauthorizedError
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from app.config import settings
@@ -57,14 +58,40 @@ async def on_any_callback(callback: CallbackQuery) -> None:
     await callback.answer()
 
 
-async def main() -> None:
+# Код выхода «токен не годится». Systemd получает его из
+# RestartPreventExitStatus и перестаёт поднимать юнит.
+EXIT_BAD_TOKEN = 78  # EX_CONFIG
+
+
+async def main() -> int:
     if not settings.moved_bot_token:
-        raise SystemExit("MOVED_BOT_TOKEN не задан — старый бот не нужен")
+        logging.warning("MOVED_BOT_TOKEN не задан — старому боту нечего делать")
+        return EXIT_BAD_TOKEN
     bot = Bot(token=settings.moved_bot_token)
-    # Меню и команды старого бота больше не актуальны — чистим, чтобы не путать
-    await bot.delete_my_commands()
-    await dp.start_polling(bot)
+    try:
+        # Меню и команды старого бота больше не актуальны — чистим, чтобы не путать
+        await bot.delete_my_commands()
+        await dp.start_polling(bot)
+    except TelegramUnauthorizedError:
+        # 🔴 Найдено 16.08: токен старого бота отозван, и юнит падал на этой самой
+        # строке 511 раз подряд. `Restart=always` тут не защита, а генератор
+        # нагрузки: каждый заход — полный импорт Python с aiogram, то есть
+        # четверть единственного ядра, и так круглосуточно. Ровно этим 01.08
+        # `tg-music-worker` довёл load average до 15.
+        #
+        # Отозванный токен сам не починится, поэтому выходим кодом, по которому
+        # systemd прекращает попытки, и пишем в журнал, что делать человеку.
+        logging.error(
+            "MOVED_BOT_TOKEN отозван — Telegram отвечает Unauthorized. "
+            "Указатель «мы переехали» работать не будет, пока в .env не появится "
+            "действующий токен старого бота. Юнит больше не перезапускается."
+        )
+        return EXIT_BAD_TOKEN
+    finally:
+        await bot.session.close()
+    return 0
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    raise SystemExit(asyncio.run(main()))
