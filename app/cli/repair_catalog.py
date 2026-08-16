@@ -25,7 +25,7 @@
 import argparse
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from aiogram import Bot
 from sqlalchemy import func, select
@@ -50,6 +50,12 @@ BOT_SWAP = datetime(2026, 8, 5)
 RECHECK_AFTER_DAYS = 14
 
 
+def _utcnow() -> datetime:
+    """Наивный UTC — как в services/premium.py: SQLite хранит datetime без
+    таймзоны, и сравнение aware с naive упало бы прямо в ночном прогоне."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
 async def _summary(session) -> None:
     """Показывает масштаб: сколько треков заведомо мертво, сколько живо."""
     total = await session.scalar(select(func.count()).select_from(Track)) or 0
@@ -71,7 +77,7 @@ async def _summary(session) -> None:
     # число здесь не убывает по ходу ремонта — это счётчик подозрений, а не
     # поломок. Настоящую живость показывает только get_file, и она проверяется
     # у каждого трека перед скачиванием.
-    stale = datetime.utcnow() - timedelta(days=RECHECK_AFTER_DAYS)
+    stale = _utcnow() - timedelta(days=RECHECK_AFTER_DAYS)
     touched = await session.scalar(
         select(func.count()).select_from(Track).where(Track.repair_checked_at.is_not(None))
     ) or 0
@@ -128,7 +134,7 @@ async def _pick(session, limit: int, popular: bool) -> list[Track]:
     растёт, пока прогон не начнёт целиком перебирать одно и то же, продолжая
     рапортовать о работе.
     """
-    stale = datetime.utcnow() - timedelta(days=RECHECK_AFTER_DAYS)
+    stale = _utcnow() - timedelta(days=RECHECK_AFTER_DAYS)
     stmt = select(Track).where(
         (Track.tg_file_id.is_(None)) | (Track.created_at < BOT_SWAP),
         # NULL — ещё ни разу не трогали, такие идут в первую очередь
@@ -181,7 +187,7 @@ async def run(limit: int, apply: bool, popular: bool) -> int:
                     # Отметка нужна и здесь, иначе живой трек, заведённый до
                     # переезда, попадал бы в выборку каждую ночь до скончания
                     # века: условие «заведён до переезда» истинно навсегда.
-                    fresh.repair_checked_at = datetime.utcnow()
+                    fresh.repair_checked_at = _utcnow()
                     await session.commit()
                     skipped += 1
                     continue
@@ -190,7 +196,7 @@ async def run(limit: int, apply: bool, popular: bool) -> int:
                 # Ставим ДО попытки: если процесс убьют посреди скачивания (а на
                 # этом боксе такое бывало), трек не должен снова оказаться первым
                 # в очереди на завтра.
-                fresh.repair_checked_at = datetime.utcnow()
+                fresh.repair_checked_at = _utcnow()
                 await session.commit()
                 try:
                     ok = await repair_track_file_id(session, bot, fresh)
