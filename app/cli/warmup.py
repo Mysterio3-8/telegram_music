@@ -20,6 +20,7 @@ import argparse
 import asyncio
 import logging
 import time
+from datetime import datetime, timedelta, timezone
 
 from aiogram import Bot
 from sqlalchemy import func, select
@@ -42,14 +43,22 @@ logger = logging.getLogger("warmup")
 DELAY_SECONDS = 4.0
 
 
-async def popular_queries(limit: int) -> list[str]:
-    """Реальные запросы людей, самые частые сверху — их и греем в первую очередь."""
+async def popular_queries(limit: int, days: int = 0) -> list[str]:
+    """Реальные запросы людей, самые частые сверху — их и греем в первую очередь.
+
+    `days` ограничивает окно последними сутками/неделей. Нужно это ночному
+    таймеру: за всё время топ запросов почти не меняется, и прогрев, запускаемый
+    каждую ночь, после первой же ночи перебирал бы один и тот же список, находя
+    «уже в базе». Окно двигается вместе со вкусами — греется то, что ищут сейчас.
+    0 — без ограничения (ручной прогон, как было).
+    """
     async with session_factory() as session:
+        stmt = select(SearchQuery.query, func.count().label("hits"))
+        if days:
+            since = datetime.now(timezone.utc) - timedelta(days=days)
+            stmt = stmt.where(SearchQuery.created_at >= since)
         rows = await session.execute(
-            select(SearchQuery.query, func.count().label("hits"))
-            .group_by(SearchQuery.query)
-            .order_by(func.count().desc())
-            .limit(limit)
+            stmt.group_by(SearchQuery.query).order_by(func.count().desc()).limit(limit)
         )
         return [row[0] for row in rows]
 
@@ -173,12 +182,19 @@ def main() -> None:
         "--per-artist", type=int, default=20, help="сколько треков брать у артиста (с --artists)"
     )
     parser.add_argument("--limit", type=int, default=0, help="ограничить число запросов из файла")
+    parser.add_argument(
+        "--days",
+        type=int,
+        default=0,
+        metavar="N",
+        help="с --popular: считать только запросы за последние N дней (0 — за всё время)",
+    )
     parser.add_argument("--delay", type=float, default=DELAY_SECONDS, help="пауза между треками, сек")
     parser.add_argument("--dry", action="store_true", help="только показать, ничего не качать")
     args = parser.parse_args()
 
     if args.popular:
-        queries = asyncio.run(popular_queries(args.popular))
+        queries = asyncio.run(popular_queries(args.popular, args.days))
     elif args.artists:
         names = read_queries(args.artists, args.limit)
         queries = asyncio.run(artist_queries(names, args.per_artist))

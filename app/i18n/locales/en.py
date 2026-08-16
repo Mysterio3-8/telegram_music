@@ -104,6 +104,7 @@ MESSAGES: dict[str, str] = {
     ),
     "quick.stale": "This list is out of date — search again.",
     "quick.results_title": "🎵 Tracks for «{query}»",
+    "quick.results_artist_only": "🎵 No exact match for «{query}». Here are tracks by {artist}:",
     "quick.searching": "🔎 Searching…",
     "quick.sending": "Sending…",
     "quick.busy": "The download service is busy, try again in a minute",

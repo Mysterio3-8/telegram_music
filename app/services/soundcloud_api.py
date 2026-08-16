@@ -217,7 +217,12 @@ def _to_candidate(item: dict) -> Candidate | None:
         artist=artist or None,
         uploader=uploader or None,
         cover_url=artwork or None,
-        popularity=int(item.get("playback_count") or 0),
+        # Отсутствие поля и ноль в поле — разное: первое значит «SoundCloud не
+        # сказал», второе «сказал: ноль». Ранжирование обходится с ними
+        # по-разному (см. Candidate.popularity), поэтому не схлопываем.
+        popularity=(
+            int(item["playback_count"]) if item.get("playback_count") is not None else None
+        ),
         official=official,
         hq_available=hq_available,
     )

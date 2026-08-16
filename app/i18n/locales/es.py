@@ -106,6 +106,7 @@ MESSAGES: dict[str, str] = {
     ),
     "quick.stale": "Esta lista ha caducado — busca de nuevo.",
     "quick.results_title": "🎵 Pistas para «{query}»",
+    "quick.results_artist_only": "🎵 Sin coincidencia exacta para «{query}». Pistas de {artist}:",
     "quick.searching": "🔎 Buscando…",
     "quick.sending": "Enviando…",
     "quick.busy": "El servicio de descarga está ocupado, inténtalo en un minuto",

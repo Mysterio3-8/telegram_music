@@ -17,6 +17,19 @@
       content="Поиск треков, личная библиотека, плейлисты и плеер внутри Telegram."
     />
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <!--
+      Сборщика у Mini App нет, модули едут как есть. Браузер узнаёт о зависимости
+      только прочитав того, кто её импортирует: сначала main.js, потом его 45
+      импортов, потом их импорты — три круга ожидания вместо одного.
+      modulepreload сообщает о самых глубоких заранее, они грузятся параллельно
+      с main.js. Перечислены только те, что нужны ПЕРВОМУ экрану: список ради
+      полноты сделал бы хуже — preload всего конкурирует за канал.
+    -->
+    <link rel="modulepreload" href="/src/main.js" />
+    <link rel="modulepreload" href="/src/state.js" />
+    <link rel="modulepreload" href="/src/api.js" />
+    <link rel="modulepreload" href="/src/i18n.js" />
+    <link rel="modulepreload" href="/src/prefs.js" />
     <link rel="stylesheet" href="/src/styles/base.css" />
     <link rel="stylesheet" href="/src/styles/components.css" />
     <link rel="stylesheet" href="/src/styles/screens.css" />

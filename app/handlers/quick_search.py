@@ -67,7 +67,23 @@ def _fetch_in_progress(user_id: int, url: str) -> bool:
 
 
 
-def _results_title(query: str) -> str:
+def _results_title(query: str, candidates: list[Candidate] | None = None) -> str:
+    """Заголовок списка. Честный, когда самой песни в источниках не нашлось.
+
+    🔴 Жалоба владельца «три запроса врут» (замер 16.08): «макан назови её»,
+    «литвиненко эйфория», «нурминский вечно молодой» отдают верного исполнителя,
+    но другую песню. Разбор показал, что виноват не поиск — этих песен нет НИ на
+    SoundCloud, НИ на YouTube; проверено по каждой отдельным запросом к обоим
+    источникам. Отдавать в такой ситуации треки artist'а — разумно (иначе экран
+    пустой), а вот подписывать их «Треки по запросу «макан назови её»» — нет:
+    именно эта подпись и превращает честную замену в обман.
+    """
+    from app.services.track_lookup import _title_found
+
+    if candidates and not _title_found(query, candidates):
+        artist = (candidates[0].artist or "").strip()
+        if artist:
+            return t("quick.results_artist_only", query=query, artist=artist)
     return t("quick.results_title", query=query)
 
 
@@ -160,7 +176,7 @@ async def quick_search(message: Message, state: FSMContext) -> None:
         **{_QUERY_KEY: query, _ITEMS_KEY: [asdict(item) for item in candidates]}
     )
     await status.edit_text(
-        _results_title(query), reply_markup=quick_search_keyboard(candidates, page=1)
+        _results_title(query, candidates), reply_markup=quick_search_keyboard(candidates, page=1)
     )
 
 
@@ -173,7 +189,7 @@ async def quick_search_page(callback: CallbackQuery, state: FSMContext) -> None:
         return
     page = max(1, min(page, total_pages(candidates)))
     await callback.message.edit_text(
-        _results_title(query), reply_markup=quick_search_keyboard(candidates, page)
+        _results_title(query, candidates), reply_markup=quick_search_keyboard(candidates, page)
     )
     await callback.answer()
 

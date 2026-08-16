@@ -106,6 +106,7 @@ MESSAGES: dict[str, str] = {
     ),
     "quick.stale": "Cette liste est périmée — relance la recherche.",
     "quick.results_title": "🎵 Morceaux pour « {query} »",
+    "quick.results_artist_only": "🎵 Aucune correspondance exacte pour « {query} ». Morceaux de {artist} :",
     "quick.searching": "🔎 Je cherche…",
     "quick.sending": "Envoi…",
     "quick.busy": "Le service de téléchargement est occupé, réessaie dans une minute",

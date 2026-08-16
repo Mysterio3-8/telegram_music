@@ -105,6 +105,7 @@ MESSAGES: dict[str, str] = {
     ),
     "quick.stale": "Bu liste eskidi — yeniden ara.",
     "quick.results_title": "🎵 «{query}» için parçalar",
+    "quick.results_artist_only": "🎵 «{query}» için tam eşleşme yok. {artist} parçaları:",
     "quick.searching": "🔎 Arıyorum…",
     "quick.sending": "Gönderiliyor…",
     "quick.busy": "İndirme servisi meşgul, bir dakika sonra dene",

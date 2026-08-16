@@ -107,7 +107,12 @@ def _visible_candidates(query: str, candidates: list[Candidate]) -> list[Candida
     # сыром порядке SoundCloud, и «фанат кот10 — Martine Rose» оказывался выше
     # «Big Baby Tape — NOBODY». Порядок внутри хвоста: официальные, потом по
     # прослушиваниям.
-    rest.sort(key=lambda item: (0 if item.official else 1, -popularity_weight(item.popularity)))
+    # `or 0` намеренно: здесь популярность нужна лишь как порядок внутри хвоста,
+    # и кандидат без счётчика (YouTube) идёт в конец — в отличие от основного
+    # ранжирования, где «неизвестно» получает нейтральную середину.
+    rest.sort(
+        key=lambda item: (0 if item.official else 1, -popularity_weight(item.popularity or 0))
+    )
     return ranked + rest
 
 
@@ -137,7 +142,8 @@ async def search_candidates(query: str, limit: int | None = None) -> list[Candid
     if russian:
         soundcloud = await _search_soundcloud_variants(query, per_source)
         soundcloud = await _add_artist_fallback(query, soundcloud, per_source)
-        if _confident_count(query, soundcloud) >= settings.youtube_fallback_min_results:
+        enough = _confident_count(query, soundcloud) >= settings.youtube_fallback_min_results
+        if enough and _title_found(query, soundcloud):
             return _ordered(query, soundcloud)
         youtube = await asyncio.to_thread(_safe_search, search_youtube, query, per_source)
     else:
@@ -262,6 +268,40 @@ def _confident_count(query: str, candidates: list[Candidate]) -> int:
     вовсе. Нужного трека человек не видел при формально полной выдаче.
     """
     return sum(1 for item in candidates if match_score(query, item) >= CONFIDENT_MATCH)
+
+
+# Какую долю названия должен покрыть хоть один кандидат, чтобы считать песню
+# найденной. Половина: у названий из двух-трёх слов человек часто помнит не все.
+_TITLE_FOUND = 0.5
+
+
+def _title_found(query: str, candidates: list[Candidate]) -> bool:
+    """Нашёл ли хоть кто-то ту САМУЮ песню, а не просто треки нужного артиста.
+
+    🔴 Дыра, найденная замером 16.08. Быстрый путь «SoundCloud набрал достаточно
+    — YouTube не спрашиваем» считал достаточность по `match_score`, а тот высоко
+    оценивает ЛЮБОЙ трек нужного исполнителя: имя артиста входит в строку, с
+    которой идёт сравнение. Вместе с добором по имени артиста
+    (`_add_artist_fallback`) это давало замкнутый круг: SoundCloud не нашёл
+    песню → мы добираем 90 других треков этого артиста → счётчик уверенных
+    совпадений перевалил за порог → YouTube не спрашивается. То есть источник,
+    который мог знать песню, молчал ровно в том случае, ради которого он и нужен.
+
+    Живой пример: «макан назови её» — SoundCloud отдавал ДВА кандидата, оба
+    чужие (Вадим Мулерман), добор приносил 90 треков MACAN, и YouTube не
+    спрашивался ни разу.
+
+    Запрос без названия («кизару», «тейп») считается покрытым: `title_hit` в нём
+    возвращает 1.0 — спрашивать с кандидата нечего, и гонять YouTube незачем.
+
+    ⚠️ Цена — секунда-полторы на запрос, и платится она ТОЛЬКО в промахе: когда
+    песня найдена, быстрый путь работает как прежде. Скорость — приоритет
+    владельца, поэтому проверка узкая: не «мало кандидатов», а «названия нет ни
+    у одного».
+    """
+    from app.services.track_lookup.ranking import title_hit
+
+    return any(title_hit(query, item) >= _TITLE_FOUND for item in candidates)
 
 
 __all__ = [

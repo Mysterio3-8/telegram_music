@@ -9,7 +9,7 @@ from app.services.track_lookup import _ordered
 from app.services.track_lookup.ranking import Candidate, rank_candidates
 
 
-def _c(title, artist=None, official=False, popularity=0, duration=180, source="soundcloud",
+def _c(title, artist=None, official=False, popularity=None, duration=180, source="soundcloud",
        uploader=None):
     return Candidate(
         source=source, url=f"https://x/{title}", title=title, duration=duration,
@@ -110,13 +110,38 @@ def test_official_still_wins_when_titles_match_equally():
 
 
 def test_unknown_popularity_does_not_punish_youtube():
-    """YouTube прослушивания не отдаёт вовсе: ноль там значит «неизвестно», а не
-    «никто не слушал». Считая его настоящим нулём, мы отнимали у каждого
-    кандидата YouTube треть веса — выше 0.6 он не поднимался в принципе."""
-    exact_yt = _c("Fake ID", artist="Kizaru", source="youtube", popularity=0)
+    """YouTube прослушивания не отдаёт вовсе: отсутствие счётчика значит
+    «неизвестно», а не «никто не слушал». Считая его настоящим нулём, мы
+    отнимали у каждого кандидата YouTube треть веса — выше 0.6 он не поднимался
+    в принципе."""
+    exact_yt = _c("Fake ID", artist="Kizaru", source="youtube")  # popularity=None
     parody_sc = _c("кизяка фейк айди", artist="neejvz", official=True, popularity=41)
 
+    assert exact_yt.popularity is None
     assert rank_candidates("кизару фейк айди", [parody_sc, exact_yt])[0] is exact_yt
+
+
+def test_unknown_popularity_is_not_an_advantage():
+    """🔴 Замер 16.08, единственный промах прогона: по «тейп» первой шла турецкая
+    группа «Teyp» — её имя короче и совпадает точнее (счёт 0.85), а прослушиваний
+    источник не сообщил. Лечение «пусть долю популярности заберёт похожесть»
+    (score * 0.9) подставляло вместо неизвестной популярности сам счёт кандидата,
+    и незнание превращалось в преимущество: 0.765 против 0.756 у «Big Baby Tape
+    — NOBODY» с полутора миллионами прослушиваний."""
+    obscure_yt = _c("Circles", artist="Teyp", source="youtube")  # счётчика нет
+    known_sc = _c("NOBODY", artist="Aarne, Toxi$, Big Baby Tape", popularity=1_526_219)
+
+    assert rank_candidates("тейп", [obscure_yt, known_sc])[0] is known_sc
+
+
+def test_reported_zero_is_not_unknown():
+    """Ноль, который источник назвал, — это ноль, а не «неизвестно». Мёртвая
+    загрузка не должна получать ту же нейтральную середину, что и кандидат
+    YouTube без счётчика."""
+    dead_sc = _c("Панелька", artist="Хаски", popularity=0)
+    unknown_yt = _c("Панелька", artist="Хаски", source="youtube")
+
+    assert rank_candidates("хаски панелька", [dead_sc, unknown_yt])[0] is unknown_yt
 
 
 # --- официальность больше не неоспорима ------------------------------------------
@@ -197,3 +222,63 @@ def test_looks_broken_detects_only_suspicious():
     assert not looks_broken("Рядом быть")
     assert not looks_broken("Plain ASCII title")
     assert not looks_broken("")
+
+
+# --- быстрый путь не должен затыкать YouTube ---------------------------------------
+
+
+def test_title_found_sees_the_actual_song():
+    """Быстрый путь пропускает YouTube, только если песня действительно нашлась."""
+    from app.services.track_lookup import _title_found
+
+    right = _c("Валим", artist="Нурминский", popularity=5_725_778)
+    assert _title_found("нурминский валим", [right])
+
+
+def test_title_found_false_when_only_artist_matched():
+    """🔴 Замкнутый круг, найденный замером 16.08: SoundCloud не нашёл песню,
+    добор по имени принёс 90 других треков артиста, счётчик уверенных совпадений
+    перевалил порог — и YouTube не спрашивался ровно там, где был нужен."""
+    from app.services.track_lookup import _title_found
+
+    others = [
+        _c("Май", artist="Macan", popularity=67_133),
+        _c("Брат", artist="Macan", popularity=88_813),
+        _c("IVL", artist="Macan", popularity=56_958),
+    ]
+    assert not _title_found("макан назови её", others)
+
+
+def test_title_found_true_for_bare_artist_query():
+    """В запросе «кизару» названия нет вовсе — гонять YouTube незачем."""
+    from app.services.track_lookup import _title_found
+
+    assert _title_found("кизару", [_c("Яд", artist="KIZARU", popularity=100)])
+
+
+def test_results_title_is_honest_when_song_is_missing():
+    """Жалоба «врут»: песни нет ни в одном источнике, но заголовок обещал
+    «Треки по запросу «макан назови её»» над списком других треков MACAN."""
+    from app.handlers.quick_search import _results_title
+
+    others = [_c("Май", artist="Macan", popularity=67_133)]
+    title = _results_title("макан назови её", others)
+
+    assert "Точного совпадения" in title
+    assert "Macan" in title
+
+
+def test_results_title_normal_when_song_is_found():
+    from app.handlers.quick_search import _results_title
+
+    found = [_c("Валим", artist="Нурминский", popularity=5_725_778)]
+    assert _results_title("нурминский валим", found).startswith("🎵 Треки по запросу")
+
+
+def test_results_title_normal_for_bare_artist_query():
+    """«кизару» — названия в запросе нет, подменять заголовок не на что."""
+    from app.handlers.quick_search import _results_title
+
+    assert _results_title("кизару", [_c("Яд", artist="KIZARU", popularity=10)]).startswith(
+        "🎵 Треки по запросу"
+    )

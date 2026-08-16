@@ -120,6 +120,7 @@ MESSAGES: dict[str, str] = {
     ),
     "quick.stale": "Список устарел — повторите поиск.",
     "quick.results_title": "🎵 Треки по запросу «{query}»",
+    "quick.results_artist_only": "🎵 Точного совпадения по «{query}» не нашли. Вот треки {artist}:",
     "quick.searching": "🔎 Ищу…",
     "quick.sending": "Отправляю…",
     "quick.busy": "Сервис загрузки занят, попробуйте через минуту",
