@@ -266,6 +266,16 @@ class Settings(BaseSettings):
     # Куда падают обращения (chat_id). Пусто → личка первого администратора.
     support_chat_id: int = 0
 
+    # Кому идут сообщения сторожа. Владелец 15.08 попросил не звать его на каждое
+    # срабатывание — их разбирает дежурный админ. Значение уже жило в .env, но
+    # читал его только deploy/healthcheck.sh; здесь оно становится доступно и
+    # проверкам на Python. Пусто → первый администратор, как раньше.
+    health_alert_chat: int = 0
+
+    @property
+    def health_alert_id(self) -> int | None:
+        return self.health_alert_chat or self.first_admin_id
+
     @property
     def admin_id_set(self) -> set[int]:
         return {int(part) for part in self.admin_ids.split(",") if part.strip().isdigit()}
