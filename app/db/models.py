@@ -118,6 +118,14 @@ class Track(Base):
     # Сетевая ошибка статус НЕ меняет: она временная, и следующий человек должен
     # попробовать снова, а не упереться в вечное «оригинала нет».
     hq_status: Mapped[str | None] = mapped_column(String(16))
+    # Когда ремонтом каталога этим треком ЗАНИМАЛИСЬ последний раз — неважно с
+    # каким исходом. Без этой отметки ночной прогон каждый раз брал одни и те же
+    # первые сто треков: условие «заведён до переезда на нового бота» не
+    # перестаёт выполняться никогда (created_at при восстановлении сохраняется),
+    # а неудачная попытка не оставляла следа вовсе. Замер 16.08 за первую же
+    # ночь: 11 треков из 100 оказались уже живыми, 17 не нашлись — 28% бюджета
+    # ушло в повтор, и доля растёт до полной остановки ремонта.
+    repair_checked_at: Mapped[datetime | None] = mapped_column()
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
     __table_args__ = (
@@ -136,6 +144,14 @@ class Track(Base):
             "file_size",
             sqlite_where=text("storage_path IS NOT NULL"),
             postgresql_where=text("storage_path IS NOT NULL"),
+        ),
+        # Ночной ремонт отсеивает по нему тех, кем недавно занимались. Частичный
+        # по той же причине: у почти всего каталога здесь NULL.
+        Index(
+            "ix_tracks_repair_checked",
+            "repair_checked_at",
+            sqlite_where=text("repair_checked_at IS NOT NULL"),
+            postgresql_where=text("repair_checked_at IS NOT NULL"),
         ),
     )
 

@@ -25,7 +25,7 @@
 import argparse
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from aiogram import Bot
 from sqlalchemy import func, select
@@ -43,6 +43,11 @@ PAUSE_SECONDS = 4.0
 # Дата переезда на @muz_damn_bot. Всё, что заведено раньше, минтил СТАРЫЙ бот,
 # и его идентификаторы нынешнему не принадлежат.
 BOT_SWAP = datetime(2026, 8, 5)
+
+# Через сколько дней возвращаться к треку, которым уже занимались. Две недели:
+# «не нашлось в источниках» — состояние временное (каталоги SoundCloud и YouTube
+# пополняются), но пробовать каждую ночь одно и то же значит не чинить остальное.
+RECHECK_AFTER_DAYS = 14
 
 
 async def _summary(session) -> None:
@@ -66,10 +71,24 @@ async def _summary(session) -> None:
     # число здесь не убывает по ходу ремонта — это счётчик подозрений, а не
     # поломок. Настоящую живость показывает только get_file, и она проверяется
     # у каждого трека перед скачиванием.
+    stale = datetime.utcnow() - timedelta(days=RECHECK_AFTER_DAYS)
+    touched = await session.scalar(
+        select(func.count()).select_from(Track).where(Track.repair_checked_at.is_not(None))
+    ) or 0
+    fresh_queue = await session.scalar(
+        select(func.count()).select_from(Track).where(
+            (Track.tg_file_id.is_(None)) | (Track.created_at < BOT_SWAP),
+            (Track.repair_checked_at.is_(None)) | (Track.repair_checked_at < stale),
+        )
+    ) or 0
     print(f"всего треков:                  {total}")
     print(f"заведены до переезда:          {suspect}  (живость проверяем поштучно)")
     print(f"заведены нынешним ботом:       {alive}")
     print(f"id погашен, ждут ремонта:      {waiting}")
+    print(f"уже занимались:                {touched}")
+    # Именно это число должно убывать от ночи к ночи. Если оно стоит на месте —
+    # прогон крутится вхолостую, и раньше заметить это было нечем.
+    print(f"осталось в очереди:            {fresh_queue}")
 
 
 async def _is_dead(bot: Bot, file_id: str) -> bool:
@@ -100,9 +119,20 @@ async def _pick(session, limit: int, popular: bool) -> list[Track]:
 
     popular=True — сперва те, которые люди действительно слушают: чинить в
     первую очередь мёртвый груз незачем.
+
+    🔴 И пропускаем тех, кем занимались недавно. Без этого условия очередь не
+    двигалась вовсе: «заведён до переезда» истинно навсегда (восстановление
+    сохраняет `created_at`), а неудачная попытка не оставляла следа. Замер 16.08
+    за первую же ночь работы таймера: из 100 обработанных 11 оказались уже
+    живыми и 17 не нашлись в источниках — 28% бюджета ушло в повтор, и доля
+    растёт, пока прогон не начнёт целиком перебирать одно и то же, продолжая
+    рапортовать о работе.
     """
+    stale = datetime.utcnow() - timedelta(days=RECHECK_AFTER_DAYS)
     stmt = select(Track).where(
-        (Track.tg_file_id.is_(None)) | (Track.created_at < BOT_SWAP)
+        (Track.tg_file_id.is_(None)) | (Track.created_at < BOT_SWAP),
+        # NULL — ещё ни разу не трогали, такие идут в первую очередь
+        (Track.repair_checked_at.is_(None)) | (Track.repair_checked_at < stale),
     )
     if popular:
         plays = (
@@ -148,10 +178,19 @@ async def run(limit: int, apply: bool, popular: bool) -> int:
                 # Идентификатор ещё жив — трогать нечего. Так отсеиваются 262
                 # трека, заминченные уже новым ботом, и всё, что вылечилось само.
                 if fresh.tg_file_id and not await _is_dead(bot, fresh.tg_file_id):
+                    # Отметка нужна и здесь, иначе живой трек, заведённый до
+                    # переезда, попадал бы в выборку каждую ночь до скончания
+                    # века: условие «заведён до переезда» истинно навсегда.
+                    fresh.repair_checked_at = datetime.utcnow()
+                    await session.commit()
                     skipped += 1
                     continue
                 fresh.tg_file_id = None
                 fresh.meta_synced = False
+                # Ставим ДО попытки: если процесс убьют посреди скачивания (а на
+                # этом боксе такое бывало), трек не должен снова оказаться первым
+                # в очереди на завтра.
+                fresh.repair_checked_at = datetime.utcnow()
                 await session.commit()
                 try:
                     ok = await repair_track_file_id(session, bot, fresh)
