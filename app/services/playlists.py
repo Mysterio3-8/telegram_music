@@ -63,6 +63,32 @@ async def get_playlist_tracks_page(
     return list((await session.scalars(stmt)).all())
 
 
+# Потолок выдачи плейлиста целиком. Mini App показывает подборку одним экраном,
+# и это её предел; заодно граница на случай, когда кто-то соберёт огромный
+# плейлист (лимит импорта сейчас снят владельцем — 0 значит «без лимита»).
+PLAYLIST_TRACKS_CAP = 1000
+
+
+async def get_playlist_tracks_all(
+    session: AsyncSession, playlist_id: int, cap: int = PLAYLIST_TRACKS_CAP
+) -> list[Track]:
+    """Все треки плейлиста ОДНИМ запросом.
+
+    ⚠️ Раньше API собирал их циклом по страницам в пять штук: плейлист на
+    полтысячи треков превращался в СОТНЮ последовательных запросов к SQLite за
+    один вызов, и всё это на единственном ядре. Постранично правильно листать
+    экран в боте, но не собирать список целиком.
+    """
+    stmt = (
+        select(Track)
+        .join(PlaylistTrack, PlaylistTrack.track_id == Track.id)
+        .where(PlaylistTrack.playlist_id == playlist_id)
+        .order_by(PlaylistTrack.position)
+        .limit(cap)
+    )
+    return list((await session.scalars(stmt)).all())
+
+
 async def add_track_to_playlist(session: AsyncSession, playlist_id: int, track_id: int) -> bool:
     """Возвращает False, если трек уже есть в плейлисте."""
     existing = await session.get(PlaylistTrack, (playlist_id, track_id))

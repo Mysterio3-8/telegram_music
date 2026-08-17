@@ -42,10 +42,17 @@ export function renderTrackList(tracks, { context, state } = {}) {
     .join("");
 }
 
+// Названия и имена приходят из источников (SoundCloud, YouTube) и от других
+// людей, то есть их пишет посторонний. Экранируем ВСЕ пять символов, включая
+// одинарную кавычку: без неё подстановка внутри url('…') в атрибуте style
+// (карточка артиста, баннер) позволяла выйти из скобок и подсунуть свой CSS.
+// Выйти из самого атрибута было нельзя — двойная кавычка закрывалась, — но
+// оставлять дыру в один символ незачем.
 export function escapeHtml(text) {
   return String(text)
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
 }

@@ -116,3 +116,44 @@ def test_premium_status_defaults_free(api):
     response = client.get("/premium/status", headers=auth_header(token))
     assert response.status_code == 200
     assert response.json()["active"] is False
+
+
+def test_playlist_tracks_use_one_query(api, monkeypatch):
+    """⚠️ API собирал плейлист циклом по страницам в ПЯТЬ штук: подборка на
+    полтысячи треков превращалась в сотню последовательных запросов к SQLite за
+    один вызов, и всё это на единственном ядре."""
+    from app.services import playlists
+
+    calls = {"n": 0}
+    original = playlists.get_playlist_tracks_all
+
+    async def counted(*args, **kwargs):
+        calls["n"] += 1
+        return await original(*args, **kwargs)
+
+    import app.api.routers.me as me_router
+
+    monkeypatch.setattr(me_router, "get_playlist_tracks_all", counted)
+
+    client, token = api
+    created = client.post(
+        "/playlist", json={"title": "Большая"}, headers={"Authorization": f"Bearer {token}"}
+    )
+    assert created.status_code in (200, 201)
+    playlist_id = created.json()["id"]
+
+    response = client.get(
+        f"/playlists/{playlist_id}/tracks", headers={"Authorization": f"Bearer {token}"}
+    )
+
+    assert response.status_code == 200
+    assert calls["n"] == 1
+
+
+def test_playlist_of_another_user_is_hidden(api):
+    """Прямой id чужой подборки не должен её открывать."""
+    client, token = api
+    response = client.get(
+        "/playlists/999999/tracks", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert response.status_code == 404

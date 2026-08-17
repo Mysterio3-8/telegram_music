@@ -65,7 +65,7 @@ from app.services.playlists import (
     create_playlist,
     get_all_playlists,
     get_playlist,
-    get_playlist_tracks_page,
+    get_playlist_tracks_all,
 )
 from app.services.artists import artist_tracks, list_artists
 from app.services.recommendations import build_mix, instrumental_mix
@@ -274,15 +274,7 @@ async def playlist_tracks(
     playlist = await get_playlist(session, playlist_id)
     if playlist is None or playlist.user_id != user.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Плейлист не найден")
-    tracks: list = []
-    page = 1
-    while True:
-        batch = await get_playlist_tracks_page(session, playlist_id, page)
-        tracks += batch
-        if len(batch) < settings.page_size:
-            break
-        page += 1
-    return [track_out(t) for t in tracks]
+    return [track_out(t) for t in await get_playlist_tracks_all(session, playlist_id)]
 
 
 @router.get("/curators", response_model=list[PlaylistSummaryOut])
@@ -325,15 +317,7 @@ async def curated_playlist_tracks(
     owner = await session.get(User, playlist.user_id)
     if owner is None or owner.telegram_id not in settings.admin_id_set:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Подборка не найдена")
-    tracks: list = []
-    page = 1
-    while True:
-        batch = await get_playlist_tracks_page(session, playlist_id, page)
-        tracks += batch
-        if len(batch) < settings.page_size:
-            break
-        page += 1
-    return [track_out(t) for t in tracks]
+    return [track_out(t) for t in await get_playlist_tracks_all(session, playlist_id)]
 
 
 @router.get("/artists", response_model=list[ArtistOut])
