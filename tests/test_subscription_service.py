@@ -47,9 +47,46 @@ async def test_check_channel_membership_false_for_left():
     assert await check_channel_membership(bot, 1, "@chan") is False
 
 
-async def test_check_channel_membership_fail_closed_on_api_error():
+async def test_api_error_is_not_an_answer():
+    """None, а не False: «спросить не удалось» — это не «не подписан».
+    Разница видна в кэше (см. тесты ниже), для самого решения оба не пускают."""
     bot = FakeBot(raise_error=True)
-    assert await check_channel_membership(bot, 1, "@chan") is False
+    assert await check_channel_membership(bot, 1, "@chan") is None
+
+
+async def test_api_error_does_not_poison_the_cache(session):
+    """🔴 Раньше сбой Telegram записывался в кэш как «не подписан», и подписанный
+    человек оказывался заперт во всём боте на весь TTL, ничего не сделав."""
+    user = await make_user(session)
+
+    await is_channel_subscribed(session, FakeBot(raise_error=True), user.id,
+                                user.telegram_id, "@chan")
+
+    assert await session.get(SubscriptionStatus, (user.id, "@chan")) is None
+    # Telegram ожил — человек проходит сразу, без ожидания истечения кэша
+    ok = await is_channel_subscribed(session, FakeBot(status=ChatMemberStatus.MEMBER),
+                                     user.id, user.telegram_id, "@chan")
+    assert ok is True
+
+
+async def test_api_error_keeps_previous_verdict(session):
+    """Прежний вердикт основан на реальном ответе Telegram — ему и верим."""
+    user = await make_user(session)
+    await is_channel_subscribed(session, FakeBot(status=ChatMemberStatus.MEMBER),
+                                user.id, user.telegram_id, "@chan")
+
+    still = await is_channel_subscribed(session, FakeBot(raise_error=True), user.id,
+                                        user.telegram_id, "@chan", force=True)
+
+    assert still is True
+
+
+async def test_api_error_without_cache_is_fail_closed(session):
+    """Ничего не знаем и спросить не смогли — не пускаем. Это не изменилось."""
+    user = await make_user(session)
+    allowed = await is_channel_subscribed(session, FakeBot(raise_error=True), user.id,
+                                          user.telegram_id, "@chan")
+    assert allowed is False
 
 
 async def test_is_channel_subscribed_uses_cache_within_ttl(session):

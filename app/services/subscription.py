@@ -25,13 +25,23 @@ _SUBSCRIBED_STATUSES = {
 }
 
 
-async def check_channel_membership(bot: Bot, telegram_id: int, channel: str) -> bool:
-    """Живой запрос к Telegram. Ошибка API → считаем неподписанным (fail-closed)."""
+async def check_channel_membership(bot: Bot, telegram_id: int, channel: str) -> bool | None:
+    """Живой запрос к Telegram. True/False — ответ Telegram, None — спросить не удалось.
+
+    ⚠️ None и False — РАЗНОЕ. «Не подписан» это факт, а сетевой сбой, 429 или
+    500 у Telegram — отсутствие ответа. Раньше и то и другое было False, и этот
+    False попадал в кэш на весь TTL: подписанный человек оказывался заперт во
+    всём боте до истечения кэша, ничего при этом не сделав. На проде за 7 дней
+    таких сбоев не было ни одного, но цена срабатывания слишком велика.
+
+    Для НЕМЕДЛЕННОГО решения None по-прежнему означает «не пускаем» (fail-closed
+    остаётся), разница только в том, что несостоявшийся ответ не запоминается.
+    """
     try:
         member = await bot.get_chat_member(chat_id=channel, user_id=telegram_id)
     except TelegramAPIError:
         logger.warning("getChatMember недоступен channel=%s user=%s", channel, telegram_id, exc_info=True)
-        return False
+        return None
     if member.status in _SUBSCRIBED_STATUSES:
         return True
     if isinstance(member, ChatMemberRestricted):
@@ -74,8 +84,8 @@ async def is_channel_subscribed(
     force: bool = False,
 ) -> bool:
     """Кэшированная (TTL) или свежая проверка одного канала."""
+    cached = await _get_cached(session, user_id, channel)
     if not force:
-        cached = await _get_cached(session, user_id, channel)
         if cached is not None:
             ttl = timedelta(minutes=settings.subscription_cache_ttl_minutes)
             checked_at = cached.checked_at
@@ -84,9 +94,18 @@ async def is_channel_subscribed(
             if datetime.now(timezone.utc) - checked_at < ttl:
                 return cached.is_subscribed
 
-    is_subscribed = await check_channel_membership(bot, telegram_id, channel)
-    await _store(session, user_id, channel, is_subscribed)
-    return is_subscribed
+    answer = await check_channel_membership(bot, telegram_id, channel)
+    if answer is None:
+        # Спросить не удалось — это не ответ «не подписан», и запоминать его
+        # нельзя: иначе одна сетевая ошибка запирала бы подписанного человека во
+        # всём боте на весь TTL кэша, а сделать он ничего не мог бы.
+        # Если прежний вердикт есть — верим ему, он основан на реальном ответе.
+        # Если нет — на это обращение не пускаем (fail-closed сохраняется),
+        # но и в базу ничего не пишем: следующая попытка спросит заново.
+        return cached.is_subscribed if cached is not None else False
+
+    await _store(session, user_id, channel, answer)
+    return answer
 
 
 async def is_fully_subscribed(
