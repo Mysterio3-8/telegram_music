@@ -66,19 +66,47 @@ async def count_user_uploads(session: AsyncSession, user_id: int) -> int:
 async def find_duplicate(
     session: AsyncSession, title: str, artist: str, duration: int
 ) -> Track | None:
-    stmt = (
+    """Тот же трек по «исполнитель — название» и длительности. None — такого нет.
+
+    🔴 Сверка идёт по `search_index`, а НЕ по `lower(title)`, и это принципиально.
+    SQLite `lower()` понижает только ASCII — известная грабля этого проекта. Питон
+    приводил запрос к «зеркало», а база оставалась с «Зеркало», и сравнение не
+    совпадало НИКОГДА, если в названии кириллица. Дедуп при этом молчал, а не
+    падал, поэтому выглядело всё исправным.
+
+    Замер 16.08: 140 пар «артист+название» с дублями, у 61 в названии кириллица;
+    131 дубль заведён уже после перехода на живой поиск. Живой пример — шесть
+    копий «yarik — Зеркало» с ОДНОЙ И ТОЙ ЖЕ ссылкой источника: воспроизведение
+    прежнего запроса на этих данных возвращало None.
+
+    `search_index` собирается в Питоне (`build_search_index`), то есть уже
+    понижен и транслитерирован; на проде он есть у 7492 треков из 7493.
+    """
+    from app.services.search_index import build_search_index
+
+    window = Track.duration.between(
+        duration - DUPLICATE_DURATION_TOLERANCE,
+        duration + DUPLICATE_DURATION_TOLERANCE,
+    )
+    found = await session.scalar(
+        select(Track)
+        .where(Track.search_index == build_search_index(artist, title), window)
+        .limit(1)
+    )
+    if found is not None:
+        return found
+    # Фолбэк на прежнее сравнение — для строк, у которых search_index не заполнен
+    # (легаси), и как страховка на случай, если формат индекса когда-нибудь
+    # изменится: молча перестать ловить дубликаты хуже, чем поискать дважды.
+    return await session.scalar(
         select(Track)
         .where(
             func.lower(Track.title) == title.strip().lower(),
             func.lower(Track.artist) == artist.strip().lower(),
-            Track.duration.between(
-                duration - DUPLICATE_DURATION_TOLERANCE,
-                duration + DUPLICATE_DURATION_TOLERANCE,
-            ),
+            window,
         )
         .limit(1)
     )
-    return await session.scalar(stmt)
 
 
 async def find_by_fingerprint(session: AsyncSession, fingerprint: str) -> Track | None:

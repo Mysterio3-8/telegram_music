@@ -224,9 +224,32 @@ async def import_user_track(
 
 
 async def find_existing_track(
-    session: AsyncSession, fingerprint: str | None, title: str, artist: str, duration: int
+    session: AsyncSession,
+    fingerprint: str | None,
+    title: str,
+    artist: str,
+    duration: int,
+    source_url: str | None = None,
 ) -> Track | None:
-    """Дедуп-проверка без побочных эффектов: сначала по отпечатку, потом по метаданным."""
+    """Дедуп-проверка без побочных эффектов: по ссылке источника, отпечатку, метаданным.
+
+    ⚠️ Ссылка проверяется ЗДЕСЬ, а не только перед скачиванием. Раньше сверка по
+    `source_url` жила лишь в `import_candidate` — до закачки, то есть за восемь
+    секунд до вставки. Этого окна хватало: когда 11.08 подняли остановленные
+    воркеры, накопившаяся очередь пошла разом, и одна и та же ссылка успевала
+    провериться несколькими задачами прежде, чем первая из них вставила строку.
+    Живой след — шесть копий одного трека, заведённых с 02:16 до 02:36.
+
+    Отпечаток у кандидатов из поиска намеренно не считается (fpcalc декодирует
+    трек целиком, а человек ждёт), поэтому ссылка тут — единственная точная
+    проверка, и обходится она одним индексированным запросом.
+    """
+    if source_url:
+        from app.services.search import find_track_by_source_url
+
+        existing = await find_track_by_source_url(session, source_url)
+        if existing is not None:
+            return existing
     if fingerprint:
         existing = await find_by_fingerprint(session, fingerprint)
         if existing is not None:
@@ -297,7 +320,9 @@ async def import_via_telegram_mint(
     Bot API) и кладёт архивную копию в хранилище: стрим Mini App не упирается в
     лимит Bot API 20 МБ. Общая точка для YouTube- и Telegram-канал-импортёров.
     Возвращает (трек, создан_ли_новый)."""
-    track = await find_existing_track(session, fingerprint, title, artist, duration)
+    track = await find_existing_track(
+        session, fingerprint, title, artist, duration, source_url=source_url
+    )
     if track is not None:
         # Дозаписываем ссылку старым трекам: следующий человек, ткнувший в того же
         # кандидата в выдаче, получит трек мгновенно, а не через новое скачивание.
