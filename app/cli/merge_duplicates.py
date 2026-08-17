@@ -57,19 +57,69 @@ async def _plays(session) -> dict[int, int]:
     return {track_id: n for track_id, n in rows}
 
 
-def _group_key(track: Track) -> tuple | None:
-    """Ключ группировки. None — трек в слияние не участвует.
+def _group_keys(track: Track) -> list[tuple]:
+    """Все ключи, по которым трек может оказаться дубликатом. Пусто — не участвует.
 
-    Ссылка источника — точный ключ. `search_index` — нормализованный в Питоне
-    «артист название», по нему и сверяется дедуп при импорте; длительность
-    округляем в корзины, чтобы допуск работал как в импорте.
+    Ключей ДВА, и оба нужны одновременно. Ссылка источника — точный ключ, но у
+    части копий её нет: первая заливка прошла до появления колонки, а повторные
+    её уже записали. `search_index` — нормализованный в Питоне «артист
+    название», по нему сверяется дедуп при импорте; длительность округляем в
+    корзины, чтобы допуск работал как там же.
+
+    ⚠️ Брать только ссылку, если она есть, нельзя: живой пример — «КИШЛАК — Угу»,
+    где самая старая копия (id=32007) ссылки не имеет, а три остальные имеют.
+    По одному ключу старая осталась бы висеть отдельным дубликатом.
     """
+    keys: list[tuple] = []
     if track.source_url:
-        return ("url", track.source_url)
+        keys.append(("url", track.source_url))
     if track.search_index and track.duration:
         bucket = round(track.duration / (DUPLICATE_DURATION_TOLERANCE * 2 or 1))
-        return ("meta", track.search_index, bucket)
-    return None
+        keys.append(("meta", track.search_index, bucket))
+    return keys
+
+
+def _build_groups(tracks: list[Track]) -> list[list[Track]]:
+    """Собирает копии в группы, связывая их ЧЕРЕЗ ОБА ключа разом.
+
+    Объединение транзитивное: если A и B — одна ссылка, а B и C — одни
+    метаданные, то все трое одна запись. Иначе копии распадались бы по признаку,
+    который у них случайно совпал, и часть оставалась бы висеть отдельно.
+    """
+    parent: dict[int, int] = {}
+
+    def find(x: int) -> int:
+        while parent.setdefault(x, x) != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def union(a: int, b: int) -> None:
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[ra] = rb
+
+    by_key: dict[tuple, int] = {}
+    for track in tracks:
+        keys = _group_keys(track)
+        if not keys:
+            continue
+        find(track.id)
+        for key in keys:
+            if key in by_key:
+                union(track.id, by_key[key])
+            else:
+                by_key[key] = track.id
+
+    clusters: dict[int, list[Track]] = defaultdict(list)
+    index = {t.id: t for t in tracks}
+    for track_id in list(parent):
+        track = index.get(track_id)
+        if track is not None:
+            clusters[find(track_id)].append(track)
+    groups = [g for g in clusters.values() if len(g) > 1]
+    groups.sort(key=lambda g: -len(g))
+    return groups
 
 
 def _keeper(group: list[Track], plays: dict[int, int]) -> Track:
@@ -162,12 +212,7 @@ async def run(apply: bool, limit: int | None) -> int:
         tracks = list((await session.scalars(select(Track))).all())
         plays = await _plays(session)
 
-        groups: dict[tuple, list[Track]] = defaultdict(list)
-        for track in tracks:
-            key = _group_key(track)
-            if key is not None:
-                groups[key].append(track)
-        dupes = [g for g in groups.values() if len(g) > 1]
+        dupes = _build_groups(tracks)
         dupes.sort(key=lambda g: -len(g))
         if limit:
             dupes = dupes[:limit]

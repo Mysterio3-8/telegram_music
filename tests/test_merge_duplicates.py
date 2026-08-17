@@ -6,7 +6,7 @@
 """
 import pytest
 
-from app.cli.merge_duplicates import _group_key, _keeper, _merge_group
+from app.cli.merge_duplicates import _build_groups, _group_keys, _keeper, _merge_group
 from app.db.models import (
     Lyrics,
     Playlist,
@@ -54,16 +54,34 @@ def test_oldest_wins_when_equal():
 def test_same_source_url_is_one_group():
     a = _t(1, url="https://sc/x")
     b = _t(2, artist="другой", title="другое", url="https://sc/x")
-    assert _group_key(a) == _group_key(b)
+    assert len(_build_groups([a, b])) == 1
 
 
 def test_different_duration_is_not_one_group():
-    assert _group_key(_t(1, duration=261)) != _group_key(_t(2, duration=218))
+    assert _build_groups([_t(1, duration=261), _t(2, duration=218)]) == []
 
 
 def test_track_without_index_and_url_is_skipped():
     bare = Track(id=1, artist="A", title="B", duration=100)
-    assert _group_key(bare) is None
+    assert _group_keys(bare) == []
+
+
+def test_copy_without_url_joins_its_group():
+    """🔴 Живой случай «КИШЛАК — Угу»: самая старая копия ссылки не имеет, три
+    остальные имеют. Группировка по одному ключу оставила бы старую висеть
+    отдельным дубликатом."""
+    old = _t(1, url=None)
+    a = _t(2, url="https://sc/ugu")
+    b = _t(3, url="https://sc/ugu")
+
+    groups = _build_groups([old, a, b])
+    assert len(groups) == 1 and len(groups[0]) == 3
+
+
+def test_unrelated_tracks_stay_apart():
+    a = _t(1, artist="Хаски", title="Панелька", duration=200)
+    b = _t(2, artist="Кизару", title="Яд", duration=150)
+    assert _build_groups([a, b]) == []
 
 
 # --- перенос связей ----------------------------------------------------------------
