@@ -146,3 +146,58 @@ async def test_machine_burst_blocks_for_a_minute(clock):
     assert await _call(middleware, _FakeMessage(), 1, calls) is None
     clock["now"] += throttling.RAPID_BLOCK_SECONDS
     assert await _call(middleware, _FakeMessage(), 1, calls) == "handled"
+
+
+# --- счётчики не растут вечно ------------------------------------------------------
+
+
+async def test_idle_users_are_swept_out(clock):
+    """⚠️ Очереди меток чистились сами, а КЛЮЧИ не удалялись никогда: каждый, кто
+    хоть раз написал боту, навсегда оставлял по записи в шести структурах. При
+    37 пользователях незаметно, но бот растёт вирально, и на сотне тысяч это
+    десятки мегабайт, которые процесс уже не отдаст — на боксе, где воркер
+    трижды падал по OOM."""
+    middleware = ThrottlingMiddleware()
+    calls: list[int] = []
+
+    for user_id in range(1, 21):
+        await _call(middleware, _FakeMessage(), user_id, calls)
+    assert len(middleware._last_action) == 20
+
+    # Прошло больше срока хранения, пришёл новый человек — старые уходят
+    clock["now"] += throttling.RETENTION_SECONDS + throttling.SWEEP_EVERY_SECONDS
+    await _call(middleware, _FakeMessage(), 999, calls)
+
+    assert list(middleware._last_action) == [999]
+    assert not middleware._history.keys() - {999}
+    assert middleware._warned == set()
+
+
+async def test_sweep_keeps_active_users(clock):
+    """Уборка не должна снимать блокировку с того, кто флудит прямо сейчас."""
+    middleware = ThrottlingMiddleware()
+    calls: list[int] = []
+
+    await _call(middleware, _FakeMessage(), 7, calls)
+    clock["now"] += 0.1
+    await _call(middleware, _FakeMessage(), 7, calls)  # слишком быстро → блокировка
+    assert middleware._blocked_until.get(7, 0) > clock["now"]
+
+    # Уборка через её интервал, но человек активен — запись должна уцелеть
+    clock["now"] += throttling.SWEEP_EVERY_SECONDS + 1
+    blocked_before = middleware._blocked_until.get(7)
+    middleware._sweep(clock["now"])
+    assert middleware._blocked_until.get(7) == blocked_before
+
+
+async def test_sweep_runs_rarely(clock):
+    """Перебор словарей в горячем пути на каждое сообщение — лишние такты."""
+    middleware = ThrottlingMiddleware()
+    calls: list[int] = []
+
+    await _call(middleware, _FakeMessage(), 1, calls)
+    first_sweep = middleware._last_sweep
+    clock["now"] += 1.0
+    await _call(middleware, _FakeMessage(), 2, calls)
+
+    assert middleware._last_sweep == first_sweep

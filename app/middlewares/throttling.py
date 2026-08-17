@@ -48,6 +48,13 @@ CHAT_BURST_LIMIT = 30
 CHAT_BURST_WINDOW = 60.0
 CHAT_BLOCK_SECONDS = 30.0
 
+# Уборка счётчиков. RETENTION с запасом больше самого длинного окна и самой
+# длинной паузы (RAPID_BLOCK_SECONDS = 60), поэтому выброшенная запись повлиять
+# на решение уже не могла бы. Реже — копили бы лишнее, чаще — тратили бы такты
+# на перебор словарей в горячем пути.
+SWEEP_EVERY_SECONDS = 300.0
+RETENTION_SECONDS = 600.0
+
 
 class ThrottlingMiddleware(BaseMiddleware):
     def __init__(self) -> None:
@@ -59,6 +66,37 @@ class ThrottlingMiddleware(BaseMiddleware):
         # то же, и второй лимит там означал бы двойное наказание за то же самое.
         self._chat_history: dict[int, deque[float]] = defaultdict(deque)
         self._chat_blocked_until: dict[int, float] = {}
+        self._last_sweep = time.monotonic()
+
+    def _sweep(self, now: float) -> None:
+        """Выбрасывает тех, кто давно ничего не делал.
+
+        ⚠️ Очереди меток чистятся сами, а вот КЛЮЧИ раньше не удалялись никогда:
+        каждый, кто хоть раз написал боту, навсегда оставлял по записи в шести
+        структурах. При нынешних 37 пользователях это незаметно, но бот растёт
+        вирально (инлайн в любом чате, рефералка), и на сотне тысяч это
+        десятки мегабайт, которые процесс уже не отдаст. На боксе с 961 МБ, где
+        воркер трижды падал по OOM, такой рост — вопрос времени.
+
+        Держим только то, что ещё может повлиять на решение: всё старше
+        RETENTION уже не влияет ни на одно окно.
+        """
+        if now - self._last_sweep < SWEEP_EVERY_SECONDS:
+            return
+        self._last_sweep = now
+        cutoff = now - RETENTION_SECONDS
+
+        for key in [k for k, stamp in self._last_action.items() if stamp < cutoff]:
+            self._last_action.pop(key, None)
+            self._warned.discard(key)
+        for key in [k for k, until in self._blocked_until.items() if until < cutoff]:
+            self._blocked_until.pop(key, None)
+        for key in [k for k, h in self._history.items() if not h or h[-1] < cutoff]:
+            self._history.pop(key, None)
+        for key in [k for k, h in self._chat_history.items() if not h or h[-1] < cutoff]:
+            self._chat_history.pop(key, None)
+        for key in [k for k, until in self._chat_blocked_until.items() if until < cutoff]:
+            self._chat_blocked_until.pop(key, None)
 
     def _chat_is_flooding(self, chat_id: int, now: float) -> bool:
         """Ведро на весь чат. True — группа шумит, пропускать не надо."""
@@ -90,6 +128,7 @@ class ThrottlingMiddleware(BaseMiddleware):
 
         user_id = tg_user.id
         now = time.monotonic()
+        self._sweep(now)
 
         # Групповой лимит проверяем ДО личного: в чате шумит не человек, а
         # компания, и гасить надо её целиком. Молча, без предупреждения —
