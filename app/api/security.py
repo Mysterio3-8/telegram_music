@@ -9,6 +9,15 @@ import jwt
 from app.config import settings
 
 
+# Сколько живёт initData. Подпись Telegram бессрочна сама по себе, поэтому срок
+# задаём мы. Сутки, а не час: Mini App получает initData один раз при открытии и
+# переиспользует её, когда истекает JWT (api.js делает повторный вход при 401).
+# Час отрезал бы человека, который держит приложение открытым дольше, — а
+# ограничить окно повтора надо, потому что без него перехваченная строка годна
+# вечно. Совпадает с рекомендацией Telegram.
+INIT_DATA_TTL_SECONDS = 24 * 3600
+
+
 def validate_init_data(init_data: str) -> dict | None:
     """Проверяет подпись Telegram WebApp initData. Возвращает данные пользователя или None."""
     try:
@@ -24,6 +33,18 @@ def validate_init_data(init_data: str) -> dict | None:
     secret_key = hmac.new(b"WebAppData", settings.bot_token.encode(), hashlib.sha256).digest()
     computed = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
     if not hmac.compare_digest(computed, received_hash):
+        return None
+
+    # 🔴 Свежесть. Подпись подтверждает, что строку выдал Telegram, но НЕ говорит
+    # когда. Без этой проверки перехваченная initData (лог, скриншот, чужое
+    # устройство) остаётся годной навсегда: по ней бесконечно выпускаются токены
+    # на чужой аккаунт. Проверка обязана идти ПОСЛЕ сверки подписи — иначе
+    # auth_date можно было бы подделать.
+    auth_date = parsed.get("auth_date", "")
+    if not auth_date.isdigit():
+        return None
+    age = datetime.now(timezone.utc).timestamp() - int(auth_date)
+    if age > INIT_DATA_TTL_SECONDS:
         return None
 
     user_raw = parsed.get("user")
