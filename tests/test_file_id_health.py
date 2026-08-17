@@ -8,7 +8,7 @@
 import pytest
 from aiogram.exceptions import TelegramBadRequest
 
-from app.db.models import Instrumental, Track
+from app.db.models import Instrumental, Track, User
 from app.services import file_id_health
 from app.services.file_id_health import (
     bury_dead_tracks,
@@ -131,3 +131,44 @@ async def test_instrumentals_are_filtered_but_never_buried():
     assert dead == [minus]
     # bury_dead_tracks к ним не применяется — id остаётся на месте
     assert minus.tg_file_id == "dead"
+
+
+# --- выдача трека: мёртвый id лечится в ОБЕИХ ветках --------------------------------
+
+
+@pytest.mark.asyncio
+async def test_delivery_repairs_dead_id_without_archive(session, monkeypatch):
+    """🔴 Ветка «байты недоступны» отправляла файл БЕЗ перехвата ошибки. Трек с
+    meta_synced=False (метаданные правил админ) и мёртвым id ронял обработчик:
+    человек получал общую ошибку, а восстановление никто не ставил — то есть
+    при следующем обращении повторялось то же самое."""
+    from app.handlers import delivery
+
+    track = Track(
+        id=1, artist="Артист", title="Трек", duration=180,
+        tg_file_id="dead", meta_synced=False, storage_path=None,
+    )
+    user = User(telegram_id=777)
+    session.add_all([track, user])
+    await session.commit()
+
+    scheduled = []
+
+    async def fake_repair(sess, trk, chat_id):
+        scheduled.append(trk.id)
+
+    monkeypatch.setattr(delivery, "_schedule_repair", fake_repair)
+
+    class DeadBot:
+        async def send_audio(self, *a, **kw):
+            raise TelegramBadRequest(method=None, message="wrong file identifier")
+
+        async def download(self, *a, **kw):
+            raise TelegramBadRequest(method=None, message="wrong file identifier")
+
+    result = await delivery.send_track_audio(
+        DeadBot(), chat_id=1, session=session, user=user, track=track
+    )
+
+    assert result is None
+    assert scheduled == [1]

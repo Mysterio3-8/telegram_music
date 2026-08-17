@@ -102,9 +102,19 @@ async def send_track_audio(
                 await session.commit()
         elif track.tg_file_id:
             # Байты недоступны (файл >20 МБ, архив пуст) — отдаём как есть, это лучше отказа
-            message = await bot.send_audio(
-                chat_id, track.tg_file_id, caption=caption, reply_markup=reply_markup
-            )
+            try:
+                message = await bot.send_audio(
+                    chat_id, track.tg_file_id, caption=caption, reply_markup=reply_markup
+                )
+            except TelegramBadRequest:
+                # Тот же мёртвый id, что и в ветке выше, — и лечить его надо так же.
+                # Раньше здесь перехвата не было: исключение уходило в глобальный
+                # обработчик, человек получал общую ошибку, а восстановление никто
+                # не ставил, то есть трек не чинился и при следующем обращении.
+                # Сюда попадают треки с meta_synced=False: их метаданные правил
+                # админ, а файл остался от старого бота.
+                await _schedule_repair(session, track, chat_id)
+                return None
 
     if message is not None:
         await record_event(session, user.id, track.id, event)
