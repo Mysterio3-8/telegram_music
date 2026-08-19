@@ -141,7 +141,7 @@ async def cb_pay_yookassa(callback: CallbackQuery) -> None:
         return
     # Сумма и срок — из ВЫБРАННОГО тарифа. Раньше здесь стояли значения месячного
     # тарифа из настроек: за год списывалось 348 ₽, а в тексте стояло
-    # «29 ₽ — Premium на 30 дней».
+    # «29 ₽ — Premium на 30 дней» (цена месяца тогда была 29 ₽).
     await callback.message.answer(
         t("premium.pay_intro", price=price, label=plan_label(months)),
         reply_markup=InlineKeyboardMarkup(

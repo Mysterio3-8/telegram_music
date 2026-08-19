@@ -1,7 +1,7 @@
 import { icon } from "../components/icons.js";
 
 // Пэйвол Mini App (решение владельца): бот бесплатный, приложение — по подписке.
-// Первый день бесплатно; дальше 29 ₽/мес. Текст объясняет, за что платят,
+// Первый день бесплатно; дальше 49 ₽/мес. Текст объясняет, за что платят,
 // и честно говорит, что цена временная — деньги идут на серверы.
 
 const FEATURES = [
@@ -14,7 +14,7 @@ const FEATURES = [
 ];
 
 export function renderPaywall(state) {
-  const price = (state.premium && state.premium.price_rub) || 29;
+  const price = (state.premium && state.premium.price_rub) || 49;
   const trialAvailable = state.profile ? state.profile.trial_available : true;
 
   const features = FEATURES.map(
