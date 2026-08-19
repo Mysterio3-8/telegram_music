@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.ratelimit import RateLimitMiddleware
+
 from app.api.routers import (
     audio,
     auth,
@@ -24,6 +26,10 @@ def create_app() -> FastAPI:
             allow_methods=["*"],
             allow_headers=["*"],
         )
+
+    # Лимитер частоты: у бота антифлуд есть, у API не было. Дорогие пути
+    # (/search/live, /search/fetch, /transfer) на боксе 961 МБ — прямой DoS.
+    app.add_middleware(RateLimitMiddleware)
 
     app.include_router(auth.router)
     app.include_router(catalog.router)
