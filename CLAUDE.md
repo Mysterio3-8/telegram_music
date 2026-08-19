@@ -1,6 +1,6 @@
 # Telegram Music Bot
 
-**Статус:** 🟢 прод (Этапы 1-5 задеплоены, Mini App живой на keybest.cc, 605 тестов)
+**Статус:** 🟢 прод (Этапы 1-5 задеплоены, Mini App живой на keybest.cc, 609 тестов)
 **Что это:** Telegram-бот [@muz_damn_bot](https://t.me/muz_damn_bot) — музыкальная платформа: библиотека, плейлисты, поиск, загрузка треков, Premium. Полное ТЗ — в [SPEC.md](docs/архив/SPEC.md). Старый [@tgram_music_bot](https://t.me/tgram_music_bot) отвечал указателем «мы переехали» ([app/moved_bot.py](app/moved_bot.py), юнит `tg-music-moved`) — ⚠️ **сейчас не работает: токен отозван** (16.08, Telegram отдаёт Unauthorized). Юнит в `failed` и намеренно не перезапускается; чтобы вернуть указатель, нужен действующий `MOVED_BOT_TOKEN` в `.env`.
 
 **➡️ Новая сессия начинай с [NEXT_SESSION.md](docs/архив/NEXT_SESSION.md)** — приоритеты (бот не должен падать, деньги, поисковый парсер) и полный список забытого/отложенного.
