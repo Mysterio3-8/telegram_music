@@ -10,18 +10,17 @@ from app.handlers.cards import show_track_card
 from app.handlers.common import ensure_user
 from app.keyboards.main_menu import language_setup_keyboard, main_menu_keyboard
 from app.keyboards.subscription import subscription_gate_keyboard
-from app.i18n import t, tracks_word
+from app.i18n import t
 from app.services.gamification import register_referral
 from app.services.library import get_track
 from app.services.premium import is_premium_active
 from app.services.subscription import is_fully_subscribed
-from app.services.users import count_library_tracks, get_user_by_telegram_id, user_language
+from app.services.users import get_user_by_telegram_id, user_language
 
 router = Router()
 
 
 async def build_cabinet_text(session: AsyncSession, user: User) -> str:
-    library_count = await count_library_tracks(session, user.id)
     lang = user_language(user)
     if is_premium_active(user) and user.premium_until is not None:
         subscription = t(
@@ -31,17 +30,12 @@ async def build_cabinet_text(session: AsyncSession, user: User) -> str:
         subscription = t("cabinet.free_plan", lang)
     from app.config import settings
 
+    # Строка «В библиотеке: N треков» убрана из кабинета (решение владельца):
+    # приветствие → статус подписки → подсказка → плеер → цена.
     name = (user.first_name or "").strip() or "друг"
     return (
         t("cabinet.greeting", lang, name=name, telegram_id=user.telegram_id) + "\n\n"
         f"{subscription}\n\n"
-        + t(
-            "cabinet.library",
-            lang,
-            count=library_count,
-            tracks_word=tracks_word(library_count, lang),
-        )
-        + "\n\n"
         + t("cabinet.hint", lang)
         + "\n\n"
         + t("cabinet.player_title", lang)

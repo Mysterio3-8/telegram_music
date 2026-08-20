@@ -3,6 +3,7 @@ from datetime import datetime
 
 from aiogram import F, Router
 from aiogram.exceptions import TelegramBadRequest
+from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import (
     CallbackQuery,
@@ -45,6 +46,27 @@ def _premium_text(active: bool, premium_until: datetime | None) -> str:
     return f"{head}\n\n{t('premium.perks')}\n\n{tail}"
 
 
+def _premium_markup() -> InlineKeyboardMarkup:
+    return premium_keyboard(
+        card_available=bool(settings.payment_provider_token),
+        yookassa_available=is_yookassa_configured(),
+    )
+
+
+@router.message(Command("premium"))
+async def cmd_premium(message: Message) -> None:
+    """Экран Premium командой /premium. Кнопки в меню больше нет — покупка и
+    пробный день переехали на пэйвол Mini App (решение владельца), но Stars и
+    оплата картой остаются доступны здесь для тех, кому так удобнее."""
+    async with session_factory() as session:
+        user = await ensure_user(session, message.from_user)
+        active = is_premium_active(user)
+        premium_until = user.premium_until
+    await message.answer(
+        _premium_text(active, premium_until), parse_mode="HTML", reply_markup=_premium_markup()
+    )
+
+
 @router.callback_query(F.data == "menu:premium")
 async def cb_premium(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(None)  # данные поиска сохраняем — экраны выше остаются рабочими
@@ -53,12 +75,7 @@ async def cb_premium(callback: CallbackQuery, state: FSMContext) -> None:
         active = is_premium_active(user)
         premium_until = user.premium_until
     await callback.message.edit_text(
-        _premium_text(active, premium_until),
-        parse_mode="HTML",
-        reply_markup=premium_keyboard(
-            card_available=bool(settings.payment_provider_token),
-            yookassa_available=is_yookassa_configured(),
-        ),
+        _premium_text(active, premium_until), parse_mode="HTML", reply_markup=_premium_markup()
     )
     await callback.answer()
 

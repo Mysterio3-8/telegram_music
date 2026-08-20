@@ -9,18 +9,16 @@ def main_menu_keyboard(lang: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text=t("menu.upload", lang), callback_data="menu:upload")],
         # Перенос плейлистов живёт в Mini App (решение владельца): в боте кнопка
         # лишняя. Команда /transfer и обработчик menu:transfer оставлены рабочими.
-        [
-            InlineKeyboardButton(
-                text=t("menu.premium", lang, price=settings.premium_price_rub),
-                callback_data="menu:premium",
-            )
-        ],
+        #
+        # Кнопки «💎 Открыть плеер — ₽/мес» и «Настройки» убраны (решение владельца):
+        # покупка и пробный день теперь на пэйволе внутри Mini App, а обложка к
+        # аудио присылается всегда — настраивать нечего. Экран /premium (Stars и
+        # карта) остался рабочим и доступен командой /premium.
         # Плейлисты вернулись в меню 14.08. Подсистема всё это время была жива и
         # покрыта тестами — при редизайне под VK Music убрали только кнопку, и
         # экран стал недостижим ничем, кроме «Назад» из чужой карточки.
         [InlineKeyboardButton(text=t("menu.playlists", lang), callback_data="menu:playlists")],
         [InlineKeyboardButton(text=t("menu.referral", lang), callback_data="menu:referral")],
-        [InlineKeyboardButton(text=t("menu.settings", lang), callback_data="menu:settings")],
         [InlineKeyboardButton(text=t("menu.language", lang), callback_data="menu:lang")],
         # Кнопка поддержки («жалобы / идеи») временно убрана по решению владельца.
         # Сам бот @suptgmusic_bot жив — вернуть строку, когда понадобится:
@@ -28,6 +26,8 @@ def main_menu_keyboard(lang: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
         #                       url=f"https://t.me/{settings.support_bot_username}")],
     ]
     if settings.public_base_url:
+        # Единственная кнопка плеера: запускает Mini App. Там пэйвол — оплатить
+        # или пробный день. Это и есть объединение «открыть» и «купить» в одну.
         rows.insert(
             0,
             [

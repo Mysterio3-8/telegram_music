@@ -24,7 +24,6 @@ from app.handlers import (
     quick_search,
     referral,
     search,
-    settings as settings_screen,
     start,
     stubs,
     subscription,
@@ -85,7 +84,7 @@ async def main() -> None:
     # одном из полутора десятков роутеров — вопрос времени, а последствие
     # (админка, открытая из группы) слишком дорогое.
     for personal in (
-        start, subscription, language, settings_screen, library, playlists, search,
+        start, subscription, language, library, playlists, search,
         upload, transfer, premium, referral, player, contests, admin, admin_broadcast,
         admin_upload_minus, admin_youtube, admin_telegram_channel, track_actions, stubs,
     ):
@@ -97,7 +96,6 @@ async def main() -> None:
         start.router,
         subscription.router,
         language.router,
-        settings_screen.router,
         library.router,
         playlists.router,
         search.router,

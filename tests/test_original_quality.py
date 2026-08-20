@@ -284,46 +284,14 @@ async def test_unknown_quality_falls_back_to_mp3(session):
     assert user.audio_quality == QUALITY_BEST
 
 
-def test_quality_keyboard_marks_current_choice():
-    from app.keyboards.settings import quality_keyboard
-
-    texts = [row[0].text for row in quality_keyboard(QUALITY_BEST, "ru").inline_keyboard]
-    assert "✅" in texts[1] and "✅" not in texts[0]
-
-    texts = [row[0].text for row in quality_keyboard(QUALITY_MP3, "ru").inline_keyboard]
-    assert "✅" in texts[0] and "✅" not in texts[1]
-
-
-def test_settings_keyboard_keeps_back_last():
-    """«Назад» обязана оставаться последней: переключатель обложки вставляется
-    между ней и качеством, и лёгкая ошибка здесь загоняет выход в середину."""
-    from app.keyboards.settings import settings_keyboard
-
-    rows = settings_keyboard(QUALITY_MP3, cover_as_file=False, lang="ru").inline_keyboard
-    assert rows[-1][0].callback_data == "menu:main"
-    assert rows[-2][0].callback_data == "set:cover"
-
-
 @pytest.mark.asyncio
-async def test_cover_toggle_flips_and_persists(session):
-    from app.services.users import toggle_cover_as_file
-
-    user = _user(audio_quality=QUALITY_MP3)
-    session.add(user)
-    await session.commit()
-
-    assert await toggle_cover_as_file(session, user) is True
-    assert user.cover_as_file is True
-    assert await toggle_cover_as_file(session, user) is False
-
-
-@pytest.mark.asyncio
-async def test_cover_not_sent_when_disabled(session, track):
-    """Выключено — ни сети, ни лишнего сообщения."""
+async def test_cover_not_sent_without_url(session, track):
+    """Нет обложки у трека — ни сети, ни лишнего сообщения. Экран настроек убран
+    (решение владельца), обложка теперь идёт всегда, когда она есть."""
     from app.handlers.delivery import _maybe_send_cover
 
-    track.cover_url = "https://cdn/cover.jpg"
-    user = _user(cover_as_file=False)
+    track.cover_url = None
+    user = _user()
     bot = FakeBot()
 
     await _maybe_send_cover(bot, 777, user, track)
@@ -332,13 +300,14 @@ async def test_cover_not_sent_when_disabled(session, track):
 
 @pytest.mark.asyncio
 async def test_cover_sent_as_document(session, track, monkeypatch):
-    """Документом, а не фото: Telegram пережимает фотографии, а смысл опции —
-    получить картинку целиком."""
+    """Документом, а не фото: Telegram пережимает фотографии, а смысл — получить
+    картинку целиком. И присылается ВСЕГДА при наличии обложки — даже без
+    какого-либо флага у пользователя (экран настроек убран)."""
     from app.handlers import delivery
     from app.services.youtube import downloader
 
     track.cover_url = "https://cdn/cover.jpg"
-    user = _user(cover_as_file=True)
+    user = _user(cover_as_file=False)  # флаг выключен — обложка всё равно уходит
     monkeypatch.setattr(downloader, "fetch_thumbnail", lambda url: b"JPEGDATA")
     bot = FakeBot()
 

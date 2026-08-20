@@ -120,7 +120,6 @@ async def test_first_screen_after_start_is_in_device_language(session):
 
     cabinet = await build_cabinet_text(session, user)
     assert "Hi, <b>John</b>" in cabinet
-    assert "In your library" in cabinet
 
 
 async def test_unsupported_choice_falls_back_instead_of_saving_garbage(session):

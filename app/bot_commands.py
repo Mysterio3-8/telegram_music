@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_COMMANDS = [
     BotCommand(command="start", description="Главное меню"),
-    BotCommand(command="settings", description="Настройки — формат треков"),
+    BotCommand(command="premium", description="Premium — Stars или карта"),
 ]
 ADMIN_COMMANDS = DEFAULT_COMMANDS + [BotCommand(command="admin", description="Админ-панель")]
 
