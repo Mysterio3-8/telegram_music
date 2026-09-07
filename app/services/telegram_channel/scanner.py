@@ -3,8 +3,10 @@
 шагом, чтобы задачи сканирования и импорта оставались независимыми (как в
 YouTube-модуле: video_id отдельно от скачивания)."""
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
-from telethon import TelegramClient
+if TYPE_CHECKING:  # тип нужен только проверяльщику — в рантайме telethon не тянем
+    from telethon import TelegramClient
 
 
 @dataclass(frozen=True)
@@ -16,7 +18,7 @@ class AudioMessageRef:
 
 
 async def list_audio_messages(
-    client: TelegramClient, channel: str, min_id: int
+    client: "TelegramClient", channel: str, min_id: int
 ) -> list[AudioMessageRef]:
     entity = await client.get_entity(channel)
     refs: list[AudioMessageRef] = []

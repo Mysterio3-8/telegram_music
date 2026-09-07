@@ -7,9 +7,13 @@
 import logging
 from datetime import datetime, timezone
 
+from typing import TYPE_CHECKING
+
 from aiogram import Bot
 from sqlalchemy.ext.asyncio import AsyncSession
-from telethon import TelegramClient
+
+if TYPE_CHECKING:  # тип нужен только проверяльщику — в рантайме telethon не тянем
+    from telethon import TelegramClient
 
 from app.config import settings
 from app.db.models import TelegramChannelImport, TelegramChannelSource
@@ -32,7 +36,7 @@ def _utcnow() -> datetime:
 
 
 async def process_import(
-    session: AsyncSession, bot: Bot, client: TelegramClient, import_id: int
+    session: AsyncSession, bot: Bot, client: "TelegramClient", import_id: int
 ) -> str:
     """Обрабатывает одну задачу. Возвращает финальный статус (imported/skipped).
     Кидает исключение при временной ошибке — воркер повторит попытку."""
