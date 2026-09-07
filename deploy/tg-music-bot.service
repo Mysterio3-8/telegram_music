@@ -1,8 +1,7 @@
 [Unit]
 Description=Telegram Music Bot
 After=network-online.target redis-server.service
-Wants=network-online.target
-Requires=redis-server.service
+Wants=network-online.target redis-server.service
 
 [Service]
 WorkingDirectory=/opt/tg-music-bot

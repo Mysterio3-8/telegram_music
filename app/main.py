@@ -48,7 +48,7 @@ async def main() -> None:
 
     bot = Bot(token=settings.bot_token)
     await setup_bot_commands(bot)
-    dp = Dispatcher(storage=build_storage())
+    dp = Dispatcher(storage=await build_storage())
 
     # Замер — самым первым: нужно полное время ожидания живого человека,
     # включая работу антиспама и проверки подписки
