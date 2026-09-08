@@ -255,7 +255,24 @@ class Settings(BaseSettings):
 
     @property
     def effective_jwt_secret(self) -> str:
-        return self.jwt_secret or self.bot_token
+        """Ключ подписи токенов Mini App: jwt_secret, иначе bot_token.
+
+        🔴 Пустой ключ — не «пустая настройка», а дыра: PyJWT до 2.10 молча
+        подписывал им токены, а подпись пустым ключом подделывается кем угодно,
+        то есть вход в чужой аккаунт становится бесплатным. С 2.10 библиотека
+        это запрещает сама, но requirements допускают и старые версии
+        (`pyjwt>=2.9`), поэтому не полагаемся на неё и отказываем явно.
+
+        Отказ здесь, а не при запуске: конфиг импортируют и бот, и воркеры,
+        которым JWT не нужен вовсе — падать им из-за ненастроенного API незачем.
+        """
+        secret = self.jwt_secret or self.bot_token
+        if not secret:
+            raise RuntimeError(
+                "Не задан ни JWT_SECRET, ни BOT_TOKEN — подписывать токены Mini App нечем. "
+                "Пустой ключ означал бы, что токен может подделать кто угодно."
+            )
+        return secret
 
     @property
     def cors_origins_list(self) -> list[str]:
