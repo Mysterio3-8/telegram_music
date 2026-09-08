@@ -12,7 +12,30 @@
 # пробросить порт. Это главная защита всей конструкции.
 set -euo pipefail
 
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Каталог репозитория. Вычисляем от расположения скрипта, но ТОЛЬКО если он
+# лежит внутри репозитория. Иначе — /opt/tg-music-bot.
+#
+# ⚠️ Почему так: скрипт нужно уметь запускать и из /tmp — пока правка не слита
+# в main, взять его на сервере больше неоткуда, а настроить автодеплой надо
+# именно ДО слияния, чтобы первая же выкатка сработала. Прежняя версия в этом
+# случае вычисляла REPO_DIR как «/» и молча прописывала в ключ битую команду.
+REPO_DIR="${REPO_DIR:-}"
+if [ -z "$REPO_DIR" ]; then
+    _here="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." 2>/dev/null && pwd)" || _here=""
+    if [ -n "$_here" ] && [ -f "$_here/deploy/remote-deploy.sh" ]; then
+        REPO_DIR="$_here"
+    else
+        REPO_DIR=/opt/tg-music-bot
+    fi
+fi
+
+if [ ! -d "$REPO_DIR/.git" ]; then
+    echo "Не нашёл репозиторий в $REPO_DIR."
+    echo "Если код лежит в другом месте, запустите так:"
+    echo "  REPO_DIR=/путь/к/репозиторию bash $0"
+    exit 1
+fi
+echo "==> Репозиторий: $REPO_DIR"
 KEY_PATH=/root/.ssh/tg-music-deploy
 DEPLOY_CMD="bash $REPO_DIR/deploy/remote-deploy.sh"
 
