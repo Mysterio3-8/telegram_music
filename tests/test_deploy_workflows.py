@@ -14,7 +14,9 @@ WORKFLOWS = pathlib.Path(".github/workflows")
 
 
 def _load(name: str) -> dict:
-    data = yaml.safe_load((WORKFLOWS / name).read_text())
+    # encoding обязателен: на Windows read_text() берёт кодировку локали
+    # (здесь cp1251) и падает на русских комментариях внутри файла.
+    data = yaml.safe_load((WORKFLOWS / name).read_text(encoding="utf-8"))
     assert isinstance(data, dict), f"{name}: не разобрался в словарь"
     return data
 
@@ -97,7 +99,7 @@ def test_automerge_has_permissions_it_needs():
 def test_remote_deploy_script_is_executable_and_sane():
     script = pathlib.Path("deploy/remote-deploy.sh")
     assert script.exists()
-    body = script.read_text()
+    body = script.read_text(encoding="utf-8")
     # Точка возврата запоминается ДО изменений — без неё откат некуда делать.
     assert "PREVIOUS=$(git rev-parse HEAD)" in body
     # Юниты доносятся отдельно: git pull их не переносит в /etc/systemd/system.

@@ -79,7 +79,9 @@ def test_unit_file_guards_against_restart_storm():
     """Юнит главного бота должен иметь те же рубежи, что воркеры и moved_bot."""
     import pathlib
 
-    unit = pathlib.Path("deploy/tg-music-bot.service").read_text()
+    # encoding обязателен: на Windows read_text() берёт кодировку локали
+    # (здесь cp1251) и падает на русских комментариях внутри файла.
+    unit = pathlib.Path("deploy/tg-music-bot.service").read_text(encoding="utf-8")
     # ⚠️ StartLimit* обязаны быть в [Unit]: в [Service] systemd их не читает.
     head = unit.split("\n[Service]")[0]
     assert "StartLimitBurst=5" in head
