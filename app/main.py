@@ -14,6 +14,7 @@ from app.handlers import (
     admin_upload_minus,
     admin_youtube,
     contests,
+    donate,
     errors,
     inline,
     language,
@@ -91,7 +92,7 @@ async def main() -> int:
     # (админка, открытая из группы) слишком дорогое.
     for personal in (
         start, subscription, language, library, playlists, search,
-        upload, transfer, premium, referral, player, contests, admin, admin_broadcast,
+        upload, transfer, premium, referral, player, contests, admin, admin_broadcast, donate,
         admin_upload_minus, admin_youtube, admin_telegram_channel, track_actions, stubs,
     ):
         personal.router.message.filter(F.chat.type == "private")
@@ -108,6 +109,7 @@ async def main() -> int:
         upload.router,
         transfer.router,
         premium.router,
+        donate.router,
         referral.router,
         player.router,
         contests.router,

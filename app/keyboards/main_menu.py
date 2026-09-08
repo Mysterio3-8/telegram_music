@@ -18,6 +18,7 @@ def main_menu_keyboard(lang: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
         # покрыта тестами — при редизайне под VK Music убрали только кнопку, и
         # экран стал недостижим ничем, кроме «Назад» из чужой карточки.
         [InlineKeyboardButton(text=t("menu.playlists", lang), callback_data="menu:playlists")],
+        [InlineKeyboardButton(text=t("menu.donate", lang), callback_data="don:open")],
         [InlineKeyboardButton(text=t("menu.referral", lang), callback_data="menu:referral")],
         [InlineKeyboardButton(text=t("menu.language", lang), callback_data="menu:lang")],
         # Кнопка поддержки («жалобы / идеи») временно убрана по решению владельца.

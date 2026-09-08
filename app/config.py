@@ -86,6 +86,9 @@ class Settings(BaseSettings):
     # захардкоженных чисел нет — кроме запасного значения в paywall.js (когда
     # статус Premium ещё не загрузился) и текста на странице /about/.
     premium_price_rub: int = 49
+    # Полные правила поддержки — внешняя страница (владелец ведёт её в Телетайпе).
+    # Пусто — кнопки «Правила» в боте нет; короткая версия всё равно на экране.
+    donate_rules_url: str = ""
     premium_forever_price_rub: int = 10000  # тариф «навсегда»
     premium_duration_days: int = 30
     payment_provider_token: str = ""  # токен провайдера для карты/СБП; пусто → доступны только Stars

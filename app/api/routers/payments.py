@@ -10,6 +10,7 @@ from app.config import settings
 from app.db.models import User
 from app.services.premium import plan_price_rub, plan_valid
 from app.services.yookassa_payments import (
+    apply_refund,
     apply_succeeded_payment,
     create_premium_payment,
     fetch_payment,
@@ -67,6 +68,29 @@ async def yookassa_webhook(request: Request, session: AsyncSession = Depends(get
     event = (body or {}).get("event", "")
     if not payment_id:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Нет object.id")
+
+    if event == "refund.succeeded":
+        # Возврат приходит СВОИМ объектом: object.id — это id возврата, а нужный
+        # нам платёж лежит в object.payment_id. Перепутать их значит не найти
+        # донат и молча оставить человека в топе за уже возвращённые деньги.
+        refunded_payment_id = ((body or {}).get("object") or {}).get("payment_id")
+        if not refunded_payment_id:
+            return {"ok": True}
+        # Телу уведомления не доверяем — как и для payment.succeeded. Иначе
+        # подделанный refund снимал бы кого угодно с рейтинга: id платежей
+        # видны в личке донатера и в чеке.
+        payment = await fetch_payment(str(refunded_payment_id))
+        if payment is None:
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Не удалось проверить возврат")
+        refunded = float(((payment.get("refunded_amount") or {}).get("value")) or 0)
+        if refunded > 0:
+            await apply_refund(session, str(refunded_payment_id))
+        else:
+            logger.warning(
+                "refund.succeeded по %s, но API ЮKassa не показывает возврата — игнорирую",
+                refunded_payment_id,
+            )
+        return {"ok": True}
 
     if event != "payment.succeeded":
         return {"ok": True}  # canceled / waiting_for_capture — просто подтверждаем приём

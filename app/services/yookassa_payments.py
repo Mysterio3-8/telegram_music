@@ -86,6 +86,44 @@ async def create_premium_payment(
         return None
 
 
+async def create_donation_payment(
+    telegram_id: int, bot_username: str, amount_rub: int
+) -> str | None:
+    """Платёж-донат. Возвращает confirmation_url или None при ошибке.
+
+    ⚠️ metadata.kind="donate" — по нему вебхук отличает донат от покупки
+    Premium. Без метки подтверждённый донат ушёл бы в activate_premium, то есть
+    человек получил бы за дарение услугу, а это уже реализация со всеми
+    последствиями по 54-ФЗ.
+
+    save_payment_method здесь не запрашивается ни при каких настройках: донат
+    разовый, списывать с человека потом нечего.
+    """
+    from app.services.donations import is_allowed_amount
+
+    # Вторая проверка суммы, у самой границы с деньгами. Первая стоит в хендлере,
+    # но между ними FSM и callback_data, а цена ошибки здесь — реальный платёж.
+    if not is_allowed_amount(amount_rub):
+        logger.error("Донат: сумма %s вне допустимых границ", amount_rub)
+        return None
+    payload = {
+        "amount": {"value": f"{amount_rub}.00", "currency": "RUB"},
+        "capture": True,
+        "confirmation": {"type": "redirect", "return_url": f"https://t.me/{bot_username}"},
+        "description": f"Добровольная поддержка проекта — {amount_rub} \u20bd",
+        "metadata": {"telegram_id": str(telegram_id), "kind": "donate"},
+    }
+    try:
+        status, body = await _post_payment(payload)
+        if status != 200:
+            logger.error("ЮKassa create donation %s: %s", status, body)
+            return None
+        return body["confirmation"]["confirmation_url"]
+    except aiohttp.ClientError:
+        logger.exception("ЮKassa недоступна (create donation)")
+        return None
+
+
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
@@ -183,6 +221,12 @@ async def apply_succeeded_payment(session: AsyncSession, payment: dict) -> bool:
         logger.error("Платёж %s: пользователь tg=%s не найден", payment.get("id"), telegram_id_raw)
         return False
 
+    # Донат обрабатывается отдельно и НИЧЕГО не выдаёт: это дарение, встречной
+    # услуги у него нет по определению. Развилка стоит до всего остального,
+    # чтобы ни одна ветка активации Premium не могла сработать по донату.
+    if (payment.get("metadata") or {}).get("kind") == "donate":
+        return await _apply_donation(session, user, payment)
+
     subscription = await session.get(PremiumSubscription, user.id)
     if subscription is not None and subscription.payment_id == payment["id"]:
         return True  # повторное уведомление — уже обработано
@@ -207,3 +251,80 @@ async def apply_succeeded_payment(session: AsyncSession, payment: dict) -> bool:
     await grant_referrer_discount(session, user)
     logger.info("Premium activated via YooKassa user=%s payment=%s", user.id, payment["id"])
     return True
+
+
+async def _apply_donation(session: AsyncSession, user: User, payment: dict) -> bool:
+    """Записывает подтверждённый донат. Идемпотентен по payment_id."""
+    from app.services.donations import record_donation
+
+    amount_raw = ((payment.get("amount") or {}).get("value")) or "0"
+    try:
+        amount_rub = int(float(amount_raw))
+    except (TypeError, ValueError):
+        logger.error("Донат %s: не разобрал сумму %r", payment.get("id"), amount_raw)
+        return False
+    if amount_rub <= 0:
+        logger.error("Донат %s: неположительная сумма %s", payment.get("id"), amount_rub)
+        return False
+
+    donation = await record_donation(session, user.id, amount_rub, payment["id"])
+    if donation is None:
+        return True  # повторное уведомление — уже учтён
+    logger.info("Донат user=%s на %s ₽ (payment=%s)", user.id, amount_rub, payment["id"])
+    await _notify_donation(session, user, amount_rub)
+    return True
+
+
+async def _notify_donation(session: AsyncSession, user: User, amount_rub: int) -> None:
+    """Спасибо донатеру и строка владельцу. Сбой уведомления не отменяет донат.
+
+    ⚠️ Всё внутри try: донат уже записан и подтверждён кассой, а вебхуку нужно
+    ответить 200. Упасть здесь значит заставить ЮKassa ретраить уведомление по
+    уже учтённому платежу — и так до отключения вебхука.
+    """
+    from app.i18n import t
+    from app.services.donations import display_name, user_rank, user_total
+    from app.services.telegram_send import send_message
+    from app.services.users import user_language
+
+    try:
+        total = await user_total(session, user.id)
+        rank = await user_rank(session, user.id)
+        lang = user_language(user)
+        await send_message(
+            user.telegram_id,
+            t("donate.thanks", lang).format(
+                amount=amount_rub,
+                total=f"{total:,}".replace(",", " "),
+                rank=rank or 1,
+            ),
+        )
+    except Exception:  # noqa: BLE001 — см. комментарий выше
+        logger.exception("Не удалось поблагодарить донатера user=%s", user.id)
+
+    # Владельцу — дежурному админу, если назначен, иначе первому из ADMIN_IDS.
+    # health_alert_id уже реализует ровно это правило, второй такой же строкой
+    # они бы разъехались при следующей правке.
+    recipient = settings.health_alert_id
+    if not recipient:
+        return
+    try:
+        await send_message(
+            int(recipient),
+            f"❤️ Донат {amount_rub} ₽ от {display_name(user)} (tg={user.telegram_id})",
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception("Не удалось уведомить владельца о донате")
+
+
+async def apply_refund(session: AsyncSession, payment_id: str) -> bool:
+    """Деньги по платежу ушли обратно — снимаем донат с рейтинга.
+
+    Сами возвраты мы не делаем (решение владельца, это записано в правилах), но
+    чарджбэк начинает банк плательщика, и правилами его не запретить. Premium
+    здесь намеренно не трогаем: отзыв уже выданной услуги — отдельное решение,
+    и принимать его молча в обработчике вебхука неправильно.
+    """
+    from app.services.donations import mark_refunded
+
+    return await mark_refunded(session, payment_id)

@@ -120,6 +120,15 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
             await message.answer(text, reply_markup=markup)
             return
         text = await build_cabinet_text(session, user)
+    # Кнопка «Поддержать» под постами канала ведёт сюда: t.me/bot?start=donate.
+    # Идёт ПОСЛЕ гейта подписки (решение владельца) — тот стоит выше и уже
+    # вернул бы управление, если человек не подписан.
+    if command.args == "donate":
+        from app.handlers.donate import show_donate_from_start
+
+        await show_donate_from_start(message, lang)
+        return
+
     if command.args and command.args.startswith("track_"):
         if await _show_shared_track(message, user, command.args):
             return
