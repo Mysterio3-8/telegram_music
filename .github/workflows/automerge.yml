@@ -1,0 +1,96 @@
+# Автослияние: готовый PR с зелёными тестами сам уезжает в main и на прод.
+#
+# Решение владельца: «ты мой главный программист, делаешь всё без моего
+# участия». Поэтому кнопку «слить» никто не жмёт — её жмёт этот workflow.
+#
+# ⚠️ Черновики (draft) НЕ сливаются. Это не формальность: пока идёт работа, PR
+# висит черновиком, и снимает этот статус тот, кто работу закончил. Так у слова
+# «готово» остаётся смысл, а недописанный код не уезжает к людям на полпути.
+#
+# ⚠️ Границы намеренно узкие — иначе это дыра размером с прод: любой человек,
+# открывший PR в публичный репозиторий, получил бы выкатку своего кода на
+# сервер. Сливаем только своё: ветка в этом же репозитории (не форк) и автор —
+# владелец.
+name: Automerge
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: automerge-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      eligible: ${{ steps.gate.outputs.eligible }}
+    steps:
+      - id: gate
+        env:
+          IS_DRAFT: ${{ github.event.pull_request.draft }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPO: ${{ github.repository }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+          OWNER: ${{ github.repository_owner }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          reason=""
+          [ "$IS_DRAFT" = "true" ] && reason="PR ещё черновик"
+          [ "$HEAD_REPO" != "$BASE_REPO" ] && reason="ветка из форка"
+          [ "$AUTHOR" != "$OWNER" ] && reason="автор не владелец ($AUTHOR)"
+          [ "$BASE_REF" != "main" ] && reason="целевая ветка не main ($BASE_REF)"
+          if [ -n "$reason" ]; then
+            echo "Автослияние пропущено: $reason"
+            echo "eligible=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Автослияние разрешено"
+            echo "eligible=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  tests:
+    needs: check
+    if: needs.check.outputs.eligible == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          # Та же версия, что на VPS.
+          python-version: "3.12"
+          cache: pip
+      - name: Зависимости
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio
+      - name: Тесты
+        run: python -m pytest -q
+
+  merge:
+    needs: [check, tests]
+    if: needs.check.outputs.eligible == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Слить PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          # squash: история main остаётся читаемой — одна задача одним коммитом.
+          # --delete-branch: отработавшие ветки не копятся.
+          gh pr merge "$PR" --repo "$REPO" --squash --delete-branch
+          echo "PR #$PR слит в main"
+
+  deploy:
+    needs: merge
+    # Выкатку зовём явно: слияние под GITHUB_TOKEN не порождает push, и ждать
+    # его было бы ожиданием того, чего не произойдёт.
+    uses: ./.github/workflows/deploy.yml
+    secrets: inherit
