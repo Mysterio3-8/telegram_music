@@ -36,6 +36,7 @@ from app.services.required_channels import (
 )
 from app.services.subscription import is_bot_admin_of_channel
 from app.services.moderation import count_pending, pending_tracks, set_status
+from app.services.donations import donations_summary
 from app.services.revenue import collect_revenue
 from app.services.library import get_track, update_track_meta
 from app.services.recommendations import VALID_MOODS
@@ -64,7 +65,7 @@ def _format_mb(size_bytes: int) -> str:
     return f"{size_bytes / (1024 * 1024):.1f} МБ"
 
 
-def _stats_text(stats: ProjectStats, revenue=None) -> str:
+def _stats_text(stats: ProjectStats, revenue=None, donations=None) -> str:
     lines = [
         "📊 Статистика проекта",
         "",
@@ -97,6 +98,15 @@ def _stats_text(stats: ProjectStats, revenue=None) -> str:
                 f"⭐ Stars: {revenue.stars_total} "
                 f"({revenue.stars_payments} платежей) — выводятся в Telegram"
             )
+    # Донаты СТРОГО отдельно от выручки: за них не выдаётся услуга, это дарение.
+    # Одной суммой с продажами Premium они врали бы и в отчётности, и владельцу.
+    if donations is not None:
+        donations_total, donations_count = donations
+        if donations_count:
+            lines += [
+                "",
+                f"❤️ Донаты: {donations_total} ₽ ({donations_count}) — дарение, не выручка",
+            ]
     if stats.reclaimable_count > 0:
         lines.append(
             f"   └ 🧹 можно освободить: {stats.reclaimable_count} "
@@ -118,9 +128,10 @@ async def cmd_admin(message: Message) -> None:
         stats = await collect_stats(session)
         pending = await count_pending(session)
         revenue = await collect_revenue(session)
+        donations = await donations_summary(session)
         clips = await count_clip_tracks(session)
     await message.answer(
-        _stats_text(stats, revenue),
+        _stats_text(stats, revenue, donations),
         reply_markup=admin_panel_keyboard(stats.reclaimable_count, stats.junk_count, pending, clips),
     )
 
@@ -134,10 +145,11 @@ async def cb_admin_stats(callback: CallbackQuery) -> None:
         stats = await collect_stats(session)
         pending = await count_pending(session)
         revenue = await collect_revenue(session)
+        donations = await donations_summary(session)
         clips = await count_clip_tracks(session)
     try:
         await callback.message.edit_text(
-            _stats_text(stats, revenue),
+            _stats_text(stats, revenue, donations),
             reply_markup=admin_panel_keyboard(stats.reclaimable_count, stats.junk_count, pending, clips),
         )
     except TelegramBadRequest:
@@ -415,9 +427,10 @@ async def cb_clip_go(callback: CallbackQuery) -> None:
         stats = await collect_stats(session)
         pending = await count_pending(session)
         revenue = await collect_revenue(session)
+        donations = await donations_summary(session)
         clips = await count_clip_tracks(session)
     await callback.message.edit_text(
-        _stats_text(stats, revenue),
+        _stats_text(stats, revenue, donations),
         reply_markup=admin_panel_keyboard(stats.reclaimable_count, stats.junk_count, pending, clips),
     )
 

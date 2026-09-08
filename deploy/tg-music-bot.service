@@ -1,8 +1,14 @@
 [Unit]
 Description=Telegram Music Bot
 After=network-online.target redis-server.service
-Wants=network-online.target
-Requires=redis-server.service
+Wants=network-online.target redis-server.service
+# Рубеж против шторма рестартов: пять смертей за 5 минут, и systemd сдаётся,
+# вместо того чтобы поднимать юнит вечно. Такой рубеж есть у всех воркеров и у
+# tg-music-moved — у главного бота его не было, то есть единственный сервис,
+# способный крутиться в петле бесконечно, был самый важный.
+# ⚠️ Именно в [Unit] — в [Service] systemd эти ключи не читает.
+StartLimitIntervalSec=300
+StartLimitBurst=5
 
 [Service]
 WorkingDirectory=/opt/tg-music-bot
@@ -12,6 +18,10 @@ RestartSec=5
 # Защита от падений (инцидент 2026-07-26/27): бот — самый приоритетный процесс,
 # ядро должно убивать его последним при нехватке памяти (OOM), а не первым.
 OOMScoreAdjust=-800
+# 78 = EX_CONFIG, его отдаёт app/main.py, когда Telegram отвечает Unauthorized
+# или BOT_TOKEN пуст: такое само не починится, и повторять попытки бессмысленно —
+# каждый заход это полный импорт Python с aiogram, четверть единственного ядра.
+RestartPreventExitStatus=78
 
 [Install]
 WantedBy=multi-user.target

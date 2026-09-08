@@ -2,6 +2,7 @@ import asyncio
 import logging
 
 from aiogram import Bot, Dispatcher, F
+from aiogram.exceptions import TelegramUnauthorizedError
 
 from app.bot_commands import setup_bot_commands
 from app.config import settings
@@ -13,6 +14,7 @@ from app.handlers import (
     admin_upload_minus,
     admin_youtube,
     contests,
+    donate,
     errors,
     inline,
     language,
@@ -38,17 +40,22 @@ from app.middlewares.throttling import ThrottlingMiddleware
 from app.middlewares.timing import TimingMiddleware
 
 
-async def main() -> None:
+# Код выхода «токен не годится». systemd получает его из
+# RestartPreventExitStatus и перестаёт поднимать юнит.
+EXIT_BAD_TOKEN = 78  # EX_CONFIG
+
+
+async def main() -> int:
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
     if not settings.bot_token:
-        raise SystemExit("BOT_TOKEN не задан — скопируйте .env.example в .env и впишите токен")
+        logging.error("BOT_TOKEN не задан — скопируйте .env.example в .env и впишите токен")
+        return EXIT_BAD_TOKEN
 
     bot = Bot(token=settings.bot_token)
-    await setup_bot_commands(bot)
-    dp = Dispatcher(storage=build_storage())
+    dp = Dispatcher(storage=await build_storage())
 
     # Замер — самым первым: нужно полное время ожидания живого человека,
     # включая работу антиспама и проверки подписки
@@ -85,7 +92,7 @@ async def main() -> None:
     # (админка, открытая из группы) слишком дорогое.
     for personal in (
         start, subscription, language, library, playlists, search,
-        upload, transfer, premium, referral, player, contests, admin, admin_broadcast,
+        upload, transfer, premium, referral, player, contests, admin, admin_broadcast, donate,
         admin_upload_minus, admin_youtube, admin_telegram_channel, track_actions, stubs,
     ):
         personal.router.message.filter(F.chat.type == "private")
@@ -102,6 +109,7 @@ async def main() -> None:
         upload.router,
         transfer.router,
         premium.router,
+        donate.router,
         referral.router,
         player.router,
         contests.router,
@@ -116,8 +124,28 @@ async def main() -> None:
         quick_search.router,  # свободный текст боту → трек (регистрируется поздно, после FSM)
         stubs.router,
     )
-    await dp.start_polling(bot)
+    try:
+        # Внутри try, а не до него: выставление команд — первое обращение к
+        # Telegram, и именно на нём вылезает отозванный токен. Снаружи это
+        # исключение ушло бы мимо обработчика ниже, дав петлю рестартов с
+        # кодом 1 вместо осмысленного отказа.
+        await setup_bot_commands(bot)
+        await dp.start_polling(bot)
+    except TelegramUnauthorizedError:
+        # 🔴 Отозванный или неверный токен — это не «сейчас не получилось», а
+        # состояние, которое само не изменится. `Restart=always` в такой
+        # ситуации не защита, а генератор нагрузки: каждый заход это полный
+        # импорт Python с aiogram, четверть единственного ядра, круглосуточно.
+        # Ровно так 16.08 крутился tg-music-moved — 511 рестартов подряд.
+        logging.error(
+            "BOT_TOKEN отвергнут Telegram (Unauthorized). Бот не запустится, пока в "
+            ".env не появится действующий токен. Юнит больше не перезапускается."
+        )
+        return EXIT_BAD_TOKEN
+    finally:
+        await bot.session.close()
+    return 0
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    raise SystemExit(asyncio.run(main()))

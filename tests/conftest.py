@@ -15,6 +15,17 @@ def _tmp_storage(tmp_path, monkeypatch):
     # Анти-бан-паузы SoundCloud (5-60 сек) в тестах не нужны
     monkeypatch.setattr(settings, "soundcloud_min_delay", 0.0)
     monkeypatch.setattr(settings, "soundcloud_max_delay", 0.0)
+    # Заглушка токена: от него зависит подпись JWT (effective_jwt_secret отдаёт
+    # jwt_secret либо bot_token). Без неё набор тестов проходил только там, где
+    # рядом лежит настоящий .env, — на чистой машине 22 теста API падали.
+    #
+    # 🔴 Поймано первым же прогоном в CI, и локально увидеть это было нельзя:
+    # PyJWT до 2.10 молча подписывал ПУСТЫМ ключом (в песочнице стоял 2.7.0), а
+    # с 2.10 это справедливо запрещено. Старое поведение — дыра: подпись пустым
+    # ключом подделывается кем угодно. Значение здесь заведомо нерабочее и
+    # никуда не уходит: тесты не должны зависеть от настоящего секрета.
+    if not settings.bot_token:
+        monkeypatch.setattr(settings, "bot_token", "0:test-only-not-a-real-token")
 
 
 @pytest_asyncio.fixture

@@ -530,3 +530,35 @@ class ContestParticipant(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     referrals_at_join: Mapped[int] = mapped_column(default=0)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
+class Donation(Base):
+    """Добровольная поддержка проекта деньгами.
+
+    Отдельная таблица от `payments` намеренно. `payments` — журнал выручки: там
+    лежит то, за что человек ПОЛУЧИЛ услугу (Premium). Донат встречной услуги не
+    даёт вовсе — это дарение, и складывать одно с другим нельзя ни в отчёте о
+    выручке, ни юридически. Плюс у доната своя жизнь: место в рейтинге и возврат.
+
+    ⚠️ `payment_id` уникален — это ключ идемпотентности. ЮKassa повторяет
+    уведомление, пока не получит 200, и без этого ограничения один платёж лёг бы
+    в рейтинг несколько раз.
+    """
+
+    __tablename__ = "donations"
+    __table_args__ = (
+        # Рейтинг считается по незачёркнутым донатам, сгруппированным по человеку —
+        # индекс под ровно этот запрос.
+        Index("ix_donations_rating", "refunded_at", "user_id"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    amount_rub: Mapped[int] = mapped_column()
+    # id платежа в ЮKassa: и ключ идемпотентности, и то, по чему приходит возврат.
+    payment_id: Mapped[str] = mapped_column(String(128), unique=True)
+    # Проставляется, когда деньги ушли обратно (возврат или чарджбэк). Такой донат
+    # выпадает из рейтинга: сами мы не возвращаем, но банк плательщика может — и
+    # тогда человек не должен остаться в топе за чужой счёт.
+    refunded_at: Mapped[datetime | None] = mapped_column(default=None)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
