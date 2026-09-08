@@ -64,10 +64,22 @@ def test_automerge_refuses_forks_drafts_and_strangers():
     assert "BASE_REF" in gate, "слияние допустимо только в main"
 
 
+def test_tests_run_even_on_drafts():
+    """Тесты не должны стоять за гейтом автослияния.
+
+    Первый живой прогон поймал ровно это: на черновике не запускалось ничего, и
+    PR висел без сигнала — а работа идёт именно на черновике. Гейт решает
+    судьбу слияния, а не то, проверять ли код.
+    """
+    data = _load("automerge.yml")
+    tests_job = data["jobs"]["tests"]
+    assert "if" not in tests_job, "тесты должны идти на любом PR, включая черновик"
+    assert "needs" not in tests_job, "и не ждать гейта"
+
+
 def test_automerge_deploys_only_after_tests_and_merge():
     data = _load("automerge.yml")
     jobs = data["jobs"]
-    assert jobs["tests"]["needs"] == "check"
     assert jobs["merge"]["needs"] == ["check", "tests"]
     assert jobs["deploy"]["needs"] == "merge"
     # Выкатка переиспользует deploy.yml, а не дублирует шаги — иначе два места
