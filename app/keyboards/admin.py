@@ -42,6 +42,7 @@ def admin_panel_keyboard(
             ]
         )
     rows += [
+        [InlineKeyboardButton(text="🎯 Цели сбора", callback_data="adm:goal")],
         [InlineKeyboardButton(text="📣 Рассылка", callback_data="adm:bcast")],
         [InlineKeyboardButton(text="📢 Каналы подписки", callback_data="adm:subch")],
         [InlineKeyboardButton(text="🎧 Треки: YouTube · YT Music · SoundCloud", callback_data="adm:yt")],

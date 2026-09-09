@@ -10,6 +10,7 @@ from app.fsm import build_storage
 from app.handlers import (
     admin,
     admin_broadcast,
+    admin_goals,
     admin_telegram_channel,
     admin_upload_minus,
     admin_youtube,
@@ -93,6 +94,7 @@ async def main() -> int:
     for personal in (
         start, subscription, language, library, playlists, search,
         upload, transfer, premium, referral, player, contests, admin, admin_broadcast, donate,
+        admin_goals,
         admin_upload_minus, admin_youtube, admin_telegram_channel, track_actions, stubs,
     ):
         personal.router.message.filter(F.chat.type == "private")
@@ -115,6 +117,7 @@ async def main() -> int:
         contests.router,
         admin.router,  # до track_actions: перехватывает ta:edit
         admin_broadcast.router,
+        admin_goals.router,
         admin_upload_minus.router,
         admin_youtube.router,
         admin_telegram_channel.router,

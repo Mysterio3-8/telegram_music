@@ -299,7 +299,21 @@ class Payment(Base):
     amount_rub — сумма в рублях (Stars пишем с 0, считаем отдельно по count)."""
 
     __tablename__ = "payments"
-    __table_args__ = (Index("ix_payments_created", "created_at"),)
+    __table_args__ = (
+        Index("ix_payments_created", "created_at"),
+        # ⚠️ Ключ идемпотентности денежных операций. ЮKassa повторяет уведомление,
+        # пока не получит 200, и повторы приходят в том числе параллельно —
+        # проверка «есть ли такая строка» перед вставкой от гонки не защищает.
+        # Частичный: у Stars и старых записей charge_id пуст, и NULL-ы в уникальный
+        # индекс попадать не должны.
+        Index(
+            "ux_payments_charge_id",
+            "charge_id",
+            unique=True,
+            sqlite_where=text("charge_id IS NOT NULL"),
+            postgresql_where=text("charge_id IS NOT NULL"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
@@ -532,6 +546,44 @@ class ContestParticipant(Base):
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
 
+class DonationGoal(Base):
+    """Цель сбора: «на новый сервер — 30 000 ₽», с прогрессом и постом в канале.
+
+    Прогресс НЕ хранится числом. Он всегда считается суммой донатов с этим
+    `goal_id` — иначе появилась бы вторая правда о деньгах, которая рано или
+    поздно разойдётся с первой (возврат, ручная правка, повтор уведомления).
+
+    ⚠️ Активная цель ровно одна, и стережёт это база, а не код. Приём:
+    `is_active` хранит True у активной и NULL у закрытой, а уникальный индекс по
+    нему пропускает только одну True — NULL-ы в уникальном индексе считаются
+    разными и друг другу не мешают (так и в SQLite, и в PostgreSQL). Держать
+    вместо этого булево с False пришлось бы вместе с триггером: уникальность по
+    False запретила бы вторую ЗАКРЫТУЮ цель.
+    """
+
+    __tablename__ = "donation_goals"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    title: Mapped[str] = mapped_column(String(128))
+    description: Mapped[str | None] = mapped_column(String(1024), default=None)
+    target_rub: Mapped[int] = mapped_column()
+    # file_id картинки в Telegram, а не URL: файл уже у них, перезаливать нечего.
+    image_file_id: Mapped[str | None] = mapped_column(String(256), default=None)
+    # Срок сбора. NULL — без срока. Наступление срока цель НЕ закрывает: решение
+    # закрыть — за владельцем, автомат лишь пишет в посте «срок вышел».
+    deadline: Mapped[datetime | None] = mapped_column(default=None)
+    # Пост в канале, который бот перерисовывает после каждого доната.
+    channel_chat_id: Mapped[int | None] = mapped_column(default=None)
+    channel_message_id: Mapped[int | None] = mapped_column(default=None)
+    # См. docstring: True у активной, NULL у закрытой.
+    is_active: Mapped[bool | None] = mapped_column(unique=True, default=True)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    # Когда сумма впервые дошла до цели. Отдельно от closed_at: цель может быть
+    # достигнута и продолжать висеть, пока владелец не заведёт следующую.
+    reached_at: Mapped[datetime | None] = mapped_column(default=None)
+    closed_at: Mapped[datetime | None] = mapped_column(default=None)
+
+
 class Donation(Base):
     """Добровольная поддержка проекта деньгами.
 
@@ -550,13 +602,30 @@ class Donation(Base):
         # Рейтинг считается по незачёркнутым донатам, сгруппированным по человеку —
         # индекс под ровно этот запрос.
         Index("ix_donations_rating", "refunded_at", "user_id"),
+        # Прогресс цели — сумма незачёркнутых донатов этой цели. Отдельный индекс,
+        # потому что запрос идёт на КАЖДЫЙ донат (надо перерисовать пост в канале).
+        Index("ix_donations_goal", "goal_id", "refunded_at"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     amount_rub: Mapped[int] = mapped_column()
-    # id платежа в ЮKassa: и ключ идемпотентности, и то, по чему приходит возврат.
+    # id платежа: в ЮKassa — её payment_id, в Wallet Pay — id заказа. И ключ
+    # идемпотентности, и то, по чему приходит возврат.
     payment_id: Mapped[str] = mapped_column(String(128), unique=True)
+    # Кто провёл платёж: yookassa (рубли) | walletpay (TON).
+    provider: Mapped[str] = mapped_column(String(16), default="yookassa")
+    # Исходная сумма в нанотонах и курс, по которому её пересчитали в рубли.
+    # ⚠️ Курс хранится вместе с платежом намеренно: `amount_rub` фиксируется
+    # НАВСЕГДА на момент оплаты, иначе прогресс цели ехал бы туда-сюда вслед за
+    # курсом, и «собрано 80%» назавтра могло стать «собрано 70%».
+    ton_nano: Mapped[int | None] = mapped_column(default=None)
+    rub_per_ton: Mapped[int | None] = mapped_column(default=None)
+    # Цель, в прогресс которой засчитан донат. NULL — донат вне целей (все, что
+    # были до появления первой цели, и те, что придут между целями).
+    goal_id: Mapped[int | None] = mapped_column(ForeignKey("donation_goals.id"), default=None)
+    # Человек попросил не показывать его в рейтинге. Сумма в прогресс идёт, имя — нет.
+    is_anonymous: Mapped[bool] = mapped_column(default=False)
     # Проставляется, когда деньги ушли обратно (возврат или чарджбэк). Такой донат
     # выпадает из рейтинга: сами мы не возвращаем, но банк плательщика может — и
     # тогда человек не должен остаться в топе за чужой счёт.

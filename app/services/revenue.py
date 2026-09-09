@@ -15,6 +15,19 @@ _RUB_SOURCES = ("yookassa", "card", "ton")
 STARS_SOURCE = "stars"
 
 
+async def payment_already_recorded(session: AsyncSession, charge_id: str) -> bool:
+    """Этот платёж уже лежит в журнале? Ключ идемпотентности денежных операций.
+
+    ⚠️ Спрашивать надо ЖУРНАЛ, а не текущее состояние подписки. Состояние
+    перезаписывается следующим платежом, и защита, привязанная к нему, перестаёт
+    работать ровно тогда, когда человек платит второй раз: повтор уведомления по
+    первому платежу пройдёт её насквозь.
+    """
+    return (
+        await session.scalar(select(Payment.id).where(Payment.charge_id == charge_id))
+    ) is not None
+
+
 async def record_payment(
     session: AsyncSession,
     user_id: int,
@@ -22,7 +35,15 @@ async def record_payment(
     source: str,
     charge_id: str | None = None,
     amount_stars: int = 0,
-) -> None:
+) -> bool:
+    """Пишет платёж в журнал. False — такой charge_id уже учтён, ничего не сделано.
+
+    ЮKassa повторяет уведомление, пока не получит 200, поэтому один и тот же
+    платёж приходит по несколько раз. Без этой проверки повтор удваивал строку в
+    журнале, и отчёт о выручке завышал сумму — а решения принимаются по нему.
+    """
+    if charge_id and await payment_already_recorded(session, charge_id):
+        return False
     session.add(
         Payment(
             user_id=user_id,
@@ -33,6 +54,7 @@ async def record_payment(
         )
     )
     await session.commit()
+    return True
 
 
 @dataclass(frozen=True)

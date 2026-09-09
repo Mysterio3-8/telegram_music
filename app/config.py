@@ -106,6 +106,29 @@ class Settings(BaseSettings):
     toncenter_api_key: str = ""
     ton_rub_per_ton: int = 0  # курс: сколько рублей в 1 TON (0 → TON-оплата выключена)
 
+    # Wallet Pay — магазинный API официального кошелька Telegram (@wallet).
+    # Принимает настоящие TON, деньги падают на баланс владельца в @wallet.
+    # Пусто → кнопка «Поддержать в TON» не показывается вовсе.
+    # ⚠️ Курс берётся из ton_rub_per_ton выше: он фиксируется в момент оплаты и
+    # хранится вместе с донатом, иначе прогресс цели ездил бы вслед за курсом.
+    wallet_pay_api_key: str = ""
+    # 🔴 Предохранитель. Контракт с API Wallet Pay не подтверждён живым
+    # запросом (их документация рендерится скриптом и недоступна из
+    # окружения разработки), поэтому кнопка TON скрыта, даже когда ключ
+    # задан. Ставить true только после успешной пробы:
+    #     python -m app.cli.walletpay probe --amount 10
+    wallet_pay_verified: bool = False
+
+    # Канал, куда уходит пост о цели сбора и где бот его перерисовывает.
+    # 0 → берём news_channel_id; если пуст и он — публикация недоступна.
+    # ⚠️ Бот обязан быть администратором канала с правом публикации, иначе
+    # Telegram откажет и в отправке, и в правке.
+    goal_channel_id: int = 0
+
+    @property
+    def effective_goal_channel_id(self) -> int:
+        return self.goal_channel_id or self.news_channel_id
+
     # ЮKassa (API ЮKassa, redirect-сценарий) — оплата 21 ₽ картой/СБП вне Telegram Payments.
     # Пустые значения → кнопка оплаты через ЮKassa не показывается.
     yookassa_shop_id: str = ""

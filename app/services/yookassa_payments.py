@@ -87,7 +87,7 @@ async def create_premium_payment(
 
 
 async def create_donation_payment(
-    telegram_id: int, bot_username: str, amount_rub: int
+    telegram_id: int, bot_username: str, amount_rub: int, *, anonymous: bool = False
 ) -> str | None:
     """Платёж-донат. Возвращает confirmation_url или None при ошибке.
 
@@ -111,7 +111,15 @@ async def create_donation_payment(
         "capture": True,
         "confirmation": {"type": "redirect", "return_url": f"https://t.me/{bot_username}"},
         "description": f"Добровольная поддержка проекта — {amount_rub} \u20bd",
-        "metadata": {"telegram_id": str(telegram_id), "kind": "donate"},
+        # ⚠️ Выбор «анонимно» едет в метаданных платежа, а не в FSM бота: между
+        # нажатием и подтверждением человек уходит на сайт кассы, возвращается
+        # когда угодно и не обязательно в бот, а уведомление и вовсе приходит в
+        # другой процесс. Метаданные — единственное, что переживёт весь путь.
+        "metadata": {
+            "telegram_id": str(telegram_id),
+            "kind": "donate",
+            "anonymous": "1" if anonymous else "0",
+        },
     }
     try:
         status, body = await _post_payment(payload)
@@ -205,6 +213,28 @@ async def fetch_payment(payment_id: str) -> dict | None:
         return None
 
 
+def _amount_to_rub(amount_raw: str, payment_id: str | None) -> int:
+    """Сумма ЮKassa ("78.00") → целые рубли.
+
+    ⚠️ Округление, а не усечение. Все текущие тарифы и суммы донатов целые, но
+    журнал денег обязан быть точным: усечение молча занижало бы выручку на
+    копейку с каждой нецелой суммы, а заметить это можно только сверкой с
+    кабинетом кассы. Нецелая сумма дополнительно пишется в журнал — значит,
+    где-то появился тариф, под который журнал не рассчитан.
+    """
+    value = float(amount_raw)
+    rub = round(value)
+    if abs(value - rub) > 1e-9:
+        logger.warning(
+            "Платёж %s на нецелую сумму %s — в журнал уйдёт %s ₽. "
+            "Если такие тарифы теперь норма, журнал надо переводить на копейки.",
+            payment_id,
+            amount_raw,
+            rub,
+        )
+    return int(rub)
+
+
 async def apply_succeeded_payment(session: AsyncSession, payment: dict) -> bool:
     """Активирует Premium по подтверждённому платежу. Идемпотентен по payment_id."""
     if payment.get("status") != "succeeded":
@@ -227,9 +257,20 @@ async def apply_succeeded_payment(session: AsyncSession, payment: dict) -> bool:
     if (payment.get("metadata") or {}).get("kind") == "donate":
         return await _apply_donation(session, user, payment)
 
+    # Идемпотентность по ЖУРНАЛУ платежей, а не по текущему состоянию подписки.
+    # ⚠️ Прежняя проверка сравнивала id с последним применённым платежом и
+    # ломалась при втором платеже: заплатил месяц (A), заплатил год (B) —
+    # состояние стало B, и повторное уведомление по A (ЮKassa повторяет часами)
+    # выдавало лишний месяц и дубль в выручке.
+    from app.services.revenue import payment_already_recorded, record_payment
+
+    if await payment_already_recorded(session, payment["id"]):
+        return True  # повторное уведомление — уже обработано
+    # Второй рубеж для платежей, применённых до появления журнала: у них строки
+    # в payments нет, и по одному журналу повтор был бы не виден.
     subscription = await session.get(PremiumSubscription, user.id)
     if subscription is not None and subscription.payment_id == payment["id"]:
-        return True  # повторное уведомление — уже обработано
+        return True
 
     months_raw = (payment.get("metadata") or {}).get("months", "1")
     months = int(months_raw) if str(months_raw).isdigit() else 1
@@ -240,10 +281,8 @@ async def apply_succeeded_payment(session: AsyncSession, payment: dict) -> bool:
         user.pay_method_id = method["id"]
         user.autorenew = True
     # Лог выручки (блок E): сумма из подтверждённого платежа
-    from app.services.revenue import record_payment
-
     amount_raw = ((payment.get("amount") or {}).get("value")) or "0"
-    amount_rub = int(float(amount_raw))
+    amount_rub = _amount_to_rub(amount_raw, payment.get("id"))
     await record_payment(session, user.id, amount_rub, "yookassa", payment["id"])
     # Пригласивший получает скидку на следующий месяц (доп. ТЗ, реферальная программа)
     from app.services.gamification import grant_referrer_discount
@@ -259,7 +298,7 @@ async def _apply_donation(session: AsyncSession, user: User, payment: dict) -> b
 
     amount_raw = ((payment.get("amount") or {}).get("value")) or "0"
     try:
-        amount_rub = int(float(amount_raw))
+        amount_rub = _amount_to_rub(amount_raw, payment.get("id"))
     except (TypeError, ValueError):
         logger.error("Донат %s: не разобрал сумму %r", payment.get("id"), amount_raw)
         return False
@@ -267,10 +306,22 @@ async def _apply_donation(session: AsyncSession, user: User, payment: dict) -> b
         logger.error("Донат %s: неположительная сумма %s", payment.get("id"), amount_rub)
         return False
 
-    donation = await record_donation(session, user.id, amount_rub, payment["id"])
+    # Анонимность человек выбирает до оплаты, и она едет в метаданных платежа:
+    # своего хранилища для «намерения заплатить» у нас нет, а после редиректа на
+    # кассу FSM бота уже не при делах.
+    anonymous = str((payment.get("metadata") or {}).get("anonymous", "")) == "1"
+    donation = await record_donation(
+        session, user.id, amount_rub, payment["id"], is_anonymous=anonymous
+    )
     if donation is None:
         return True  # повторное уведомление — уже учтён
     logger.info("Донат user=%s на %s ₽ (payment=%s)", user.id, amount_rub, payment["id"])
+    # Фиксируем ДО обращений к Telegram: дальше идут сетевые вызовы на секунды,
+    # и запись о деньгах не должна ждать, пока они закончатся.
+    await session.commit()
+    from app.services.goal_events import after_donation
+
+    await after_donation(session, donation)
     await _notify_donation(session, user, amount_rub)
     return True
 

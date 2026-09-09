@@ -66,17 +66,42 @@ def is_allowed_amount(amount: int) -> bool:
 
 
 async def record_donation(
-    session: AsyncSession, user_id: int, amount_rub: int, payment_id: str
+    session: AsyncSession,
+    user_id: int,
+    amount_rub: int,
+    payment_id: str,
+    *,
+    provider: str = "yookassa",
+    is_anonymous: bool = False,
+    ton_nano: int | None = None,
+    rub_per_ton: int | None = None,
 ) -> Donation | None:
     """Записывает подтверждённый донат. None — такой платёж уже учтён.
 
     Идемпотентность по payment_id обязательна: ЮKassa повторяет уведомление,
     пока не получит 200, и повтор не должен удваивать вклад в рейтинге.
+
+    ⚠️ Цель проставляется ЗДЕСЬ, на момент зачисления, а не при показе. Донат
+    навсегда приписан к той цели, которая была активна в секунду оплаты: заведи
+    владелец завтра новую — прогресс старой не должен ни вырасти, ни усохнуть.
+    Донат вне сбора (целей нет вовсе) получает NULL и просто идёт в общий топ.
     """
+    from app.services.donation_goals import active_goal
+
     existing = await session.scalar(select(Donation).where(Donation.payment_id == payment_id))
     if existing is not None:
         return None
-    donation = Donation(user_id=user_id, amount_rub=amount_rub, payment_id=payment_id)
+    goal = await active_goal(session)
+    donation = Donation(
+        user_id=user_id,
+        amount_rub=amount_rub,
+        payment_id=payment_id,
+        provider=provider,
+        is_anonymous=is_anonymous,
+        ton_nano=ton_nano,
+        rub_per_ton=rub_per_ton,
+        goal_id=goal.id if goal is not None else None,
+    )
     session.add(donation)
     await session.flush()
     return donation
