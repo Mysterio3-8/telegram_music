@@ -26,9 +26,16 @@ def donate_keyboard(
     rows.append([InlineKeyboardButton(text=t(anon_key, lang), callback_data="don:anon")])
     # Кнопка вклада в цель появляется только когда сбор идёт — иначе она вела бы
     # на пустой экран.
+    # ⚠️ Когда сбор идёт, общий рейтинг УБИРАЕТСЯ с этого экрана и живёт внутри
+    # сбора. Иначе на одном экране оказывались и «Текущий сбор», и «Рейтинг», и
+    # «По текущей цели» — три кнопки про почти одно и то же, между которыми
+    # человек ходил кругами (жалоба владельца 09.09).
     if has_goal:
         rows.append([InlineKeyboardButton(text=t("goal.open", lang), callback_data="don:goal")])
-    rows.append([InlineKeyboardButton(text=t("donate.top", lang), callback_data="don:top")])
+    else:
+        rows.append(
+            [InlineKeyboardButton(text=t("donate.top", lang), callback_data="don:top:o")]
+        )
     # Полные правила живут вне бота (решение владельца). Пока ссылка не задана —
     # кнопки нет: мёртвая кнопка хуже отсутствующей. Короткая версия правил всё
     # равно всегда на экране.
@@ -51,7 +58,11 @@ def donate_pay_keyboard(url: str, lang: str = DEFAULT_LANGUAGE) -> InlineKeyboar
 
 
 def donate_top_keyboard(
-    lang: str = DEFAULT_LANGUAGE, *, showing_goal: bool = False, has_goal: bool = False
+    lang: str = DEFAULT_LANGUAGE,
+    *,
+    showing_goal: bool = False,
+    has_goal: bool = False,
+    origin: str = "o",
 ) -> InlineKeyboardMarkup:
     """С рейтинга — назад к выбору суммы, а не в главное меню: человек пришёл
     поддержать, и терять его на экране со списком незачем.
@@ -63,17 +74,26 @@ def donate_top_keyboard(
     rows: list[list[InlineKeyboardButton]] = []
     if showing_goal:
         rows.append(
-            [InlineKeyboardButton(text=t("goal.switch_all", lang), callback_data="don:top")]
+            [
+                InlineKeyboardButton(
+                    text=t("goal.switch_all", lang), callback_data=f"don:top:{origin}"
+                )
+            ]
         )
     elif has_goal:
         rows.append(
-            [InlineKeyboardButton(text=t("goal.switch_goal", lang), callback_data="don:goaltop")]
+            [
+                InlineKeyboardButton(
+                    text=t("goal.switch_goal", lang), callback_data=f"don:goaltop:{origin}"
+                )
+            ]
         )
-    # ⚠️ «Назад» ведёт на экран поддержки, а НЕ в главное меню: сюда попадают
-    # именно оттуда, и прыжок в меню терял человека на полпути (жалоба
-    # владельца 09.09). Отдельной кнопки «Поддержать» здесь больше нет — она
-    # вела ровно туда же, куда теперь ведёт «Назад».
-    rows.append([InlineKeyboardButton(text=t("donate.back", lang), callback_data="don:open")])
+    # ⚠️ «Назад» возвращает ТУДА, ОТКУДА пришли, а не в заранее выбранное место.
+    # Откуда именно — едет в callback_data: «g» — экран сбора, «o» — экран
+    # поддержки. Захардкоженный адрес и был жалобой владельца: человек заходил
+    # в рейтинг из сбора, а выходил в другое место.
+    back = "don:goal" if origin == "g" else "don:open"
+    rows.append([InlineKeyboardButton(text=t("donate.back", lang), callback_data=back)])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -133,32 +153,33 @@ def goal_screen_keyboard(
     lang: str = DEFAULT_LANGUAGE, *, post_url: str | None = None
 ) -> InlineKeyboardMarkup:
     """Экран сбора: поддержать, поделиться, пост в канале, вклад, назад."""
-    rows = [
-        [InlineKeyboardButton(text=t("goal.support", lang), callback_data="don:open")],
-        [InlineKeyboardButton(text=t("goal.share", lang), callback_data="don:share")],
-    ]
+    # ⚠️ Кнопки «Поддержать сбор» здесь больше нет: она вела ровно туда же, куда
+    # «Назад» (на экран поддержки), и из-за этой пары экран замыкался сам на
+    # себя. Одно действие — одна кнопка.
+    rows = [[InlineKeyboardButton(text=t("goal.share", lang), callback_data="don:share")]]
     # Кнопки на пост нет, пока сбор не опубликован: мёртвая ссылка хуже её
     # отсутствия.
     if post_url:
         rows.append([InlineKeyboardButton(text=t("goal.post_link", lang), url=post_url)])
     rows.append(
-        [InlineKeyboardButton(text=t("goal.switch_goal", lang), callback_data="don:goaltop")]
+        [InlineKeyboardButton(text=t("donate.top", lang), callback_data="don:goaltop:g")]
     )
     rows.append([InlineKeyboardButton(text=t("donate.back", lang), callback_data="don:open")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def goal_share_keyboard(
-    share_url: str, lang: str = DEFAULT_LANGUAGE, *, post_url: str | None = None
-) -> InlineKeyboardMarkup:
+def goal_share_keyboard(share_url: str, lang: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
     """Пересылка сбора.
 
     `t.me/share/url` открывает штатную шторку выбора чата — работает у всех и
     не требует включённого инлайн-режима (он у бота до сих пор не включён у
     BotFather, и кнопка на нём молча ничего бы не делала).
     """
-    rows = [[InlineKeyboardButton(text=t("goal.share_send", lang), url=share_url)]]
-    if post_url:
-        rows.append([InlineKeyboardButton(text=t("goal.post_link", lang), url=post_url)])
-    rows.append([InlineKeyboardButton(text=t("donate.back", lang), callback_data="don:goal")])
-    return InlineKeyboardMarkup(inline_keyboard=rows)
+    # Ссылки на пост здесь нет намеренно: она уже есть на экране сбора, откуда
+    # сюда и попадают. Повторять её — снова разводить кнопки-двойники.
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=t("goal.share_send", lang), url=share_url)],
+            [InlineKeyboardButton(text=t("donate.back", lang), callback_data="don:goal")],
+        ]
+    )

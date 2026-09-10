@@ -1,9 +1,9 @@
 [Unit]
-Description=Проверять приходы TON каждые 2 минуты
+Description=Проверять приходы TON каждые 5 минут
 
 [Timer]
 OnBootSec=3min
-OnUnitActiveSec=2min
+OnUnitActiveSec=5min
 AccuracySec=30s
 Unit=tg-music-ton-check.service
 

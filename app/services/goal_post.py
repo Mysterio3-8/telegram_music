@@ -12,6 +12,7 @@
 картинки значило бы ответить кассе ошибкой и получить повтор уведомления.
 """
 import logging
+import time
 
 import aiohttp
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -218,18 +219,38 @@ async def refresh_active(session: AsyncSession) -> bool:
     return await refresh(session, goal)
 
 
+# Юзернейм канала по его id. 🔴 Кэш добавлен по жалобе на лаги: без него getChat
+# уходил в Telegram на КАЖДОЕ открытие экрана сбора — сетевой запрос в самом
+# горячем месте раздела. Юзернейм канала меняется раз в никогда, поэтому час
+# жизни здесь с огромным запасом; процесс перезапускается чаще.
+_username_cache: dict[int, tuple[str | None, float]] = {}
+USERNAME_TTL_SEC = 3600
+
+
+async def _channel_username(chat_id: int) -> str | None:
+    cached = _username_cache.get(chat_id)
+    if cached is not None and time.monotonic() - cached[1] < USERNAME_TTL_SEC:
+        return cached[0]
+    chat = await _call("getChat", {"chat_id": chat_id})
+    if chat is None:
+        # Отказ Telegram НЕ кэшируем: он временный, а запомнить его на час
+        # значило бы на час же спрятать кнопку на пост без всякой причины.
+        return None
+    username = chat.get("username")
+    _username_cache[chat_id] = (username, time.monotonic())
+    return username
+
+
 async def post_url(goal: DonationGoal) -> str | None:
     """Ссылка на пост о сборе в канале. None — поста нет или канал приватный.
 
-    Юзернейм канала не хранится вместе с целью намеренно: он у владельца
-    меняется независимо от нас, и сохранённая копия однажды начала бы вести в
-    никуда. Спрашиваем Telegram в момент показа — это редкое действие, а не
-    горячий путь.
+    Юзернейм не хранится вместе с целью намеренно: он у владельца меняется
+    независимо от нас, и сохранённая в базе копия однажды повела бы в никуда.
+    Спрашиваем Telegram, но через кэш — см. выше.
     """
     if not goal.channel_chat_id or not goal.channel_message_id:
         return None
-    chat = await _call("getChat", {"chat_id": goal.channel_chat_id})
-    username = (chat or {}).get("username")
+    username = await _channel_username(goal.channel_chat_id)
     if not username:
         return None  # приватный канал — публичной ссылки на пост не существует
     return f"https://t.me/{username}/{goal.channel_message_id}"

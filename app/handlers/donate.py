@@ -232,7 +232,6 @@ async def cb_share(callback: CallbackQuery, state: FSMContext) -> None:
             await callback.answer(t("goal.none", lang), show_alert=True)
             return
         raised = await goals.goal_progress(session, goal.id)
-        url = await goal_post.post_url(goal)
 
     link = _goal_link()
     share_text = t("goal.share_text", lang).format(
@@ -246,7 +245,7 @@ async def cb_share(callback: CallbackQuery, state: FSMContext) -> None:
     )
     await callback.message.edit_text(
         t("goal.share_screen", lang).format(link=html.escape(link)),
-        reply_markup=goal_share_keyboard(share_url, lang, post_url=url),
+        reply_markup=goal_share_keyboard(share_url, lang),
         parse_mode="HTML",
     )
     await callback.answer()
@@ -503,7 +502,17 @@ def _format_top(rows: list[tuple[object, int]], lang: str) -> str:
     return "\n".join(lines)
 
 
-@router.callback_query(F.data == "don:top")
+def _origin(data: str, prefix: str) -> str:
+    """Хвост callback_data — откуда человек пришёл: «g» сбор, «o» поддержка.
+
+    Старые сообщения без хвоста продолжают работать: у них origin = «o». Бот
+    живёт годами, и кнопки в чатах остаются нажимаемыми и после нашего деплоя.
+    """
+    tail = data.removeprefix(prefix).lstrip(":")
+    return "g" if tail == "g" else "o"
+
+
+@router.callback_query(F.data.startswith("don:top"))
 async def cb_top(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(None)
     async with session_factory() as session:
@@ -513,6 +522,7 @@ async def cb_top(callback: CallbackQuery, state: FSMContext) -> None:
         mine = await user_total(session, user.id)
         rank = await user_rank(session, user.id)
         has_goal = await goals.active_goal(session) is not None
+    origin = _origin(callback.data, "don:top")
     text = _format_top(rows, lang)
     if rank is not None:
         text += "\n\n" + t("donate.your_place", lang).format(
@@ -520,13 +530,15 @@ async def cb_top(callback: CallbackQuery, state: FSMContext) -> None:
         )
     await callback.message.edit_text(
         text,
-        reply_markup=donate_top_keyboard(lang, showing_goal=False, has_goal=has_goal),
+        reply_markup=donate_top_keyboard(
+            lang, showing_goal=False, has_goal=has_goal, origin=origin
+        ),
         parse_mode="HTML",
     )
     await callback.answer()
 
 
-@router.callback_query(F.data == "don:goaltop")
+@router.callback_query(F.data.startswith("don:goaltop"))
 async def cb_goal_top(callback: CallbackQuery, state: FSMContext) -> None:
     """Вклад в ТЕКУЩУЮ цель — отдельный список от общего топа за всё время.
 
@@ -534,6 +546,7 @@ async def cb_goal_top(callback: CallbackQuery, state: FSMContext) -> None:
     против давнего спонсора не имеет шансов, а здесь все начинают с нуля.
     """
     await state.set_state(None)
+    origin = _origin(callback.data, "don:goaltop")
     async with session_factory() as session:
         user = await ensure_user(session, callback.from_user)
         lang = user_language(user)
@@ -563,7 +576,9 @@ async def cb_goal_top(callback: CallbackQuery, state: FSMContext) -> None:
     )
     await callback.message.edit_text(
         text,
-        reply_markup=donate_top_keyboard(lang, showing_goal=True, has_goal=True),
+        reply_markup=donate_top_keyboard(
+            lang, showing_goal=True, has_goal=True, origin=origin
+        ),
         parse_mode="HTML",
     )
     await callback.answer()

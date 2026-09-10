@@ -4,6 +4,15 @@ After=network-online.target
 
 [Service]
 Type=oneshot
+# 🔴 Рубеж против пустого сжигания ядра. Каждый запуск — полный импорт Python
+# с SQLAlchemy, и на этом боксе с ОДНИМ ядром такой запуск раз в две минуты
+# стоит заметной доли процессора (журнал проекта: moved_bot давал 23% ядра
+# ровно этим). Прямой перевод на кошелёк включается курсом, и пока курса нет,
+# задача не делает НИЧЕГО — импортируется и выходит. Дешёвая проверка на sh
+# отсекает такой запуск до старта Python.
+#
+# ⚠️ Crypto Pay сюда не относится вовсе: у него вебхук, и таймер ему не нужен.
+ExecCondition=/bin/sh -c 'grep -qE "^TON_RUB_PER_TON=[1-9]" /opt/tg-music-bot/.env'
 WorkingDirectory=/opt/tg-music-bot
 ExecStart=/opt/tg-music-bot/.venv/bin/python -m app.cli.ton check
 # Прогон короткий (один HTTP-запрос к блокчейну), поэтому лимит с запасом:
