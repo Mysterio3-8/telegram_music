@@ -335,9 +335,11 @@ async def cb_refresh(callback: CallbackQuery) -> None:
         return
     async with session_factory() as session:
         ok = await goal_post.refresh_active(session)
-    # «Не изменилось» Telegram считает ошибкой, а для нас это норма: с прошлой
-    # правки могло не прийти ни одного доната.
-    await callback.answer("Пост обновлён" if ok else "Пост уже актуален либо Telegram отказал")
+    # «Не изменилось» сюда уже приходит как успех (см. NOT_MODIFIED в goal_post):
+    # с прошлой правки могло просто не быть донатов, и это не отказ.
+    await callback.answer(
+        "Пост обновлён" if ok else "Не вышло: пост не публиковался или Telegram отказал"
+    )
 
 
 @router.callback_query(F.data == "adm:goal:close:ask")

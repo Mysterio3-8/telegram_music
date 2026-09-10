@@ -25,6 +25,14 @@ from app.services.donations import display_name
 logger = logging.getLogger(__name__)
 
 TELEGRAM_API = "https://api.telegram.org"
+
+# 🔴 «Текст и так актуален» — это УСПЕХ, а не отказ, и путать их дорого.
+# Telegram отвечает на такую правку кодом 400, и пока этот ответ сваливался в
+# общий None, `refresh` рапортовал «обновить не удалось» на совершенно здоровом
+# посте. По этому ложному сигналу можно решить, что пост сломан, и полезть
+# чинить то, что не ломалось (10.09 именно так и вышло: проверка «а правится ли
+# сообщение» перезаписала живой пост словом «проверка»).
+NOT_MODIFIED = object()
 TIMEOUT_SEC = 15
 # Подпись к фото у Telegram ограничена 1024 символами, обычное сообщение — 4096.
 # Пост с картинкой приходится держать в более узких рамках.
@@ -129,7 +137,7 @@ async def _call(method: str, payload: dict) -> dict | None:
                     # Правка поста, который и так актуален, — не ошибка, а норма:
                     # два доната на одну сумму подряд дают тот же самый текст.
                     if "message is not modified" in description:
-                        return None
+                        return NOT_MODIFIED
                     logger.error("goal_post.%s %s: %s", method, response.status, description)
                     return None
                 return body.get("result")
@@ -173,7 +181,9 @@ async def publish(session: AsyncSession, goal: DonationGoal, chat_id: int) -> bo
                 "reply_markup": _keyboard(),
             },
         )
-    if not result:
+    # У отправки нового сообщения «не изменилось» быть не может, но сентинел
+    # сюда всё равно не должен просочиться: ниже идёт result["message_id"].
+    if not result or result is NOT_MODIFIED:
         return False
 
     goal.channel_chat_id = chat_id
@@ -208,6 +218,7 @@ async def refresh(session: AsyncSession, goal: DonationGoal) -> bool:
     }
     if method == "editMessageText":
         payload["disable_web_page_preview"] = True
+    # NOT_MODIFIED тоже успех: пост актуален, делать нечего.
     return await _call(method, payload) is not None
 
 
@@ -232,7 +243,7 @@ async def _channel_username(chat_id: int) -> str | None:
     if cached is not None and time.monotonic() - cached[1] < USERNAME_TTL_SEC:
         return cached[0]
     chat = await _call("getChat", {"chat_id": chat_id})
-    if chat is None:
+    if chat is None or chat is NOT_MODIFIED:
         # Отказ Telegram НЕ кэшируем: он временный, а запомнить его на час
         # значило бы на час же спрятать кнопку на пост без всякой причины.
         return None

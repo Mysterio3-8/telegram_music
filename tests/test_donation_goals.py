@@ -297,3 +297,48 @@ async def test_reopen_refuses_while_another_goal_is_active(session):
 
 async def test_reopen_without_closed_goals_returns_none(session):
     assert await goals.reopen_goal(session) is None
+
+
+async def test_refresh_treats_unchanged_post_as_success(session, monkeypatch):
+    """🔴 «Текст и так актуален» — успех, а не отказ.
+
+    Telegram отвечает на правку тем же текстом кодом 400, и пока это сваливалось
+    в общий отказ, refresh рапортовал «обновить не удалось» на здоровом посте.
+    По такому сигналу легко решить, что пост сломан, и полезть чинить целое —
+    10.09 именно так живой пост в канале и был перезаписан словом «проверка».
+    """
+    goal = await _goal(session)
+    goal.channel_chat_id = -100123
+    goal.channel_message_id = 7
+    await session.flush()
+
+    async def _not_modified(method, payload):
+        return goal_post.NOT_MODIFIED
+
+    monkeypatch.setattr(goal_post, "_call", _not_modified)
+    assert await goal_post.refresh(session, goal) is True
+
+
+async def test_refresh_reports_real_failure(session, monkeypatch):
+    """А вот настоящий отказ Telegram обязан остаться отказом."""
+    goal = await _goal(session)
+    goal.channel_chat_id = -100123
+    goal.channel_message_id = 7
+    await session.flush()
+
+    async def _failed(method, payload):
+        return None
+
+    monkeypatch.setattr(goal_post, "_call", _failed)
+    assert await goal_post.refresh(session, goal) is False
+
+
+async def test_publish_does_not_accept_the_not_modified_sentinel(session, monkeypatch):
+    """Сентинел не должен просочиться в publish: там дальше result['message_id']."""
+    goal = await _goal(session)
+
+    async def _not_modified(method, payload):
+        return goal_post.NOT_MODIFIED
+
+    monkeypatch.setattr(goal_post, "_call", _not_modified)
+    assert await goal_post.publish(session, goal, -100123) is False
