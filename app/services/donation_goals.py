@@ -89,6 +89,44 @@ async def close_goal(session: AsyncSession, goal: DonationGoal) -> None:
     logger.info("Цель #%s «%s» закрыта", goal.id, goal.title)
 
 
+async def has_closed_goal(session: AsyncSession) -> bool:
+    """Есть ли закрытая цель, которую можно вернуть."""
+    result = await session.execute(
+        select(DonationGoal.id).where(DonationGoal.closed_at.is_not(None)).limit(1)
+    )
+    return result.scalar_one_or_none() is not None
+
+
+async def reopen_goal(session: AsyncSession) -> DonationGoal | None:
+    """Вернуть в работу последнюю закрытую цель. None — вернуть нечего.
+
+    Нужно потому, что «Закрыть цель» — необратимая на вид кнопка в двух тапах от
+    админки, и нажать её случайно легко (владелец так и сделал 10.09). Данные при
+    закрытии никуда не деваются: цель лишь помечается неактивной, донаты и id
+    поста остаются на месте, поэтому возврат — это снятие пометки, а не
+    восстановление из небытия.
+
+    ⚠️ Пока есть активная цель, вернуть старую нельзя: активная ровно одна, и
+    попытка завести вторую упёрлась бы в уникальный индекс базы.
+    """
+    if await active_goal(session) is not None:
+        return None
+    result = await session.execute(
+        select(DonationGoal)
+        .where(DonationGoal.closed_at.is_not(None))
+        .order_by(DonationGoal.closed_at.desc())
+        .limit(1)
+    )
+    goal = result.scalar_one_or_none()
+    if goal is None:
+        return None
+    goal.is_active = True
+    goal.closed_at = None
+    await session.commit()
+    logger.info("Цель #%s «%s» возвращена в работу", goal.id, goal.title)
+    return goal
+
+
 async def goal_progress(session: AsyncSession, goal_id: int) -> int:
     """Сколько собрано по цели. Возвращённые донаты не в счёт."""
     result = await session.execute(

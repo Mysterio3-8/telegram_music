@@ -114,6 +114,19 @@ async def cmd_refresh() -> int:
         return 1
 
 
+async def cmd_reopen() -> int:
+    async with session_factory() as session:
+        goal = await goals.reopen_goal(session)
+        if goal is None:
+            print("Вернуть нечего: закрытых целей нет либо уже идёт активная.")
+            return 1
+        raised = await goals.goal_progress(session, goal.id)
+        print(f"Цель #{goal.id} «{goal.title}» снова в работе. Собрано {raised} ₽.")
+        if goal.channel_message_id:
+            print("Пост в канале сохранён — обновить: python -m app.cli.goals refresh")
+    return 0
+
+
 async def cmd_close() -> int:
     async with session_factory() as session:
         goal = await goals.active_goal(session)
@@ -145,6 +158,7 @@ def main() -> int:
 
     sub.add_parser("refresh", help="перерисовать опубликованный пост")
     sub.add_parser("close", help="закрыть активную цель")
+    sub.add_parser("reopen", help="вернуть в работу последнюю закрытую цель")
 
     args = parser.parse_args()
     if args.command == "list":
@@ -157,6 +171,8 @@ def main() -> int:
         return asyncio.run(cmd_refresh())
     if args.command == "close":
         return asyncio.run(cmd_close())
+    if args.command == "reopen":
+        return asyncio.run(cmd_reopen())
     return 1
 
 

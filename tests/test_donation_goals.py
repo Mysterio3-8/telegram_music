@@ -270,3 +270,30 @@ async def test_post_has_no_disclaimer_but_payment_screen_does(session):
     assert "добровольн" not in goal_post.render_post(goal, 100, []).lower()
     assert "добровольн" in MESSAGES["donate.intro"].lower()
     assert "не покупка" in MESSAGES["donate.intro"].lower()
+
+
+async def test_reopen_returns_the_last_closed_goal(session):
+    """«Закрыть цель» — кнопка в двух тапах от админки, и нажать её случайно
+    легко. Закрытие ничего не удаляет, поэтому возврат обязан быть возможен."""
+    goal = await _goal(session, title="На новый сервер", target=25000)
+    user = await _user(session, 1)
+    await record_donation(session, user.id, 500, "pay-1")
+    await goals.close_goal(session, goal)
+
+    reopened = await goals.reopen_goal(session)
+    assert reopened is not None and reopened.id == goal.id
+    assert (await goals.active_goal(session)).id == goal.id
+    # Донаты остались при цели — возврат не начинает сбор с нуля.
+    assert await goals.goal_progress(session, goal.id) == 500
+
+
+async def test_reopen_refuses_while_another_goal_is_active(session):
+    """Активная цель ровно одна: иначе вторая упёрлась бы в индекс базы."""
+    first = await _goal(session, title="Сервер")
+    await goals.close_goal(session, first)
+    await _goal(session, title="Домен")
+    assert await goals.reopen_goal(session) is None
+
+
+async def test_reopen_without_closed_goals_returns_none(session):
+    assert await goals.reopen_goal(session) is None

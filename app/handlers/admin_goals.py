@@ -56,7 +56,9 @@ def _spaced(amount: int) -> str:
     return f"{amount:,}".replace(",", " ")
 
 
-def _panel_keyboard(has_goal: bool, published: bool) -> InlineKeyboardMarkup:
+def _panel_keyboard(
+    has_goal: bool, published: bool, *, can_reopen: bool = False
+) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     if has_goal:
         rows.append(
@@ -76,6 +78,17 @@ def _panel_keyboard(has_goal: bool, published: bool) -> InlineKeyboardMarkup:
         )
     else:
         rows.append([InlineKeyboardButton(text="➕ Завести цель", callback_data="adm:goal:new")])
+        # Закрыть цель легко случайно — кнопка в двух тапах отсюда, и владелец
+        # так и сделал 10.09. Поэтому рядом стоит возврат последней закрытой: он
+        # ничего не восстанавливает из небытия, лишь снимает пометку «закрыта».
+        if can_reopen:
+            rows.append(
+                [
+                    InlineKeyboardButton(
+                        text="↩️ Вернуть прошлую цель", callback_data="adm:goal:reopen"
+                    )
+                ]
+            )
     rows.append([InlineKeyboardButton(text="◀️ Назад", callback_data="adm:stats")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -128,7 +141,10 @@ async def _panel_text(session) -> tuple[str, bool, bool]:
 async def _show_panel(message: Message, edit: bool) -> None:
     async with session_factory() as session:
         text, has_goal, published = await _panel_text(session)
-    markup = _panel_keyboard(has_goal, published)
+        # Есть ли что возвращать — спрашиваем, только когда активной цели нет:
+        # иначе кнопка всё равно не показывается, а запрос был бы впустую.
+        can_reopen = not has_goal and await goals.has_closed_goal(session)
+    markup = _panel_keyboard(has_goal, published, can_reopen=can_reopen)
     if edit:
         await message.edit_text(text, reply_markup=markup, parse_mode="HTML")
     else:
@@ -266,6 +282,23 @@ async def step_days(message: Message, state: FSMContext) -> None:
 
 
 # --- публикация и закрытие --------------------------------------------------
+
+
+@router.callback_query(F.data == "adm:goal:reopen")
+async def cb_reopen(callback: CallbackQuery) -> None:
+    if not is_admin(callback.from_user.id):
+        await callback.answer("Недоступно", show_alert=True)
+        return
+    async with session_factory() as session:
+        goal = await goals.reopen_goal(session)
+        if goal is None:
+            await callback.answer("Вернуть нечего", show_alert=True)
+            return
+        # Пост в канале пережил закрытие — перерисовываем сразу, чтобы
+        # подписчики увидели живой сбор, а не замерший.
+        await goal_post.refresh(session, goal)
+    await _show_panel(callback.message, edit=True)
+    await callback.answer("Цель снова в работе")
 
 
 @router.callback_query(F.data == "adm:goal:pub")
