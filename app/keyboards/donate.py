@@ -27,9 +27,7 @@ def donate_keyboard(
     # Кнопка вклада в цель появляется только когда сбор идёт — иначе она вела бы
     # на пустой экран.
     if has_goal:
-        rows.append(
-            [InlineKeyboardButton(text=t("goal.switch_goal", lang), callback_data="don:goaltop")]
-        )
+        rows.append([InlineKeyboardButton(text=t("goal.open", lang), callback_data="don:goal")])
     rows.append([InlineKeyboardButton(text=t("donate.top", lang), callback_data="don:top")])
     # Полные правила живут вне бота (решение владельца). Пока ссылка не задана —
     # кнопки нет: мёртвая кнопка хуже отсутствующей. Короткая версия правил всё
@@ -71,10 +69,11 @@ def donate_top_keyboard(
         rows.append(
             [InlineKeyboardButton(text=t("goal.switch_goal", lang), callback_data="don:goaltop")]
         )
-    rows.append(
-        [InlineKeyboardButton(text=t("donate.support_now", lang), callback_data="don:open")]
-    )
-    rows.append([InlineKeyboardButton(text=t("donate.back", lang), callback_data="menu:main")])
+    # ⚠️ «Назад» ведёт на экран поддержки, а НЕ в главное меню: сюда попадают
+    # именно оттуда, и прыжок в меню терял человека на полпути (жалоба
+    # владельца 09.09). Отдельной кнопки «Поддержать» здесь больше нет — она
+    # вела ровно туда же, куда теперь ведёт «Назад».
+    rows.append([InlineKeyboardButton(text=t("donate.back", lang), callback_data="don:open")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -88,13 +87,18 @@ def donate_cancel_keyboard(lang: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup
 
 
 def donate_method_keyboard(
-    amount: int, ton_amount: float, lang: str = DEFAULT_LANGUAGE
+    amount: int, ton_amount: float | None = None, lang: str = DEFAULT_LANGUAGE
 ) -> InlineKeyboardMarkup:
     """Выбор способа: рубли или TON.
 
     Показывается ТОЛЬКО когда TON действительно доступен. Иначе экран с одной
     кнопкой был бы лишним шагом между человеком и оплатой.
+
+    `ton_amount=None` — курс нам неизвестен (так у Crypto Pay: он считает свой
+    курс на своём экране оплаты). Тогда на кнопке просто «TON» без числа: лучше
+    не показать сумму, чем показать выдуманную.
     """
+    ton_text = t("donate.pay_ton", lang).format(ton=ton_amount) if ton_amount else "💎 TON"
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
@@ -102,12 +106,59 @@ def donate_method_keyboard(
                     text=t("donate.pay_rub", lang), callback_data=f"don:rub:{amount}"
                 )
             ],
+            [InlineKeyboardButton(text=ton_text, callback_data=f"don:ton:{amount}")],
+            [InlineKeyboardButton(text=t("donate.back", lang), callback_data="don:open")],
+        ]
+    )
+
+
+def ton_manual_keyboard(
+    wallet_url: str, amount: int, lang: str = DEFAULT_LANGUAGE
+) -> InlineKeyboardMarkup:
+    """Прямой перевод на кошелёк: открыть кошелёк, проверить, назад."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=t("donate.ton_open_wallet", lang), url=wallet_url)],
             [
                 InlineKeyboardButton(
-                    text=t("donate.pay_ton", lang).format(ton=ton_amount),
-                    callback_data=f"don:ton:{amount}",
+                    text=t("donate.ton_check", lang), callback_data=f"don:tonok:{amount}"
                 )
             ],
             [InlineKeyboardButton(text=t("donate.back", lang), callback_data="don:open")],
         ]
     )
+
+
+def goal_screen_keyboard(
+    lang: str = DEFAULT_LANGUAGE, *, post_url: str | None = None
+) -> InlineKeyboardMarkup:
+    """Экран сбора: поддержать, поделиться, пост в канале, вклад, назад."""
+    rows = [
+        [InlineKeyboardButton(text=t("goal.support", lang), callback_data="don:open")],
+        [InlineKeyboardButton(text=t("goal.share", lang), callback_data="don:share")],
+    ]
+    # Кнопки на пост нет, пока сбор не опубликован: мёртвая ссылка хуже её
+    # отсутствия.
+    if post_url:
+        rows.append([InlineKeyboardButton(text=t("goal.post_link", lang), url=post_url)])
+    rows.append(
+        [InlineKeyboardButton(text=t("goal.switch_goal", lang), callback_data="don:goaltop")]
+    )
+    rows.append([InlineKeyboardButton(text=t("donate.back", lang), callback_data="don:open")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def goal_share_keyboard(
+    share_url: str, lang: str = DEFAULT_LANGUAGE, *, post_url: str | None = None
+) -> InlineKeyboardMarkup:
+    """Пересылка сбора.
+
+    `t.me/share/url` открывает штатную шторку выбора чата — работает у всех и
+    не требует включённого инлайн-режима (он у бота до сих пор не включён у
+    BotFather, и кнопка на нём молча ничего бы не делала).
+    """
+    rows = [[InlineKeyboardButton(text=t("goal.share_send", lang), url=share_url)]]
+    if post_url:
+        rows.append([InlineKeyboardButton(text=t("goal.post_link", lang), url=post_url)])
+    rows.append([InlineKeyboardButton(text=t("donate.back", lang), callback_data="don:goal")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)

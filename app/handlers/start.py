@@ -129,6 +129,14 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
         await show_donate_from_start(message, lang)
         return
 
+    # Ссылка на сбор: её кидают друзьям и выкладывают в другие соцсети, поэтому
+    # она обязана приводить сразу на экран сбора, а не в общее меню.
+    if command.args == "goal":
+        from app.handlers.donate import show_goal_from_start
+
+        await show_goal_from_start(message, lang)
+        return
+
     if command.args and command.args.startswith("track_"):
         if await _show_shared_track(message, user, command.args):
             return

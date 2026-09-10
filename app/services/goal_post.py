@@ -218,3 +218,20 @@ async def refresh_active(session: AsyncSession) -> bool:
     if goal is None:
         return False
     return await refresh(session, goal)
+
+
+async def post_url(goal: DonationGoal) -> str | None:
+    """Ссылка на пост о сборе в канале. None — поста нет или канал приватный.
+
+    Юзернейм канала не хранится вместе с целью намеренно: он у владельца
+    меняется независимо от нас, и сохранённая копия однажды начала бы вести в
+    никуда. Спрашиваем Telegram в момент показа — это редкое действие, а не
+    горячий путь.
+    """
+    if not goal.channel_chat_id or not goal.channel_message_id:
+        return None
+    chat = await _call("getChat", {"chat_id": goal.channel_chat_id})
+    username = (chat or {}).get("username")
+    if not username:
+        return None  # приватный канал — публичной ссылки на пост не существует
+    return f"https://t.me/{username}/{goal.channel_message_id}"

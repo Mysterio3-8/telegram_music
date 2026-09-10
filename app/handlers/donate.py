@@ -5,6 +5,7 @@
 """
 import html
 import logging
+from urllib.parse import quote
 
 from aiogram import F, Router
 from aiogram.filters import Command
@@ -22,6 +23,9 @@ from app.keyboards.donate import (
     donate_method_keyboard,
     donate_pay_keyboard,
     donate_top_keyboard,
+    goal_screen_keyboard,
+    goal_share_keyboard,
+    ton_manual_keyboard,
 )
 from app.services.donations import (
     MAX_AMOUNT_RUB,
@@ -35,7 +39,9 @@ from app.services.donations import (
     user_total,
 )
 from app.services import donation_goals as goals
-from app.services import wallet_pay
+from app.services import goal_post
+from app.services import crypto_pay
+from app.services import ton_donations
 from app.services.users import user_language
 from app.services.yookassa_payments import create_donation_payment, is_yookassa_configured
 
@@ -134,6 +140,118 @@ async def cb_open(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
 
 
+def _ton_available() -> bool:
+    """Есть ли хоть один рабочий путь оплаты в TON.
+
+    Их два, и порядок не случаен: Crypto Pay даёт счёт в рублях, оплату в один
+    тап и уведомление с подписью, а прямой перевод на кошелёк работает вообще
+    без ключей, но требует от человека скопировать адрес и метку. Поэтому
+    Crypto Pay — основной, прямой перевод — запасной.
+    """
+    return crypto_pay.is_configured() or ton_donations.is_configured()
+
+
+def _goal_link() -> str:
+    """Ссылка, которая открывает сбор прямо в боте.
+
+    Именно её человек кидает другу или выкладывает в другую соцсеть: она ведёт
+    не на пост в канале, а в бота, где сразу видно прогресс и стоит кнопка
+    оплаты. Пост в канале даётся отдельной кнопкой — он нужен тем, кто хочет
+    показать сбор внутри Telegram.
+    """
+    return f"https://t.me/{settings.bot_username}?start=goal"
+
+
+async def _goal_screen(message: Message, lang: str, edit: bool) -> bool:
+    """Экран текущего сбора. False — сбора сейчас нет."""
+    async with session_factory() as session:
+        goal = await goals.active_goal(session)
+        if goal is None:
+            return False
+        raised = await goals.goal_progress(session, goal.id)
+        recent = await goals.recent_donations(session, goal.id)
+        url = await goal_post.post_url(goal)
+
+    lines = [
+        t("goal.block", lang).format(
+            title=html.escape(goal.title),
+            bar=goals.progress_bar(raised, goal.target_rub),
+            percent=goals.progress_percent(raised, goal.target_rub),
+            raised=_spaced(raised),
+            target=_spaced(goal.target_rub),
+        )
+    ]
+    if goal.description:
+        lines.insert(1, html.escape(goal.description))
+    left = goals.days_left(goal)
+    if left is not None:
+        if left > 0:
+            lines.append(t("goal.days_left", lang).format(days=left))
+        elif left == 0:
+            lines.append(t("goal.last_day", lang))
+        else:
+            lines.append(t("goal.deadline_over", lang))
+    if goal.reached_at is not None:
+        lines.append(t("goal.reached", lang))
+    if recent:
+        lines.append("")
+        for row_user, amount, anonymous in recent:
+            who = "🙈" if anonymous else html.escape(display_name(row_user))
+            lines.append(f"▪️ {who} — {amount} ₽")
+
+    text = "\n".join(lines)
+    markup = goal_screen_keyboard(lang, post_url=url)
+    if edit:
+        await message.edit_text(text, reply_markup=markup, parse_mode="HTML")
+    else:
+        await message.answer(text, reply_markup=markup, parse_mode="HTML")
+    return True
+
+
+@router.callback_query(F.data == "don:goal")
+async def cb_goal(callback: CallbackQuery, state: FSMContext) -> None:
+    await state.set_state(None)
+    async with session_factory() as session:
+        user = await ensure_user(session, callback.from_user)
+        lang = user_language(user)
+    if not await _goal_screen(callback.message, lang, edit=True):
+        await callback.answer(t("goal.none", lang), show_alert=True)
+        return
+    await callback.answer()
+
+
+@router.callback_query(F.data == "don:share")
+async def cb_share(callback: CallbackQuery, state: FSMContext) -> None:
+    """Экран пересылки: готовая ссылка текстом плюс кнопка отправки."""
+    await state.set_state(None)
+    async with session_factory() as session:
+        user = await ensure_user(session, callback.from_user)
+        lang = user_language(user)
+        goal = await goals.active_goal(session)
+        if goal is None:
+            await callback.answer(t("goal.none", lang), show_alert=True)
+            return
+        raised = await goals.goal_progress(session, goal.id)
+        url = await goal_post.post_url(goal)
+
+    link = _goal_link()
+    share_text = t("goal.share_text", lang).format(
+        title=goal.title, percent=goals.progress_percent(raised, goal.target_rub)
+    )
+    # quote(safe="") обязателен: без него «&» и «=» из нашей ссылки станут
+    # разделителями параметров самой шторки, и до друга уедет обрубок.
+    share_url = (
+        "https://t.me/share/url"
+        f"?url={quote(link, safe='')}&text={quote(share_text, safe='')}"
+    )
+    await callback.message.edit_text(
+        t("goal.share_screen", lang).format(link=html.escape(link)),
+        reply_markup=goal_share_keyboard(share_url, lang, post_url=url),
+        parse_mode="HTML",
+    )
+    await callback.answer()
+
+
 @router.callback_query(F.data == "don:anon")
 async def cb_anon(callback: CallbackQuery, state: FSMContext) -> None:
     """Переключить анонимность. Экран перерисовывается целиком: подпись кнопки и
@@ -227,7 +345,7 @@ async def cb_pay_method(callback: CallbackQuery, state: FSMContext) -> None:
     if not (raw.isascii() and raw.isdigit()) or not is_allowed_amount(int(raw)):
         await callback.answer(t("donate.bad_amount_short", lang), show_alert=True)
         return
-    if method == "ton" and not wallet_pay.is_configured():
+    if method == "ton" and not _ton_available():
         # Способ мог отключиться, пока человек смотрел на экран.
         await callback.answer(t("donate.unavailable", lang), show_alert=True)
         return
@@ -246,7 +364,10 @@ async def cb_pay_method(callback: CallbackQuery, state: FSMContext) -> None:
 async def _offer_methods(message: Message, amount: int, lang: str, edit: bool) -> None:
     """Экран выбора способа оплаты. Показывается, только если TON доступен."""
     text = t("donate.method_title", lang).format(amount=amount)
-    markup = donate_method_keyboard(amount, wallet_pay.ton_for_rub(amount), lang)
+    # Сумму в TON показываем, только когда её есть чем посчитать: у Crypto Pay
+    # курс свой и станет известен лишь на их экране оплаты.
+    ton = ton_donations.ton_for_rub(amount) if ton_donations.is_configured() else None
+    markup = donate_method_keyboard(amount, ton, lang)
     if edit:
         await message.edit_text(text, reply_markup=markup, parse_mode="HTML")
     else:
@@ -256,21 +377,68 @@ async def _offer_methods(message: Message, amount: int, lang: str, edit: bool) -
 async def _start_ton_payment(
     message: Message, telegram_id: int, amount: int, lang: str, edit: bool, anonymous: bool
 ) -> None:
-    """Счёт в TON через Wallet Pay."""
-    result = await wallet_pay.create_order(telegram_id, amount, anonymous=anonymous)
-    if result is None:
-        text = t("donate.error", lang)
-        markup = donate_keyboard(lang, anonymous=anonymous)
-    else:
-        _order_id, link = result
-        text = t("donate.ton_prompt", lang).format(
-            amount=amount, ton=wallet_pay.ton_for_rub(amount)
+    """Оплата в TON. Путей два, и первым идёт тот, что удобнее человеку.
+
+    Crypto Pay: счёт выставляется в рублях, человек платит в один тап в
+    @CryptoBot, зачисление приходит вебхуком. Прямой перевод на кошелёк:
+    ключей не нужно вовсе, но адрес и метку человек копирует сам.
+    """
+    if crypto_pay.is_configured():
+        result = await crypto_pay.create_invoice(telegram_id, amount, anonymous=anonymous)
+        if result is None:
+            text, markup = t("donate.error", lang), donate_keyboard(lang, anonymous=anonymous)
+        else:
+            _invoice_id, link = result
+            text = t("donate.pay_prompt", lang).format(amount=amount)
+            markup = donate_pay_keyboard(link, lang)
+    elif ton_donations.is_configured():
+        ton = ton_donations.ton_for_rub(amount)
+        memo = ton_donations.make_memo(telegram_id, anonymous=anonymous)
+        text = t("donate.ton_manual", lang).format(
+            amount=amount,
+            ton=ton,
+            address=html.escape(settings.ton_wallet_address),
+            memo=html.escape(memo),
         )
-        markup = donate_pay_keyboard(link, lang)
+        markup = ton_manual_keyboard(ton_donations.transfer_link(ton, memo), amount, lang)
+    else:
+        text, markup = t("donate.unavailable", lang), donate_keyboard(lang, anonymous=anonymous)
+
     if edit:
         await message.edit_text(text, reply_markup=markup, parse_mode="HTML")
     else:
         await message.answer(text, reply_markup=markup, parse_mode="HTML")
+
+
+@router.callback_query(F.data.startswith("don:tonok:"))
+async def cb_ton_check(callback: CallbackQuery) -> None:
+    """«Я перевёл» — разобрать свежие приходы прямо сейчас.
+
+    Проверка по кнопке нужна не вместо фонового опроса, а вместе с ним: человек
+    только что отправил перевод и хочет видеть результат сразу, а не ждать
+    следующего прохода таймера.
+    """
+    async with session_factory() as session:
+        user = await ensure_user(session, callback.from_user)
+        lang = user_language(user)
+        before = await user_total(session, user.id)
+        transactions = await ton_donations.fetch_incoming()
+        if transactions is None:
+            # ⚠️ «Спросить не удалось» и «денег нет» — разные вещи, и путать их
+            # нельзя: человек, которому сказали «перевода не вижу» из-за сбоя
+            # сети, решит, что деньги пропали.
+            await callback.answer(t("donate.ton_unavailable", lang), show_alert=True)
+            return
+        await ton_donations.collect(session)
+        after = await user_total(session, user.id)
+
+    if after > before:
+        await callback.answer(
+            t("donate.ton_found", lang).format(amount=after - before), show_alert=True
+        )
+        await _show_donate_screen(callback.message, lang, edit=True)
+        return
+    await callback.answer(t("donate.ton_not_found", lang), show_alert=True)
 
 
 async def _start_payment(
@@ -289,7 +457,7 @@ async def _start_payment(
     выключен (нет ключа, нет курса или проба не пройдена), развилки нет вовсе и
     человек идёт прямо на кассу, как раньше.
     """
-    if method is None and wallet_pay.is_configured():
+    if method is None and _ton_available():
         await _offer_methods(message, amount, lang, edit)
         return
     if method == "ton":
@@ -404,3 +572,14 @@ async def cb_goal_top(callback: CallbackQuery, state: FSMContext) -> None:
 async def show_donate_from_start(message: Message, lang: str) -> None:
     """Экран доната по deep-link `/start donate` — для кнопки под постами канала."""
     await _show_donate_screen(message, lang, edit=False)
+
+
+async def show_goal_from_start(message: Message, lang: str) -> None:
+    """Экран сбора по deep-link `/start goal` — по этой ссылке сбор расходится
+    по чатам и другим соцсетям.
+
+    Сбор мог закончиться, пока ссылка ходила по рукам, поэтому человек не должен
+    упереться в пустоту: показываем обычный экран поддержки.
+    """
+    if not await _goal_screen(message, lang, edit=False):
+        await _show_donate_screen(message, lang, edit=False)

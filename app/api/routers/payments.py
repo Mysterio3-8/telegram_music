@@ -104,40 +104,28 @@ async def yookassa_webhook(request: Request, session: AsyncSession = Depends(get
     return {"ok": True}
 
 
-@router.post("/webhook/walletpay")
-async def walletpay_webhook(request: Request, session: AsyncSession = Depends(get_db)) -> dict:
-    """Уведомления Wallet Pay об оплаченных заказах (донаты в TON).
+@router.post("/webhook/cryptopay")
+async def cryptopay_webhook(request: Request, session: AsyncSession = Depends(get_db)) -> dict:
+    """Уведомления Crypto Pay (@CryptoBot) об оплаченных счетах — донаты в TON.
 
-    Два рубежа, и оба обязательны:
-    1. **подпись** — иначе кто угодно, зная адрес вебхука, дарил бы себе места в
-       рейтинге спонсоров одним curl-ом;
-    2. **перепроверка у API** — как и у ЮKassa, телу уведомления не доверяем:
-       подпись подтверждает отправителя, но не то, что заказ действительно
-       оплачен. Если API недоступен, отвечаем 502 — Wallet Pay повторит.
+    Подпись обязательна: без неё любой, зная адрес вебхука, дарил бы себе места
+    в рейтинге спонсоров одним curl-ом. Проверяется по СЫРОМУ телу запроса —
+    разобранный и заново собранный JSON почти наверняка разойдётся с оригиналом
+    порядком ключей, и подпись перестала бы сходиться на ровном месте.
 
-    ⚠️ Формат уведомления не подтверждён живым запросом (см. docstring
-    app/services/wallet_pay.py). Поэтому неудачная проверка подписи пишет в
-    журнал обе подписи и отвечает 403: платёж не теряется — уведомление
-    повторится, а по записи в журнале формулу можно поправить.
+    ⚠️ Отвечаем 200 на всё, что смогли разобрать. Crypto Pay повторяет доставку
+    до 17 раз за трое суток и **отключает вебхук**, если эндпоинт так и не
+    ответил, — а отключённый вебхук это молча непринятые донаты.
     """
-    from app.services import wallet_pay
+    from app.services import crypto_pay
 
-    if not settings.wallet_pay_api_key:
+    if not crypto_pay.is_configured():
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "TON-оплата не настроена")
 
     raw = await request.body()
-    timestamp = request.headers.get("Walletpay-Timestamp", "")
-    signature = request.headers.get("Walletpay-Signature", "")
-    if not wallet_pay.verify_signature(
-        request.method, request.url.path, timestamp, raw, signature
-    ):
-        logger.error(
-            "Wallet Pay: подпись не сошлась (путь %s, метка %s, пришло %r). "
-            "Если платежи реальные — сверьте формулу в wallet_pay.verify_signature.",
-            request.url.path,
-            timestamp,
-            signature,
-        )
+    signature = request.headers.get("crypto-pay-api-signature", "")
+    if not crypto_pay.verify_signature(raw, signature):
+        logger.error("Crypto Pay: подпись не сошлась (пришло %r)", signature[:32])
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Подпись не совпала")
 
     try:
@@ -145,14 +133,9 @@ async def walletpay_webhook(request: Request, session: AsyncSession = Depends(ge
     except ValueError:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Не JSON")
 
-    order = wallet_pay.extract_order(body)
-    order_id = order.get("id") or order.get("orderId") or order.get("externalId")
-    if not order_id:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "В уведомлении нет id заказа")
+    if (body or {}).get("update_type") != "invoice_paid":
+        return {"ok": True}  # других типов у них пока нет, но молчать безопаснее
 
-    checked = await wallet_pay.get_order_status(str(order_id))
-    if checked is None:
-        raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Не удалось проверить заказ")
-
-    await wallet_pay.apply_paid_order(session, wallet_pay.extract_order(checked))
+    invoice = (body or {}).get("payload") or {}
+    await crypto_pay.apply_paid_invoice(session, invoice)
     return {"ok": True}

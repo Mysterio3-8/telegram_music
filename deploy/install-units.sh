@@ -61,6 +61,10 @@ echo "==> Сторож здоровья (инцидент 11.08: воркеры 
 # would be overwritten». Исполняемый бит хранится в самом репозитории (100755).
 mkdir -p /var/lib/tg-music-health
 systemctl enable --now tg-music-health.timer
+
+# Разбор входящих TON-переводов. Нужен только прямому переводу на кошелёк:
+# у Crypto Pay есть вебхук, и ему таймер ни к чему.
+systemctl enable --now tg-music-ton-check.timer
 # Только включённые: массовый парсер (tg-music-soundcloud, tg-music-youtube)
 # выключен решением владельца 27.07 — поднимать его здесь значило бы тихо
 # отменять это решение и занимать 180 МБ из 961 МБ на боксе.

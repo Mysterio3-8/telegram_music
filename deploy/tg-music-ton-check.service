@@ -1,0 +1,16 @@
+[Unit]
+Description=Разбор входящих TON-переводов на кошелёк владельца
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/tg-music-bot
+ExecStart=/opt/tg-music-bot/.venv/bin/python -m app.cli.ton check
+# Прогон короткий (один HTTP-запрос к блокчейну), поэтому лимит с запасом:
+# зависший запрос не должен копить процессы к следующему срабатыванию таймера.
+TimeoutStartSec=120
+MemoryHigh=150M
+MemoryMax=250M
+
+[Install]
+WantedBy=multi-user.target

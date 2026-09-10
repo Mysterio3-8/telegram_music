@@ -613,7 +613,8 @@ class Donation(Base):
     # id платежа: в ЮKassa — её payment_id, в Wallet Pay — id заказа. И ключ
     # идемпотентности, и то, по чему приходит возврат.
     payment_id: Mapped[str] = mapped_column(String(128), unique=True)
-    # Кто провёл платёж: yookassa (рубли) | walletpay (TON).
+    # Кто провёл платёж: yookassa (рубли) | cryptopay (TON через @CryptoBot)
+    # | ton (прямой перевод на кошелёк владельца).
     provider: Mapped[str] = mapped_column(String(16), default="yookassa")
     # Исходная сумма в нанотонах и курс, по которому её пересчитали в рубли.
     # ⚠️ Курс хранится вместе с платежом намеренно: `amount_rub` фиксируется
