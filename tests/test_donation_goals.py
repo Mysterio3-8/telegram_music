@@ -249,3 +249,24 @@ async def test_post_fits_photo_caption_limit(session):
     fitted = goal_post._fit(text, goal_post.CAPTION_LIMIT)
     assert len(fitted) <= goal_post.CAPTION_LIMIT
     assert fitted.count("<b>") == fitted.count("</b>")
+
+
+async def test_post_names_the_goal(session):
+    """В посте название идёт под подписью «Цель сбора» (решение владельца 09.09)."""
+    goal = await _goal(session, title="На новый сервер")
+    assert "Цель сбора: На новый сервер" in goal_post.render_post(goal, 0, [])
+
+
+async def test_post_has_no_disclaimer_but_payment_screen_does(session):
+    """🔴 Решение владельца: из поста в канале дисклеймер убран.
+
+    Но с экрана оплаты он НЕ убран, и это не мелочь: именно эта фраза удерживает
+    донат в статусе дарения, а не продажи. Пост — витрина, деньги человек отдаёт
+    на экране в боте, и там предупреждение обязано оставаться.
+    """
+    from app.i18n.locales.ru import MESSAGES
+
+    goal = await _goal(session)
+    assert "добровольн" not in goal_post.render_post(goal, 100, []).lower()
+    assert "добровольн" in MESSAGES["donate.intro"].lower()
+    assert "не покупка" in MESSAGES["donate.intro"].lower()

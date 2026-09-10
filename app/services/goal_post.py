@@ -55,7 +55,7 @@ def render_post(
     percent = goals.progress_percent(raised, goal.target_rub)
     bar = goals.progress_bar(raised, goal.target_rub)
 
-    lines = [f"🎯 <b>{_escape(goal.title)}</b>"]
+    lines = [f"🎯 <b>Цель сбора: {_escape(goal.title)}</b>"]
     if goal.description:
         lines.append("")
         lines.append(_escape(goal.description))
@@ -84,8 +84,6 @@ def render_post(
             who = "Аноним" if anonymous else _escape(display_name(user))
             lines.append(f"▪️ {who} — {amount} ₽")
 
-    lines.append("")
-    lines.append("<i>Поддержка добровольная. Взамен ничего не выдаётся.</i>")
     return "\n".join(lines)
 
 
