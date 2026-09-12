@@ -1,6 +1,6 @@
 # Telegram Music Bot
 
-**Статус:** 🟢 прод (Этапы 1-5 задеплоены, Mini App живой на keybest.cc, 745 тестов, автодеплой через GitHub Actions)
+**Статус:** 🟢 прод (Этапы 1-5 задеплоены, Mini App живой на keybest.cc, 826 тестов, автодеплой через GitHub Actions)
 **Что это:** Telegram-бот [@muz_damn_bot](https://t.me/muz_damn_bot) — музыкальная платформа: библиотека, плейлисты, поиск, загрузка треков, Premium. Полное ТЗ — в [SPEC.md](docs/архив/SPEC.md). Старый [@tgram_music_bot](https://t.me/tgram_music_bot) отвечал указателем «мы переехали» ([app/moved_bot.py](app/moved_bot.py), юнит `tg-music-moved`) — ⚠️ **сейчас не работает: токен отозван** (16.08, Telegram отдаёт Unauthorized). Юнит в `failed` и намеренно не перезапускается; чтобы вернуть указатель, нужен действующий `MOVED_BOT_TOKEN` в `.env`.
 
 **➡️ Инженерный свод — [docs/ai-engineer-os/](docs/ai-engineer-os/README.md).** Обязателен к применению: границы доверия, проходы самопроверки, гейт перед релизом, профиль Telegram, деньги, юридический слой. Текущий статус проекта по каждому пункту — [PROJECT-STATUS.md](docs/ai-engineer-os/PROJECT-STATUS.md), накопленные уроки — [LESSONS.md](docs/ai-engineer-os/LESSONS.md). Присланный владельцем материал разбирается по [INTAKE.md](docs/ai-engineer-os/INTAKE.md) (материал → проверка первоисточника → правило → проход проекта → исправление → тест). ⚠️ `PASS` без выполненной проверки запрещён — пишется `UNKNOWN` с причиной.

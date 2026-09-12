@@ -22,6 +22,7 @@ from app.services.premium import activate_premium, is_premium_active
 from app.services.revenue import record_payment
 from app.services.yookassa_payments import create_premium_payment, is_yookassa_configured
 from app.i18n import plural, t
+from app.services.donations import DONATE_STARS_PAYLOAD
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -210,7 +211,19 @@ async def cb_pay_card(callback: CallbackQuery) -> None:
     await callback.answer()
 
 
-@router.pre_checkout_query()
+# 🔴 Оба платёжных обработчика Premium ИСКЛЮЧАЮТ донаты звёздами явно.
+# Роутер Premium регистрируется раньше роутера донатов, и без фильтра его
+# глобальные обработчики ловили бы ВСЕ платежи: pre_checkout отклонил бы донат
+# как незнакомый payload, а successful_payment — хуже — выдал бы за донат
+# Premium. Это ровно та черта, на которой держится донат как ДАРЕНИЕ: появись
+# встречная услуга, это уже продажа с чеком и другой отчётностью.
+# Фильтр с обеих сторон, а не опора на порядок роутеров: порядок меняется
+# случайной правкой main.py, и тогда ошибка стала бы молчаливой.
+_NOT_DONATION = ~F.invoice_payload.startswith(DONATE_STARS_PAYLOAD)
+_NOT_DONATION_PAYMENT = ~F.successful_payment.invoice_payload.startswith(DONATE_STARS_PAYLOAD)
+
+
+@router.pre_checkout_query(_NOT_DONATION)
 async def cb_pre_checkout(pre_checkout_query: PreCheckoutQuery) -> None:
     payload = pre_checkout_query.invoice_payload or ""
     # Счета без срока в payload (`premium_stars`) выставлял код до 14.08. Такой
@@ -228,7 +241,7 @@ async def cb_pre_checkout(pre_checkout_query: PreCheckoutQuery) -> None:
     )
 
 
-@router.message(F.successful_payment)
+@router.message(F.successful_payment, _NOT_DONATION_PAYMENT)
 async def cb_successful_payment(message: Message) -> None:
     payment = message.successful_payment
     payment_type = "stars" if payment.currency == "XTR" else "card"

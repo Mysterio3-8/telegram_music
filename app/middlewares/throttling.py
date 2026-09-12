@@ -24,6 +24,7 @@ from aiogram.types import CallbackQuery, Message, TelegramObject
 
 from app.config import settings
 from app.i18n import t
+from app.middlewares import is_payment_message
 
 THROTTLE_SECONDS = 0.7  # минимальный интервал между действиями
 BURST_LIMIT = 12  # действий за окно
@@ -125,6 +126,9 @@ class ThrottlingMiddleware(BaseMiddleware):
         tg_user = data.get("event_from_user")
         if tg_user is None or tg_user.id in settings.admin_id_set:
             return await handler(event, data)  # админов не ограничиваем
+        if is_payment_message(event):
+            # Не считаем и не гасим: деньги уже списаны, см. is_payment_message.
+            return await handler(event, data)
 
         user_id = tg_user.id
         now = time.monotonic()

@@ -9,13 +9,18 @@ from aiogram.types import CallbackQuery, Message, TelegramObject
 from app.db.base import session_factory
 from app.i18n import t
 from app.keyboards.subscription import subscription_gate_keyboard
+from app.middlewares import is_payment_message
 from app.services.subscription import is_fully_subscribed
 from app.services.users import get_user_by_telegram_id, user_language
 
 
 def _is_exempt(event: TelegramObject) -> bool:
+    if is_payment_message(event):
+        return True
     if isinstance(event, Message):
-        return bool(event.text) and event.text.startswith("/start")
+        # /paysupport — вне гейта: по правилам Telegram бот, принимающий звёзды,
+        # обязан отвечать на неё любому, кто платил, подписан он или нет.
+        return bool(event.text) and event.text.startswith(("/start", "/paysupport"))
     if isinstance(event, CallbackQuery):
         # lang:* — экран выбора языка. Он показывается новичку ДО гейта подписки,
         # поэтому гейтить его нельзя: иначе первый же экран бота мёртвый.

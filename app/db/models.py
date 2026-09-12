@@ -614,7 +614,7 @@ class Donation(Base):
     # идемпотентности, и то, по чему приходит возврат.
     payment_id: Mapped[str] = mapped_column(String(128), unique=True)
     # Кто провёл платёж: yookassa (рубли) | cryptopay (TON через @CryptoBot)
-    # | ton (прямой перевод на кошелёк владельца).
+    # | ton (прямой перевод на кошелёк владельца) | stars (Telegram Stars).
     provider: Mapped[str] = mapped_column(String(16), default="yookassa")
     # Исходная сумма в нанотонах и курс, по которому её пересчитали в рубли.
     # ⚠️ Курс хранится вместе с платежом намеренно: `amount_rub` фиксируется
@@ -622,6 +622,9 @@ class Donation(Base):
     # курсом, и «собрано 80%» назавтра могло стать «собрано 70%».
     ton_nano: Mapped[int | None] = mapped_column(default=None)
     rub_per_ton: Mapped[int | None] = mapped_column(default=None)
+    # Сколько звёзд пришло, если донат в Telegram Stars. Вместе с amount_rub даёт
+    # курс, по которому засчитали: смена STARS_RUB_RATE прошлое не переписывает.
+    stars: Mapped[int | None] = mapped_column(default=None)
     # Цель, в прогресс которой засчитан донат. NULL — донат вне целей (все, что
     # были до появления первой цели, и те, что придут между целями).
     goal_id: Mapped[int | None] = mapped_column(ForeignKey("donation_goals.id"), default=None)

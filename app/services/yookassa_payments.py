@@ -322,12 +322,17 @@ async def _apply_donation(session: AsyncSession, user: User, payment: dict) -> b
     from app.services.goal_events import after_donation
 
     await after_donation(session, donation)
-    await _notify_donation(session, user, amount_rub)
+    await notify_donation(session, user, amount_rub)
     return True
 
 
-async def _notify_donation(session: AsyncSession, user: User, amount_rub: int) -> None:
+async def notify_donation(
+    session: AsyncSession, user: User, amount_rub: int, *, via: str = ""
+) -> None:
     """Спасибо донатеру и строка владельцу. Сбой уведомления не отменяет донат.
+
+    `via` — пометка способа для владельца («звёздами, 70 ⭐»): рубли в строке у
+    звёзд пересчитаны по курсу, и без пометки их не отличить от настоящих.
 
     ⚠️ Всё внутри try: донат уже записан и подтверждён кассой, а вебхуку нужно
     ответить 200. Упасть здесь значит заставить ЮKassa ретраить уведомление по
@@ -362,7 +367,8 @@ async def _notify_donation(session: AsyncSession, user: User, amount_rub: int) -
     try:
         await send_message(
             int(recipient),
-            f"❤️ Донат {amount_rub} ₽ от {display_name(user)} (tg={user.telegram_id})",
+            f"❤️ Донат {amount_rub} ₽{f' ({via})' if via else ''} "
+            f"от {display_name(user)} (tg={user.telegram_id})",
         )
     except Exception:  # noqa: BLE001
         logger.exception("Не удалось уведомить владельца о донате")

@@ -8,10 +8,11 @@ import logging
 from urllib.parse import quote
 
 from aiogram import F, Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, LabeledPrice, Message, PreCheckoutQuery
 
 from app.config import settings
 from app.db.base import session_factory
@@ -28,12 +29,20 @@ from app.keyboards.donate import (
     ton_manual_keyboard,
 )
 from app.services.donations import (
+    DONATE_STARS_PAYLOAD,
     MAX_AMOUNT_RUB,
     MIN_AMOUNT_RUB,
     TOP_LIMIT,
     display_name,
     is_allowed_amount,
+    can_pay_in_stars,
+    mark_refunded,
     parse_amount,
+    parse_stars_payload,
+    record_donation,
+    rub_for_stars,
+    stars_for_rub,
+    stars_payload,
     top_sponsors,
     user_rank,
     user_total,
@@ -149,6 +158,12 @@ def _ton_available() -> bool:
     Crypto Pay — основной, прямой перевод — запасной.
     """
     return crypto_pay.is_configured() or ton_donations.is_configured()
+
+
+def _extra_methods_available(amount: int) -> bool:
+    """Есть ли кроме рублей хоть один способ. Нет — экран выбора не нужен,
+    человек идёт прямо на кассу: развилка с одним вариантом — лишний тап."""
+    return _ton_available() or can_pay_in_stars(amount)
 
 
 def _goal_link() -> str:
@@ -328,7 +343,9 @@ async def cb_pay(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
 
 
-@router.callback_query(F.data.startswith("don:rub:") | F.data.startswith("don:ton:"))
+@router.callback_query(
+    F.data.startswith("don:rub:") | F.data.startswith("don:ton:") | F.data.startswith("don:stars:")
+)
 async def cb_pay_method(callback: CallbackQuery, state: FSMContext) -> None:
     """Способ выбран — создаём платёж.
 
@@ -344,9 +361,20 @@ async def cb_pay_method(callback: CallbackQuery, state: FSMContext) -> None:
     if not (raw.isascii() and raw.isdigit()) or not is_allowed_amount(int(raw)):
         await callback.answer(t("donate.bad_amount_short", lang), show_alert=True)
         return
-    if method == "ton" and not _ton_available():
+    if (method == "ton" and not _ton_available()) or (
+        method == "stars" and not can_pay_in_stars(int(raw))
+    ):
         # Способ мог отключиться, пока человек смотрел на экран.
         await callback.answer(t("donate.unavailable", lang), show_alert=True)
+        return
+    if method == "stars":
+        # Счёт звёздами — отдельное сообщение-инвойс, а не правка экрана:
+        # Telegram не превращает обычное сообщение в счёт. Экран выбора остаётся
+        # на месте, и с него можно выбрать другой способ, если передумал.
+        ok = await _send_stars_invoice(
+            callback.message, int(raw), lang, anonymous=await _is_anonymous(state)
+        )
+        await callback.answer(None if ok else t("donate.error", lang), show_alert=not ok)
         return
     await _start_payment(
         callback.message,
@@ -361,12 +389,19 @@ async def cb_pay_method(callback: CallbackQuery, state: FSMContext) -> None:
 
 
 async def _offer_methods(message: Message, amount: int, lang: str, edit: bool) -> None:
-    """Экран выбора способа оплаты. Показывается, только если TON доступен."""
+    """Экран выбора способа оплаты. Показывается, только если кроме рублей есть
+    хоть что-то ещё (TON или звёзды)."""
     text = t("donate.method_title", lang).format(amount=amount)
     # Сумму в TON показываем, только когда её есть чем посчитать: у Crypto Pay
     # курс свой и станет известен лишь на их экране оплаты.
     ton = ton_donations.ton_for_rub(amount) if ton_donations.is_configured() else None
-    markup = donate_method_keyboard(amount, ton, lang)
+    markup = donate_method_keyboard(
+        amount,
+        ton,
+        lang,
+        show_ton=_ton_available(),
+        stars=stars_for_rub(amount) if can_pay_in_stars(amount) else None,
+    )
     if edit:
         await message.edit_text(text, reply_markup=markup, parse_mode="HTML")
     else:
@@ -440,6 +475,130 @@ async def cb_ton_check(callback: CallbackQuery) -> None:
     await callback.answer(t("donate.ton_not_found", lang), show_alert=True)
 
 
+# --- Telegram Stars ----------------------------------------------------------
+#
+# ⚠️ Донат звёздами идёт через те же апдейты, что и оплата Premium звёздами
+# (pre_checkout_query и successful_payment). Развести их обязаны ОБЕ стороны:
+# здесь фильтр «payload донатный», в premium.py — «payload НЕ донатный». Иначе
+# донат выдал бы Premium, а это уже продажа, а не дарение.
+
+
+async def _send_stars_invoice(
+    message: Message, amount_rub: int, lang: str, *, anonymous: bool
+) -> bool:
+    """Выставить счёт в звёздах. False — Telegram счёт не принял."""
+    stars = stars_for_rub(amount_rub)
+    try:
+        await message.answer_invoice(
+            title=t("donate.stars_title", lang),
+            description=t("donate.stars_desc", lang).format(amount=amount_rub),
+            payload=stars_payload(amount_rub, anonymous),
+            # Stars — без provider_token и без множителя 100: сумма прямо в звёздах.
+            currency="XTR",
+            prices=[LabeledPrice(label=t("donate.stars_title", lang), amount=stars)],
+        )
+    except TelegramBadRequest:
+        logger.exception("Не удалось выставить счёт-донат в звёздах (%s ₽)", amount_rub)
+        return False
+    return True
+
+
+@router.pre_checkout_query(F.invoice_payload.startswith(DONATE_STARS_PAYLOAD))
+async def cb_donate_pre_checkout(query: PreCheckoutQuery) -> None:
+    """Подтверждение перед списанием. Ответить надо за 10 секунд, иначе
+    Telegram отменит платёж сам — поэтому здесь ни базы, ни сети."""
+    ok = parse_stars_payload(query.invoice_payload) is not None and query.currency == "XTR"
+    if not ok:
+        logger.warning(
+            "Отклонён pre_checkout доната user=%s payload=%r currency=%s",
+            query.from_user.id, query.invoice_payload, query.currency,
+        )
+    await query.answer(ok=ok, error_message=None if ok else t("donate.error"))
+
+
+@router.message(F.successful_payment.invoice_payload.startswith(DONATE_STARS_PAYLOAD))
+async def cb_donate_stars_paid(message: Message) -> None:
+    """Звёзды списаны — записываем донат.
+
+    Идемпотентно по charge_id: Telegram не шлёт successful_payment дважды, но
+    record_donation всё равно не даст задвоить вклад, если это однажды случится.
+    """
+    from app.services.goal_events import after_donation
+    from app.services.yookassa_payments import notify_donation
+
+    payment = message.successful_payment
+    charge_id = payment.telegram_payment_charge_id
+    parsed = parse_stars_payload(payment.invoice_payload)
+    anonymous, amount_rub = parsed if parsed is not None else (False, None)
+    if amount_rub is None:
+        amount_rub = rub_for_stars(payment.total_amount)
+    if payment.currency != "XTR" or amount_rub <= 0:
+        # Деньги уже списаны — молча выбросить нельзя. Пишем в журнал громко:
+        # такой платёж разбирается руками (вернуть звёзды — refundStarPayment).
+        logger.error(
+            "Донат звёздами не зачтён: charge=%s currency=%s stars=%s rub=%s",
+            charge_id, payment.currency, payment.total_amount, amount_rub,
+        )
+        return
+
+    async with session_factory() as session:
+        user = await ensure_user(session, message.from_user)
+        donation = await record_donation(
+            session,
+            user.id,
+            amount_rub,
+            f"stars-{charge_id}",
+            provider="stars",
+            is_anonymous=anonymous,
+            stars=payment.total_amount,
+        )
+        if donation is None:
+            return  # уже учтён
+        # Фиксируем ДО обращений к Telegram — запись о деньгах не ждёт сети.
+        await session.commit()
+        logger.info(
+            "Донат звёздами: user=%s %s ⭐ = %s ₽, charge=%s",
+            user.id, payment.total_amount, amount_rub, charge_id,
+        )
+        await after_donation(session, donation)
+        await notify_donation(
+            session, user, amount_rub, via=f"звёздами, {payment.total_amount} ⭐"
+        )
+
+
+@router.message(F.refunded_payment.invoice_payload.startswith(DONATE_STARS_PAYLOAD))
+async def cb_donate_stars_refunded(message: Message) -> None:
+    """Звёзды вернулись — донат выпадает из рейтинга и из прогресса цели."""
+    refund = message.refunded_payment
+    async with session_factory() as session:
+        found = await mark_refunded(session, f"stars-{refund.telegram_payment_charge_id}")
+        await session.commit()
+        if not found:
+            logger.warning(
+                "Возврат звёзд по неизвестному донату charge=%s",
+                refund.telegram_payment_charge_id,
+            )
+            return
+        try:
+            # Прогресс уменьшился — пост в канале должен это показать.
+            await goal_post.refresh_active(session)
+        except Exception:  # noqa: BLE001 — возврат уже записан, пост вторичен
+            logger.exception("После возврата звёзд не удалось обновить пост цели")
+
+
+@router.message(Command("paysupport"))
+async def cmd_paysupport(message: Message) -> None:
+    """Обязательная для приёма звёзд команда: правила Telegram требуют, чтобы
+    бот отвечал на /paysupport, куда писать по спорному платежу."""
+    async with session_factory() as session:
+        user = await ensure_user(session, message.from_user)
+        lang = user_language(user)
+    await message.answer(
+        t("paysupport.text", lang).format(support=settings.support_bot_username),
+        parse_mode="HTML",
+    )
+
+
 async def _start_payment(
     message: Message,
     telegram_id: int,
@@ -452,11 +611,11 @@ async def _start_payment(
 ) -> None:
     """Создаёт платёж и показывает кнопку оплаты.
 
-    `method=None` и доступный TON — сперва спрашиваем, чем платить. Когда TON
-    выключен (нет ключа, нет курса или проба не пройдена), развилки нет вовсе и
-    человек идёт прямо на кассу, как раньше.
+    `method=None` и доступен TON или звёзды — сперва спрашиваем, чем платить.
+    Когда оба выключены (нет ключа, нет курса), развилки нет вовсе и человек
+    идёт прямо на кассу, как раньше.
     """
-    if method is None and _ton_available():
+    if method is None and _extra_methods_available(amount):
         await _offer_methods(message, amount, lang, edit)
         return
     if method == "ton":

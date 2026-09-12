@@ -6,6 +6,7 @@ from aiogram.types import CallbackQuery, Message, TelegramObject, User
 
 from app.db.base import session_factory
 from app.keyboards.premium import ad_keyboard
+from app.middlewares import is_payment_message
 from app.services.premium import is_premium_active
 from app.services.users import get_user_by_telegram_id
 from app.i18n import t
@@ -33,7 +34,8 @@ class AdMiddleware(BaseMiddleware):
         data: dict[str, Any],
     ) -> Any:
         result = await handler(event, data)
-        if self._frequency <= 0:
+        # Реклама Premium сразу за «спасибо за донат» — худший момент для неё.
+        if self._frequency <= 0 or is_payment_message(event):
             return result
         # В группах рекламу не показываем (пункт 6 спеки): «купи Premium» в
         # чужом чате — это спам от нашего имени, за который бота выгоняют, а не

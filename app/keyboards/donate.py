@@ -107,29 +107,44 @@ def donate_cancel_keyboard(lang: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup
 
 
 def donate_method_keyboard(
-    amount: int, ton_amount: float | None = None, lang: str = DEFAULT_LANGUAGE
+    amount: int,
+    ton_amount: float | None = None,
+    lang: str = DEFAULT_LANGUAGE,
+    *,
+    show_ton: bool = True,
+    stars: int | None = None,
 ) -> InlineKeyboardMarkup:
-    """Выбор способа: рубли или TON.
+    """Выбор способа: рубли, звёзды, TON.
 
-    Показывается ТОЛЬКО когда TON действительно доступен. Иначе экран с одной
-    кнопкой был бы лишним шагом между человеком и оплатой.
+    Показывается ТОЛЬКО когда кроме рублей есть хоть что-то ещё. Каждый способ
+    появляется, лишь когда он реально включён: кнопка на выключенный способ
+    ведёт в отказ, а это хуже, чем её отсутствие.
 
-    `ton_amount=None` — курс нам неизвестен (так у Crypto Pay: он считает свой
-    курс на своём экране оплаты). Тогда на кнопке просто «TON» без числа: лучше
-    не показать сумму, чем показать выдуманную.
+    `ton_amount=None` — курс TON нам неизвестен (так у Crypto Pay: он считает
+    свой курс на своём экране оплаты). Тогда на кнопке просто «TON» без числа:
+    лучше не показать сумму, чем показать выдуманную.
     """
-    ton_text = t("donate.pay_ton", lang).format(ton=ton_amount) if ton_amount else "💎 TON"
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
+    rows = [
+        [InlineKeyboardButton(text=t("donate.pay_rub", lang), callback_data=f"don:rub:{amount}")]
+    ]
+    # Звёзды — вторыми: их можно купить прямо в Telegram без банковской карты
+    # страны, поэтому для зарубежной аудитории это первый реальный способ.
+    if stars:
+        rows.append(
             [
                 InlineKeyboardButton(
-                    text=t("donate.pay_rub", lang), callback_data=f"don:rub:{amount}"
+                    text=t("donate.pay_stars", lang).format(stars=stars),
+                    callback_data=f"don:stars:{amount}",
                 )
-            ],
-            [InlineKeyboardButton(text=ton_text, callback_data=f"don:ton:{amount}")],
-            [InlineKeyboardButton(text=t("donate.back", lang), callback_data="don:open")],
-        ]
-    )
+            ]
+        )
+    if show_ton:
+        ton_text = (
+            t("donate.pay_ton", lang).format(ton=ton_amount) if ton_amount else "💎 TON"
+        )
+        rows.append([InlineKeyboardButton(text=ton_text, callback_data=f"don:ton:{amount}")])
+    rows.append([InlineKeyboardButton(text=t("donate.back", lang), callback_data="don:open")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def ton_manual_keyboard(

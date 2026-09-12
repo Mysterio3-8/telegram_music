@@ -7,6 +7,7 @@
 должно появиться ни одного вызова activate_premium.
 """
 import logging
+import math
 from datetime import datetime, timezone
 
 from sqlalchemy import func, select
@@ -75,6 +76,7 @@ async def record_donation(
     is_anonymous: bool = False,
     ton_nano: int | None = None,
     rub_per_ton: int | None = None,
+    stars: int | None = None,
 ) -> Donation | None:
     """Записывает подтверждённый донат. None — такой платёж уже учтён.
 
@@ -100,11 +102,106 @@ async def record_donation(
         is_anonymous=is_anonymous,
         ton_nano=ton_nano,
         rub_per_ton=rub_per_ton,
+        stars=stars,
         goal_id=goal.id if goal is not None else None,
     )
     session.add(donation)
     await session.flush()
     return donation
+
+
+# --- Telegram Stars ----------------------------------------------------------
+
+# Префикс payload счёта-доната в звёздах. Живёт здесь, а не в хендлере: по нему
+# ДВА разных роутера (Premium и донаты) решают, чей это платёж, и расходиться в
+# написании им нельзя — иначе донат уехал бы в выдачу Premium.
+DONATE_STARS_PAYLOAD = "donate_stars"
+# Потолок счёта в звёздах. Bot API не даёт выставить больше 10 000 ⭐ за раз,
+# и счёт сверх этого Telegram просто отвергнет, не объяснив человеку почему.
+MAX_STARS_PER_INVOICE = 10_000
+
+
+def is_stars_configured() -> bool:
+    """Принимаем ли донаты звёздами. Без курса — нет: не во что пересчитать."""
+    from app.config import settings
+
+    return settings.stars_rub_rate > 0
+
+
+def _stars_exact(amount_rub: int) -> int:
+    from app.config import settings
+
+    rate = settings.stars_rub_rate
+    if rate <= 0:
+        raise ValueError("Курс звезды не задан (STARS_RUB_RATE)")
+    # round(…, 6) до ceil обязателен: 49 / 0.7 в плавающей точке даёт
+    # 70.00000000000001, и голый ceil запросил бы у человека 71 звезду вместо 70.
+    return max(1, math.ceil(round(amount_rub / rate, 6)))
+
+
+def can_pay_in_stars(amount_rub: int) -> bool:
+    """Звёзды включены и сумма влезает в один счёт.
+
+    🔴 Сумму сверх потолка НЕ обрезаем до 10 000 ⭐: тогда человек заплатил бы
+    меньше, а в цель легла бы вся выбранная сумма. Такую сумму звёздами просто
+    не предлагаем — рубли и TON для неё остаются.
+    """
+    return is_stars_configured() and _stars_exact(amount_rub) <= MAX_STARS_PER_INVOICE
+
+
+def stars_for_rub(amount_rub: int) -> int:
+    """Сколько звёзд попросить за сумму в рублях. Округление ВВЕРХ.
+
+    Вверх, потому что иначе за «49 ₽» человек отдал бы звёзд на 48 ₽, и в цель
+    легла бы сумма меньше той, что он выбрал на кнопке. Сумма сверх потолка
+    счёта — ValueError: сперва спросить can_pay_in_stars.
+    """
+    stars = _stars_exact(amount_rub)
+    if stars > MAX_STARS_PER_INVOICE:
+        raise ValueError(f"{amount_rub} ₽ не влезает в один счёт звёздами")
+    return stars
+
+
+def rub_for_stars(stars: int) -> int:
+    """Пришедшие звёзды → рубли в прогресс цели, целыми рублями вниз.
+
+    Вниз по той же причине, что и у TON: округление вверх приписало бы рубль,
+    которого никто не давал.
+    """
+    from app.config import settings
+
+    # round(…, 6) до floor — та же грабля плавающей точки, что и в stars_for_rub,
+    # только в обратную сторону: 70 * 0.7 = 48.99999999999999, и голый int()
+    # записал бы в цель 48 ₽ за донат, который человек выбрал на кнопке «49 ₽».
+    return math.floor(round(stars * settings.stars_rub_rate, 6))
+
+
+def stars_payload(amount_rub: int, anonymous: bool) -> str:
+    """payload счёта: «donate_stars:<анонимно 1|0>:<рубли>».
+
+    Рубли едут в счёте, а не пересчитываются из звёзд при оплате: между счётом и
+    оплатой владелец может сменить курс (или вовсе обнулить его, выключив звёзды),
+    и тогда в цель легла бы не та сумма, что человек видел на кнопке. Подделать
+    payload нельзя — счёт выставляет только сам бот.
+    """
+    return f"{DONATE_STARS_PAYLOAD}:{1 if anonymous else 0}:{amount_rub}"
+
+
+def parse_stars_payload(payload: str | None) -> tuple[bool, int | None] | None:
+    """payload → (анонимно, рубли). None — это не наш донатный счёт.
+
+    Рубли None — в payload их нет или они вне границ; тогда сумму считают по
+    звёздам. Так разбираются и счета, выставленные до появления суммы в payload.
+    """
+    parts = (payload or "").split(":")
+    if parts[0] != DONATE_STARS_PAYLOAD:
+        return None
+    anonymous = len(parts) > 1 and parts[1] == "1"
+    raw = parts[2] if len(parts) > 2 else ""
+    amount = int(raw) if raw.isascii() and raw.isdigit() else None
+    if amount is not None and not is_allowed_amount(amount):
+        amount = None
+    return anonymous, amount
 
 
 async def mark_refunded(session: AsyncSession, payment_id: str) -> bool:

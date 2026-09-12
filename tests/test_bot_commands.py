@@ -25,10 +25,10 @@ async def test_setup_bot_commands_sets_default_and_admin_scopes(monkeypatch):
     default_calls = [c for c in bot.calls if isinstance(c[1], BotCommandScopeDefault)]
     admin_calls = [c for c in bot.calls if isinstance(c[1], BotCommandScopeChat)]
     assert len(default_calls) == 1
-    assert {"start", "premium", "donate"} == {cmd.command for cmd in default_calls[0][0]}
+    assert {"start", "premium", "donate", "paysupport"} == {cmd.command for cmd in default_calls[0][0]}
     assert {c[1].chat_id for c in admin_calls} == {111, 222}
     for commands, _scope in admin_calls:
-        assert {"start", "premium", "donate", "admin"} == {cmd.command for cmd in commands}
+        assert {"start", "premium", "donate", "paysupport", "admin"} == {cmd.command for cmd in commands}
 
 
 async def test_setup_bot_commands_tolerates_admin_scope_failure(monkeypatch):

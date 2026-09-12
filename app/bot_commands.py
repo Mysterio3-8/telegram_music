@@ -20,6 +20,8 @@ DEFAULT_COMMANDS = [
     BotCommand(command="start", description="Главное меню"),
     BotCommand(command="premium", description="Premium — Stars или карта"),
     BotCommand(command="donate", description="Поддержать проект"),
+    # Обязательна для бота, принимающего звёзды (правила Telegram для платежей).
+    BotCommand(command="paysupport", description="Вопросы по оплате"),
 ]
 ADMIN_COMMANDS = DEFAULT_COMMANDS + [BotCommand(command="admin", description="Админ-панель")]
 
