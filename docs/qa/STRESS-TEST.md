@@ -68,6 +68,19 @@ curl -sI https://keybest.cc/ | grep -iE "^(server|strict|x-content|referrer|cach
 `Strict-Transport-Security`, `main.js` сжат (~17 КБ). В этой сборке curl нет
 `--http2`: HTTP/2 проверять по конфигу (`listen 443 ssl http2`).
 
+## Выкатка исправлений
+
+⚠️ На 13.09 автодеплой из GitHub Actions падает на шаге SSH (подробности в
+PROJECT-STATUS). Пока его не починили, пуш в main код на прод НЕ доставляет.
+Выкатка руками, отвязанно от SSH-сессии (она на этом боксе рвётся):
+
+```bash
+ssh -i "C:/Users/Илья/.ssh/id_ed25519" -o UserKnownHostsFile="C:/Users/Илья/.ssh/known_hosts" root@38.244.213.132 'cd /opt/tg-music-bot && setsid nohup bash deploy/remote-deploy.sh > /root/deploy.log 2>&1 < /dev/null &'
+```
+
+Готово, когда в `/root/deploy.log` появилась строка «✅ Деплой … прошёл».
+После выкатки сверить `git rev-parse --short HEAD` на сервере с локальным.
+
 ## Итог прохода 13.09
 
 Исправлено 20+ находок — полная таблица с серьёзностью в
