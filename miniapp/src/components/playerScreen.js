@@ -13,7 +13,10 @@ export function renderPlayerScreen(state) {
   const { currentTrack, isPlaying, shuffleMode } = state;
   if (!state.playerOpen || !currentTrack) return "";
 
-  const isInstrumental = currentTrack.id < 0;
+  // Минус (id<0) и кандидат живого поиска (id "live:…", в базе его ещё нет):
+  // библиотека, текст, скачивание и шит для них не работают. Раньше кнопки
+  // рисовались с data-id="live:…" → Number() = NaN, и тапы молча ничего не делали.
+  const isInstrumental = typeof currentTrack.id !== "number" || currentTrack.id < 0;
   const inLibrary = state.libraryIds.has(currentTrack.id);
 
   const metaActions = isInstrumental

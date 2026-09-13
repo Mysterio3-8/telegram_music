@@ -43,12 +43,14 @@ async def create_payment_link(
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Неизвестный тариф")
     discount = user.premium_discount_pct or 0
     price = plan_price_rub(months, discount)
-    url = await create_premium_payment(user.telegram_id, settings.bot_username, price, months=months)
+    # Скидка НЕ гасится здесь. Раньше она сгорала в момент создания ссылки: нажал
+    # «Оплатить», закрыл страницу кассы — скидки больше нет. Гасится при успешной
+    # оплате (apply_succeeded_payment) по метке discount_pct в платеже.
+    url = await create_premium_payment(
+        user.telegram_id, settings.bot_username, price, months=months, discount_pct=discount
+    )
     if url is None:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Не удалось создать платёж")
-    if discount:
-        user.premium_discount_pct = 0
-        await session.commit()
     return PaymentLinkOut(confirmation_url=url)
 
 

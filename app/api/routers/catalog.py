@@ -20,7 +20,7 @@ from app.api.schemas import (
 )
 from app.api.security import build_instrumental_audio_url
 from app.config import settings
-from app.db.models import Instrumental, User
+from app.db.models import Artist, Instrumental, User
 from app.services.artist_card import get_artist_card
 from app.services.artist_entities import get_artist_by_name
 from app.services.artist_follow import (
@@ -185,6 +185,8 @@ async def follow(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> None:
+    if await session.get(Artist, artist_id) is None:  # внешние ключи SQLite выключены
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Артист не найден")
     await follow_artist(session, user.id, artist_id)
 
 

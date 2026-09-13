@@ -1,4 +1,5 @@
 from sqlalchemy import delete, func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -100,7 +101,11 @@ async def add_track_to_playlist(session: AsyncSession, playlist_id: int, track_i
     session.add(
         PlaylistTrack(playlist_id=playlist_id, track_id=track_id, position=(max_position or 0) + 1)
     )
-    await session.commit()
+    try:
+        await session.commit()
+    except IntegrityError:
+        await session.rollback()  # параллельное добавление той же пары
+        return False
     return True
 
 

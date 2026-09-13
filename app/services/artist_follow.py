@@ -6,6 +6,7 @@
 from dataclasses import dataclass
 
 from sqlalchemy import delete, func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Artist, ArtistGenre, Track, UserArtist
@@ -16,7 +17,11 @@ async def follow_artist(session: AsyncSession, user_id: int, artist_id: int) -> 
     if await session.get(UserArtist, (user_id, artist_id)) is not None:
         return False
     session.add(UserArtist(user_id=user_id, artist_id=artist_id))
-    await session.commit()
+    try:
+        await session.commit()
+    except IntegrityError:
+        await session.rollback()  # параллельный тап «подписаться»
+        return False
     return True
 
 

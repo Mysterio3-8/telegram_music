@@ -352,6 +352,20 @@ function setAudioSource(track) {
   playNetwork();
 }
 
+// Прослушивание засчитываем, только если трек звучал хотя бы LISTEN_AFTER_MS.
+// Раньше запрос уходил на каждый старт: 60 быстрых «следующий» = 61 запрос, это
+// половина минутного лимита API (120) — и пролистанное считалось «прослушанным».
+const LISTEN_AFTER_MS = 5000;
+let listenTimer = null;
+
+function scheduleListen(track) {
+  clearTimeout(listenTimer);
+  if (typeof track.id !== "number" || track.id <= 0) return; // минусы и live:… не пишем
+  listenTimer = setTimeout(() => {
+    if (state.currentTrack === track && !audio.paused) recordListen(track.id);
+  }, LISTEN_AFTER_MS);
+}
+
 function startTrack(index) {
   const track = state.queue[index];
   if (!track) return;
@@ -359,8 +373,9 @@ function startTrack(index) {
   state.currentTrack = track;
   state.isPlaying = true;
   audio.volume = 1; // страховка от «затихания»: держим полную громкость на каждом треке
-  pushRecentTrack(track);
-  if (typeof track.id === "number" && track.id > 0) recordListen(track.id); // минусы (id<0) не пишем
+  // live:… в «Недавних» не сыграет: ref живёт 6 часов, а id в базе у него нет
+  if (typeof track.id === "number") pushRecentTrack(track);
+  scheduleListen(track);
   setAudioSource(track);
   updateMediaSession(track);
   notify();

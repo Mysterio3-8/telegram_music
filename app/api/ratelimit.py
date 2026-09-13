@@ -72,11 +72,15 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         ip = self._client(request)
         path = request.url.path
 
+        # Retry-After: без него клиент не знает, когда повторять, и долбит сразу
+        retry = {"Retry-After": str(int(WINDOW))}
         if self._over(self._general[ip], now, GENERAL_LIMIT):
-            return JSONResponse({"detail": "Слишком много запросов"}, status_code=429)
+            return JSONResponse({"detail": "Слишком много запросов"}, status_code=429, headers=retry)
         if path.startswith(EXPENSIVE_PREFIXES) and self._over(
             self._expensive[ip], now, EXPENSIVE_LIMIT
         ):
-            return JSONResponse({"detail": "Слишком часто, подождите минуту"}, status_code=429)
+            return JSONResponse(
+                {"detail": "Слишком часто, подождите минуту"}, status_code=429, headers=retry
+            )
 
         return await call_next(request)

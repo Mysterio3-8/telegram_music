@@ -1,4 +1,5 @@
 from sqlalchemy import func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -73,7 +74,13 @@ async def add_to_library(session: AsyncSession, user_id: int, track_id: int) -> 
     if existing is not None:
         return False
     session.add(UserLibrary(user_id=user_id, track_id=track_id))
-    await session.commit()
+    try:
+        await session.commit()
+    except IntegrityError:
+        # Двойной тап: параллельный запрос успел вставить ту же пару между
+        # проверкой и вставкой. Результат тот же — трек в библиотеке, а не 500.
+        await session.rollback()
+        return False
     return True
 
 

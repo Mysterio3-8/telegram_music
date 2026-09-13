@@ -84,6 +84,8 @@ from app.storage import get_storage
 
 router = APIRouter(tags=["me"])
 
+UPLOAD_MAX_TITLE = 256  # как MAX_TITLE_LENGTH мастера загрузки в боте
+
 
 @router.get("/library", response_model=Page[TrackOut])
 async def my_library(
@@ -382,14 +384,33 @@ async def start_transfer(
     if not settings.effective_celery_broker:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Перенос временно недоступен")
 
+    from starlette.concurrency import run_in_threadpool
+
+    from app.services.playlist_transfer.service import (
+        TRANSFER_MAX_ITEMS,
+        acquire_transfer_lock,
+        release_transfer_lock,
+    )
     from app.tasks.transfer import transfer_playlist_task
 
-    transfer_playlist_task.delay(
-        [{"artist": i.artist, "title": i.title} for i in items], user.telegram_id
-    )
+    skipped = max(0, len(items) - TRANSFER_MAX_ITEMS)
+    items = items[:TRANSFER_MAX_ITEMS]
+    if not await run_in_threadpool(acquire_transfer_lock, user.telegram_id):
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Предыдущий перенос ещё идёт — дождитесь отчёта в чате бота",
+        )
+    try:
+        transfer_playlist_task.delay(
+            [{"artist": i.artist, "title": i.title} for i in items], user.telegram_id
+        )
+    except Exception as exc:  # noqa: BLE001 — брокер лёг: замок не должен висеть сутки
+        await run_in_threadpool(release_transfer_lock, user.telegram_id)
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Перенос временно недоступен") from exc
     return TransferStartOut(
         queued=len(items),
         preview=[f"{i.artist} — {i.title}" for i in items[:5]],
+        skipped=skipped,
     )
 
 
@@ -462,6 +483,10 @@ async def add_to_playlist(
     playlist = await get_playlist(session, playlist_id)
     if playlist is None or playlist.user_id != user.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Плейлист не найден")
+    # Внешние ключи в SQLite выключены: без проверки в плейлист ложилась строка на
+    # несуществующий трек — счётчик показывал на трек больше, чем открывалось.
+    if await get_track(session, track_id) is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Трек не найден")
     await add_track_to_playlist(session, playlist_id, track_id)
 
 
@@ -473,6 +498,14 @@ async def upload_track(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> TrackOut:
+    # Те же границы, что у мастера загрузки в боте (handlers/upload.py). Пробелы
+    # вместо названия раньше доходили до mutagen и роняли запрос в 500.
+    title, artist = title.strip(), artist.strip()
+    if not title or not artist or len(title) > UPLOAD_MAX_TITLE or len(artist) > UPLOAD_MAX_TITLE:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"Название и исполнитель обязательны, до {UPLOAD_MAX_TITLE} символов",
+        )
     if not await can_upload(session, user):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Лимит загрузок бесплатного тарифа")
 
@@ -480,9 +513,15 @@ async def upload_track(
     if file_format is None:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Неподдерживаемый формат")
 
-    data = await file.read()
-    if len(data) > settings.max_file_size_mb * 1024 * 1024:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Файл больше {settings.max_file_size_mb} МБ")
+    # Кусками с остановкой на потолке: file.read() целиком тянул в память весь
+    # присланный файл ещё до проверки размера.
+    limit = settings.max_file_size_mb * 1024 * 1024
+    buffer = bytearray()
+    while chunk := await file.read(1024 * 1024):
+        buffer.extend(chunk)
+        if len(buffer) > limit:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Файл больше {settings.max_file_size_mb} МБ")
+    data = bytes(buffer)
 
     duration = duration_from_bytes(data, suffix=f".{file_format}")
     if duration <= 0:
@@ -551,6 +590,11 @@ async def submit_lyrics(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> LyricsOut:
+    # Текст общий для всех слушателей трека, а правка перезаписывает его целиком.
+    # Интерфейс пускал к редактору только Premium, сервер — любого: бесплатный
+    # аккаунт одним запросом затирал текст у всех (замер: 201).
+    if not is_premium_active(user):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Добавление текста — с Premium")
     if await get_track(session, track_id) is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Трек не найден")
     text = payload.text.strip()

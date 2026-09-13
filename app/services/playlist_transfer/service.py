@@ -47,8 +47,65 @@ class TransferReport:
         return "\n".join(lines)
 
 
+# Потолок одного переноса (решение владельца). Перенос идёт последовательно с
+# паузой 5–60 сек между скачиваниями, так что 1000 треков — это до полусуток.
+TRANSFER_MAX_ITEMS = 1000
+
+# Один активный перенос на человека: без замка десять отправок подряд ставили
+# десять многочасовых задач, и очередь стояла у всех.
+_LOCK_PREFIX = "transfer:active:"
+_LOCK_TTL_SECONDS = 24 * 3600
+
+
+def _redis_sync():
+    if not settings.redis_url:
+        return None
+    try:
+        import redis
+
+        return redis.from_url(settings.redis_url)
+    except Exception:  # noqa: BLE001 — замок опционален, как и кэш поиска
+        logger.warning("Перенос: Redis недоступен, замок не ставится", exc_info=True)
+        return None
+
+
+def acquire_transfer_lock(telegram_id: int) -> bool:
+    """True — можно начинать. Redis недоступен → не блокируем: перенос важнее замка."""
+    client = _redis_sync()
+    if client is None:
+        return True
+    try:
+        return bool(
+            client.set(f"{_LOCK_PREFIX}{telegram_id}", "1", nx=True, ex=_LOCK_TTL_SECONDS)
+        )
+    except Exception:  # noqa: BLE001
+        logger.warning("Перенос: не удалось поставить замок", exc_info=True)
+        return True
+
+
+def release_transfer_lock(telegram_id: int) -> None:
+    client = _redis_sync()
+    if client is None:
+        return
+    try:
+        client.delete(f"{_LOCK_PREFIX}{telegram_id}")
+    except Exception:  # noqa: BLE001 — истечёт сам по TTL
+        logger.warning("Перенос: не удалось снять замок", exc_info=True)
+
+
 async def find_in_catalog(session: AsyncSession, item: TransferItem) -> Track | None:
-    """Точное совпадение исполнителя и названия без учёта регистра и пробелов."""
+    """Точное совпадение исполнителя и названия без учёта регистра и транслита.
+
+    ⚠️ По search_index, а не lower() в запросе: SQLite lower() не понижает
+    кириллицу, и «Макан — Назови» из Яндекса никогда не находился в базе, где он
+    записан «МАКАН — Назови», — перенос качал заново уже имеющийся трек. Прежнее
+    сравнение осталось фолбэком для строк без индекса.
+    """
+    from app.services.search import find_track_by_metadata
+
+    found = await find_track_by_metadata(session, item.artist, item.title)
+    if found is not None:
+        return found
     return await session.scalar(
         select(Track)
         .where(

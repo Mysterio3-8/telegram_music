@@ -1,5 +1,6 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.api.ratelimit import RateLimitMiddleware
 
@@ -39,6 +40,12 @@ def create_app() -> FastAPI:
     app.include_router(subscription.router)
     app.include_router(contests.router)
     app.include_router(live_search.router)
+
+    @app.exception_handler(OverflowError)
+    async def id_out_of_range(request: Request, exc: OverflowError) -> JSONResponse:
+        # /track/99999999999999999999: FastAPI принимает любое int, а SQLite
+        # падает на числе шире 64 бит — был 500. Такой записи быть не может.
+        return JSONResponse({"detail": "Не найдено"}, status_code=404)
 
     @app.get("/health", tags=["health"])
     async def health() -> dict[str, str]:

@@ -1,4 +1,5 @@
 import { icon } from "../components/icons.js";
+import { escapeHtml } from "../components/trackRow.js";
 
 // «Перенос из других сервисов» по скрину VK (копи/ photo_16): выбор сервиса,
 // поле для ссылки/списка, объяснение как это работает.
@@ -76,7 +77,7 @@ export function renderTransfer(state) {
 
     <div class="transfer-prompt">${active.prompt}</div>
     <textarea class="transfer-input" data-role="transfer-input" rows="${isVk ? 4 : 2}"
-      placeholder="${placeholder}">${state.transferSource || ""}</textarea>
+      placeholder="${placeholder}">${escapeHtml(state.transferSource || "")}</textarea>
     <div class="hint-text">${active.help}</div>
     ${active.warn ? `<div class="transfer-warn">${active.warn}</div>` : ""}
 

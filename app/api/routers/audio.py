@@ -118,8 +118,16 @@ def _range_response(data: bytes, range_header: str, media_type: str) -> Response
         if unit.strip() != "bytes" or "," in spec:
             raise ValueError
         start_raw, _, end_raw = spec.partition("-")
-        start = int(start_raw) if start_raw else 0
-        end = int(end_raw) if end_raw else len(data) - 1
+        if not start_raw.strip():
+            # bytes=-N — ПОСЛЕДНИЕ N байт (RFC 9110 §14.1.2). Раньше читалось как
+            # 0-N: плеер, спрашивающий хвост файла (теги, индекс m4a), получал начало.
+            suffix = int(end_raw)
+            if suffix <= 0:
+                raise ValueError
+            start, end = max(0, len(data) - suffix), len(data) - 1
+        else:
+            start = int(start_raw)
+            end = int(end_raw) if end_raw else len(data) - 1
     except ValueError:
         raise HTTPException(status.HTTP_416_REQUESTED_RANGE_NOT_SATISFIABLE, "Некорректный Range")
 

@@ -33,7 +33,12 @@ def _auth() -> aiohttp.BasicAuth:
 
 
 def _payment_payload(
-    telegram_id: int, bot_username: str, amount: int, months: int, with_save_method: bool
+    telegram_id: int,
+    bot_username: str,
+    amount: int,
+    months: int,
+    with_save_method: bool,
+    discount_pct: int = 0,
 ) -> dict:
     payload = {
         "amount": {"value": f"{amount}.00", "currency": "RUB"},
@@ -43,7 +48,12 @@ def _payment_payload(
             "return_url": f"https://t.me/{bot_username}",
         },
         "description": f"Premium на {settings.premium_duration_days * months} дней",
-        "metadata": {"telegram_id": str(telegram_id), "months": str(months)},
+        # discount_pct — по нему скидка гасится только после успешной оплаты
+        "metadata": {
+            "telegram_id": str(telegram_id),
+            "months": str(months),
+            "discount_pct": str(discount_pct),
+        },
     }
     if with_save_method:
         # Сохраняем способ оплаты для автопродления (блок E): согласие пользователь
@@ -63,19 +73,27 @@ async def _post_payment(payload: dict) -> tuple[int, dict]:
 
 
 async def create_premium_payment(
-    telegram_id: int, bot_username: str, price_rub: int | None = None, months: int = 1
+    telegram_id: int,
+    bot_username: str,
+    price_rub: int | None = None,
+    months: int = 1,
+    discount_pct: int = 0,
 ) -> str | None:
     """Создаёт платёж, возвращает confirmation_url или None при ошибке."""
     amount = settings.premium_price_rub if price_rub is None else price_rub
     want_save_method = bool(settings.premium_autorenew and months == 1)
-    payload = _payment_payload(telegram_id, bot_username, amount, months, want_save_method)
+    payload = _payment_payload(
+        telegram_id, bot_username, amount, months, want_save_method, discount_pct
+    )
     try:
         status, body = await _post_payment(payload)
         if status != 200 and want_save_method and body.get("code") == "forbidden":
             # Магазин не подключил рекуррентные платежи в ЮKassa — платежи не должны
             # падать из-за этого, повторяем без сохранения способа оплаты
             logger.warning("ЮKassa: рекуррент недоступен для магазина, повтор без save_payment_method")
-            payload = _payment_payload(telegram_id, bot_username, amount, months, False)
+            payload = _payment_payload(
+                telegram_id, bot_username, amount, months, False, discount_pct
+            )
             status, body = await _post_payment(payload)
         if status != 200:
             logger.error("ЮKassa create payment %s: %s", status, body)
@@ -280,6 +298,11 @@ async def apply_succeeded_payment(session: AsyncSession, payment: dict) -> bool:
     if method.get("saved") and method.get("id"):
         user.pay_method_id = method["id"]
         user.autorenew = True
+    # Скидка гасится здесь, по факту оплаты, а не при создании ссылки (там она
+    # сгорала у каждого, кто открыл кассу и передумал). Коммит — в record_payment.
+    discount_raw = str((payment.get("metadata") or {}).get("discount_pct", "0"))
+    if discount_raw.isdigit() and int(discount_raw) > 0:
+        user.premium_discount_pct = 0
     # Лог выручки (блок E): сумма из подтверждённого платежа
     amount_raw = ((payment.get("amount") or {}).get("value")) or "0"
     amount_rub = _amount_to_rub(amount_raw, payment.get("id"))

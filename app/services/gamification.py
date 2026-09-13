@@ -6,7 +6,7 @@
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import exists, func, or_, select
+from sqlalchemy import exists, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import (
@@ -435,6 +435,18 @@ async def start_trial(session: AsyncSession, user: User) -> bool:
         return False
     now = _utcnow()
     if user.premium and user.premium_until and user.premium_until > now:
+        return False
+    # Атомарная отметка: 10 параллельных тапов раньше давали 7 «активаций», потому
+    # что каждый запрос читал trial_used=False до чужого коммита. Условный UPDATE
+    # пропускает ровно один.
+    claimed = await session.execute(
+        update(User)
+        .where(User.id == user.id, or_(User.trial_used.is_(False), User.trial_used.is_(None)))
+        .values(trial_used=True)
+        .execution_options(synchronize_session=False)
+    )
+    if claimed.rowcount != 1:
+        await session.rollback()
         return False
     user.trial_used = True
     _extend_premium(user, TRIAL_DAYS)

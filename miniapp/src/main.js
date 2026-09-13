@@ -79,6 +79,7 @@ import { renderPlayerScreen } from "./components/playerScreen.js";
 import { renderTrackSheet } from "./components/trackSheet.js";
 import { renderPlaylistPicker } from "./components/playlistPicker.js";
 import { icon } from "./components/icons.js";
+import { escapeHtml } from "./components/trackRow.js";
 import { renderHome } from "./screens/home.js";
 import { renderSearch, renderSearchResults } from "./screens/search.js";
 import { renderLibrary } from "./screens/library.js";
@@ -314,12 +315,25 @@ function render() {
     ${renderPlayerScreen(state)}
     ${renderTrackSheet(state)}
     ${renderPlaylistPicker(state)}
-    ${state.toast ? `<div class="toast">${state.toast}</div>` : ""}
+    ${state.toast ? `<div class="toast">${escapeHtml(state.toast)}</div>` : ""}
   `;
 
   if (html === lastHtml) return; // состояние изменилось, разметка — нет: DOM не трогаем
   lastHtml = html;
+  // Черновики полей, о которых state не знает (исполнитель в загрузке, список для
+  // переноса, текст песни, имя плейлиста). innerHTML пересоздаёт узлы, и любой
+  // тост, смена трека или фоновая догрузка стирали набранное. Возвращаем значение
+  // в поле той же роли, если исходное значение поля при этом не поменялось.
+  const drafts = [];
+  root.querySelectorAll("input[data-role], textarea[data-role]").forEach((el) => {
+    if (el.type === "file" || el.type === "range") return;
+    if (el.value !== el.defaultValue) drafts.push([el.dataset.role, el.defaultValue, el.value]);
+  });
   root.innerHTML = html;
+  for (const [role, initial, value] of drafts) {
+    const el = root.querySelector(`[data-role="${role}"]`);
+    if (el && el.defaultValue === initial) el.value = value;
+  }
 
   if (keepFocus) {
     const input = root.querySelector(`[data-role="${focusedRole}"]`);
@@ -503,16 +517,27 @@ function finishOnboarding() {
 }
 
 let libraryPagesLoaded = 1;
+let libraryPageLoading = null;
 
-async function loadMoreLibrary() {
-  const next = libraryPagesLoaded + 1;
-  const page = await getLibrary(next);
-  libraryPagesLoaded = next;
-  const state = getState();
-  mutate({
-    libraryPageItems: [...state.libraryPageItems, ...page.items],
-    libraryTotal: page.total,
+// Двойной тап «Ещё» раньше грузил одну и ту же страницу дважды — в списке
+// появлялись дубли. Пока запрос в пути, повторный вызов ждёт его же.
+function loadMoreLibrary() {
+  if (libraryPageLoading) return libraryPageLoading;
+  libraryPageLoading = (async () => {
+    const next = libraryPagesLoaded + 1;
+    const page = await getLibrary(next);
+    libraryPagesLoaded = next;
+    const state = getState();
+    const known = new Set(state.libraryPageItems.map((t) => t.id));
+    mutate({
+      libraryPageItems: [...state.libraryPageItems, ...page.items.filter((t) => !known.has(t.id))],
+      libraryTotal: page.total,
+    });
+    return page;
+  })().finally(() => {
+    libraryPageLoading = null;
   });
+  return libraryPageLoading;
 }
 
 async function loadProfile() {
@@ -758,8 +783,23 @@ function refreshMyTracksBody() {
 }
 
 // «Скачать всё» (шит Моих треков, скрин VK): офлайн-кэш всей библиотеки — Premium.
+let downloadAllRunning = false;
+
 async function downloadAllTracks() {
   mutate({ myTracksMenuOpen: false });
+  if (downloadAllRunning) {
+    showToast("Скачивание уже идёт");
+    return;
+  }
+  downloadAllRunning = true;
+  try {
+    await downloadAllTracksNow();
+  } finally {
+    downloadAllRunning = false;
+  }
+}
+
+async function downloadAllTracksNow() {
   const state = getState();
   if (!state.premium || !state.premium.active) {
     showToast("Скачивание треков — с Premium");
@@ -770,7 +810,17 @@ async function downloadAllTracks() {
     showToast("Офлайн-кэш недоступен на этом устройстве");
     return;
   }
-  const list = myTracksList(state).filter((t) => t.id > 0 && !isOffline(t.id));
+  // «Скачать всё» раньше брало только загруженную страницу библиотеки (первые
+  // 100): у кого треков больше, остальные молча не скачивались. Догружаем все.
+  try {
+    while (getState().libraryPageItems.length < getState().libraryTotal) {
+      const page = await loadMoreLibrary();
+      if (!page || !page.items.length) break;
+    }
+  } catch {
+    showToast("Не удалось получить весь список — скачаю то, что загружено");
+  }
+  const list = myTracksList(getState()).filter((t) => t.id > 0 && !isOffline(t.id));
   if (!list.length) {
     showToast("Всё уже скачано");
     return;
@@ -800,7 +850,9 @@ async function activateTrial() {
     const premium = await startPremiumTrial();
     mutate({ premium });
     loadProfile(); // trial_available и достижения пересчитываются на сервере
-    showToast("Premium на 3 дня активирован 🎁");
+    // Без числа дней: пробный период задаёт сервер (TRIAL_DAYS = 1), а тост
+    // обещал «3 дня» — пэйвол рядом при этом честно писал «1 день»
+    showToast("Пробный Premium активирован 🎁");
   } catch (error) {
     showToast((error && error.message) || "Не удалось активировать пробный период");
   }
@@ -816,19 +868,26 @@ async function startPlaylistTransfer() {
   mutate({ transferSource: source, transferStatus: "loading", transferResult: "" });
   try {
     const result = await startTransfer(source);
+    // ⚠️ preview — названия треков из ЧУЖОГО плейлиста Spotify/Яндекса. Без
+    // экранирования трек с названием «<img onerror=…>» исполнял код в Mini App
+    // того, кто переносит, — вплоть до кражи initData и входа в его аккаунт.
+    const skipped = result.skipped
+      ? `<br>Лимит одного переноса — ${result.queued}, ещё ${result.skipped} не вошли.`
+      : "";
     mutate({
       transferStatus: "idle",
       transferResult:
-        `Принято треков: ${result.queued}. Переношу — отчёт придёт в чат бота.` +
-        (result.preview.length ? `<br><br>${result.preview.join("<br>")}` : ""),
+        `Принято треков: ${result.queued}. Переношу — отчёт придёт в чат бота.${skipped}` +
+        (result.preview.length ? `<br><br>${result.preview.map(escapeHtml).join("<br>")}` : ""),
     });
     showToast(`Переношу ${result.queued} треков`);
   } catch (error) {
     mutate({
       transferStatus: "idle",
-      transferResult:
+      transferResult: escapeHtml(
         (error && error.message) ||
-        "Не удалось прочитать список. Проверьте ссылку или пришлите треки текстом.",
+          "Не удалось прочитать список. Проверьте ссылку или пришлите треки текстом."
+      ),
     });
   }
 }
@@ -868,9 +927,24 @@ function refreshLibraryButtons(trackId, inLibrary) {
   });
 }
 
+// Треки, по которым запрос библиотеки ещё в пути. Двойной тап раньше слал POST и
+// DELETE одновременно: сервер мог применить их в обратном порядке, и интерфейс
+// показывал «не в библиотеке» при треке в библиотеке.
+const libraryInFlight = new Set();
+
 async function handleToggleLibrary(trackId, fromSheet) {
   if (fromSheet) closeSheet();
   if (!trackId || trackId < 0) return; // минусы в библиотеку не добавляются
+  if (libraryInFlight.has(trackId)) return;
+  libraryInFlight.add(trackId);
+  try {
+    await toggleLibraryNow(trackId, fromSheet);
+  } finally {
+    libraryInFlight.delete(trackId);
+  }
+}
+
+async function toggleLibraryNow(trackId, fromSheet) {
   const state = getState();
   const prevIds = state.libraryIds;
   const inLibrary = prevIds.has(trackId);
@@ -909,7 +983,12 @@ async function handleToggleLibrary(trackId, fromSheet) {
   }
 }
 
+// Двойной тап по «Оплатить» создавал два платежа в кассе и открывал две вкладки
+let paymentInFlight = false;
+
 async function handlePayPremium() {
+  if (paymentInFlight) return;
+  paymentInFlight = true;
   try {
     const months = getState().premiumMonths || 1;
     const { confirmation_url: url } = await createPaymentLink(months);
@@ -917,6 +996,8 @@ async function handlePayPremium() {
     else window.open(url, "_blank");
   } catch {
     showToast("Оплата временно недоступна");
+  } finally {
+    paymentInFlight = false;
   }
 }
 
@@ -1659,7 +1740,7 @@ async function submitUpload() {
         title: "",
         artist: "",
         status: "idle",
-        result: `✅ «${track.artist} — ${track.title}» добавлен в библиотеку`,
+        result: `✅ «${escapeHtml(track.artist)} — ${escapeHtml(track.title)}» добавлен в библиотеку`,
       },
       libraryTotal: getState().libraryTotal + 1,
     });
@@ -1698,7 +1779,11 @@ root.addEventListener("keydown", (event) => {
 // время drag, поэтому захват переживает ре-рендеры. move/up слушаем на window,
 // чтобы палец мог уйти за пределы полоски и перемотка не срывалась.
 function seekFractionAt(track, clientX) {
+  // Смена трека или тост посреди перетаскивания пересоздают полоску: у
+  // оторванного узла ширина 0, и перемотка улетала в начало. Берём живую.
+  if (!track.isConnected) track = document.querySelector('[data-action="seek"]') || track;
   const rect = track.getBoundingClientRect();
+  if (!rect.width) return 0;
   return Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
 }
 

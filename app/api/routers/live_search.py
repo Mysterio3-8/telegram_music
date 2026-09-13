@@ -6,6 +6,7 @@
 слать Authorization-заголовок — та же причина, что и у /tracks/{id}/audio).
 """
 import logging
+import time
 from dataclasses import asdict
 
 import aiohttp
@@ -30,6 +31,30 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["live-search"])
 
 _CHUNK = 64 * 1024
+
+# Прямая ссылка источника по ref. Каждая перемотка — это новый Range-запрос, и
+# раньше на каждый вызывался yt-dlp (секунды единственного ядра): десяток
+# перемоток одного трека грузил сервер сильнее поиска. Ссылка источника живёт
+# дольше десяти минут, при отказе источника запись выбрасывается.
+_STREAM_URL_TTL = 600.0
+_STREAM_URLS_MAX = 500
+_stream_urls: dict[str, tuple[float, str]] = {}
+
+
+async def _cached_stream_url(ref: str, candidate: Candidate) -> str | None:
+    now = time.monotonic()
+    hit = _stream_urls.get(ref)
+    if hit is not None and hit[0] > now:
+        return hit[1]
+    url = await run_in_threadpool(resolve_stream_url, candidate)
+    if url:
+        if len(_stream_urls) >= _STREAM_URLS_MAX:
+            for key in [k for k, (until, _) in _stream_urls.items() if until <= now]:
+                _stream_urls.pop(key, None)
+            if len(_stream_urls) >= _STREAM_URLS_MAX:
+                _stream_urls.clear()
+        _stream_urls[ref] = (now + _STREAM_URL_TTL, url)
+    return url
 
 
 class LiveTrackOut(BaseModel):
@@ -131,7 +156,7 @@ async def stream_candidate(ref: str, request: Request) -> Response:
     if candidate is None:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Ссылка недействительна или истекла")
 
-    source_url = await run_in_threadpool(resolve_stream_url, candidate)
+    source_url = await _cached_stream_url(ref, candidate)
     if not source_url:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Источник не отдал поток")
 
@@ -139,15 +164,21 @@ async def stream_candidate(ref: str, request: Request) -> Response:
     if request.headers.get("range"):
         headers["Range"] = request.headers["range"]
 
-    session = aiohttp.ClientSession()
+    # Таймауты на соединение и паузу между кусками: без них зависший источник
+    # держал соединение и память процесса вечно.
+    session = aiohttp.ClientSession(
+        timeout=aiohttp.ClientTimeout(total=None, sock_connect=10, sock_read=30)
+    )
     try:
         upstream = await session.get(source_url, headers=headers)
     except Exception:  # noqa: BLE001 — сеть источника
         await session.close()
+        _stream_urls.pop(ref, None)
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Источник недоступен")
     if upstream.status >= 400:
         upstream.release()
         await session.close()
+        _stream_urls.pop(ref, None)  # ссылка источника протухла — следующий раз резолвим заново
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Источник не отдал поток")
 
     async def body():

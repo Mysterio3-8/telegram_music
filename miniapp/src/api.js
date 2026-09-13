@@ -300,7 +300,7 @@ export async function uploadTrack(file, title, artist) {
   return response.json();
 }
 
-// Пробный Premium на 3 дня — один раз на аккаунт
+// Пробный Premium (TRIAL_DAYS на сервере) — один раз на аккаунт
 export function startPremiumTrial() {
   return request("/premium/trial", { method: "POST" });
 }

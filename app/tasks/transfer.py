@@ -28,6 +28,9 @@ async def _run(items: list[dict], telegram_id: int) -> None:
         except Exception:  # noqa: BLE001
             pass
     finally:
+        from app.services.playlist_transfer.service import release_transfer_lock
+
+        release_transfer_lock(telegram_id)
         await bot.session.close()
         await engine.dispose()
 

@@ -18,7 +18,10 @@ celery_app.conf.update(
     # (youtube.user_import, soundcloud.user_import) — в отзывчивую очередь youtube_user,
     # чтобы не стоять за бэклогом массовых сканов каналов/профилей.
     task_routes={
-        "transfer.playlist": {"queue": "youtube_user"},
+        # Не youtube_user: перенос идёт часами (пауза 5–60 сек между треками) и
+        # занимал один из двух потоков поискового парсера — два переноса разом
+        # останавливали выдачу треков всем. Общую очередь разбирает tg-music-worker.
+        "transfer.playlist": {"queue": "celery"},
         "soundcloud.user_import": {"queue": "youtube_user"},
         "soundcloud.*": {"queue": "soundcloud"},
         "youtube.user_import": {"queue": "youtube_user"},

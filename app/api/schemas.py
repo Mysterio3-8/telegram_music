@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Generic, TypeVar
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 T = TypeVar("T")
 
@@ -62,8 +62,10 @@ class LoginIn(BaseModel):
     init_data: str
 
 
+# Потолки длины совпадают с ботом (handlers/playlists, handlers/upload): без них
+# API принимал название плейлиста в 1 МБ и текст песни в 5 МБ.
 class PlaylistCreateIn(BaseModel):
-    title: str
+    title: str = Field(max_length=128)
 
 
 class LyricsOut(BaseModel):
@@ -153,16 +155,19 @@ class AlbumOut(BaseModel):
 
 
 class LyricsIn(BaseModel):
-    text: str
+    text: str = Field(max_length=20_000)  # самые длинные тексты — около 10 тысяч знаков
 
 
 class TransferIn(BaseModel):
-    source: str  # ссылка на плейлист или текстовый список «Артист — Название»
+    # ссылка на плейлист или текстовый список «Артист — Название»; 300 КБ хватает
+    # на тысячу строк с запасом, а разбор 50 тысяч строк больше не стоит памяти
+    source: str = Field(max_length=300_000)
 
 
 class TransferStartOut(BaseModel):
     queued: int
     preview: list[str]
+    skipped: int = 0  # сверх потолка одного переноса — не поставлены
 
 
 class PremiumStatusOut(BaseModel):
@@ -240,7 +245,7 @@ class ProfileOut(BaseModel):
 
 
 class SearchFetchIn(BaseModel):
-    query: str
+    query: str = Field(max_length=200)  # уходит в поиск источников и в очередь
 
 
 class AutorenewIn(BaseModel):

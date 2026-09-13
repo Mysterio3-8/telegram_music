@@ -4,6 +4,8 @@ Mini App гейтит доступ так же, как бот: не подпис
 показываем экран-гейт. Premium и админы (при bypass) от гейта освобождены.
 Проверка идёт тем же getChatMember с TTL-кэшем, что и в боте.
 """
+import time
+
 from aiogram import Bot
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,6 +24,12 @@ from app.services.subscription import is_channel_subscribed
 from app.services.users import is_admin
 
 router = APIRouter(tags=["subscription"])
+
+# Последний засчитанный клик (user_id, channel_id) → monotonic. В памяти, как и
+# лимитер: uvicorn один процесс, а запись на диск при флуде уже роняла прод.
+_CLICK_WINDOW = 3600.0
+_CLICKS_MAX = 10_000
+_recent_clicks: dict[tuple[int, int], float] = {}
 
 
 @router.get("/subscription/status", response_model=SubscriptionStatusOut)
@@ -69,4 +77,15 @@ async def channel_click(
     session: AsyncSession = Depends(get_db),
 ) -> None:
     """Клик по кнопке канала в гейте — воронка для продажи рекламы."""
+    # Один человек — один клик по каналу в час. Иначе цикл запросов накручивал
+    # счётчик, по которому продаётся реклама (замер: +30 за 30 запросов).
+    now = time.monotonic()
+    if len(_recent_clicks) > _CLICKS_MAX:
+        for key in [k for k, at in _recent_clicks.items() if now - at > _CLICK_WINDOW]:
+            _recent_clicks.pop(key, None)
+    key = (user.id, channel_id)
+    seen = _recent_clicks.get(key)
+    if seen is not None and now - seen < _CLICK_WINDOW:
+        return
+    _recent_clicks[key] = now
     await register_channel_click(session, channel_id)

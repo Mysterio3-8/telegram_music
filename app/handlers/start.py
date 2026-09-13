@@ -1,3 +1,5 @@
+import re
+
 from aiogram import F, Router
 from aiogram.filters import CommandObject, CommandStart
 from aiogram.fsm.context import FSMContext
@@ -18,6 +20,9 @@ from app.services.subscription import is_fully_subscribed
 from app.services.users import get_user_by_telegram_id, user_language
 
 router = Router()
+
+# id записи в deep-link: только ASCII-цифры и не шире int64 SQLite
+_DB_ID_RE = re.compile(r"[0-9]{1,18}")
 
 
 async def build_cabinet_text(session: AsyncSession, user: User) -> str:
@@ -49,7 +54,9 @@ async def build_cabinet_text(session: AsyncSession, user: User) -> str:
 async def _show_shared_track(message: Message, user: User, args: str) -> bool:
     """Обрабатывает deep-link /start track_{id}. True — карточка показана."""
     track_id_raw = args.removeprefix("track_")
-    if not track_id_raw.isdigit():
+    # Не isdigit(): он пропускает «²» (int() падает) и числа шире 64 бит (SQLite
+    # падает на OverflowError) — человек по битой ссылке получал ошибку вместо меню.
+    if not _DB_ID_RE.fullmatch(track_id_raw):
         return False
     async with session_factory() as session:
         track = await get_track(session, int(track_id_raw))
@@ -98,7 +105,7 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
         user = await ensure_user(session, message.from_user)
         if is_new and command.args and command.args.startswith("ref_"):
             referrer_raw = command.args.removeprefix("ref_")
-            if referrer_raw.isdigit():
+            if _DB_ID_RE.fullmatch(referrer_raw):
                 await register_referral(session, user, int(referrer_raw))
         # Первый вход — сначала язык (решение владельца). ui_language хранит только
         # осознанный выбор, поэтому пустое поле и есть признак «ещё не спрашивали»;
