@@ -269,10 +269,26 @@ ssh -i "C:/Users/Илья/.ssh/id_ed25519" -o UserKnownHostsFile="C:/Users/Ил�
    `/root/env-backups` (решение владельца, не удалять самому).
 8. ~~План масштабирования 100 → 1 млн пользователей~~ ✅ [SCALING-PLAN.md](SCALING-PLAN.md).
    Из него в очередь: ~~аудио через nginx `X-Accel-Redirect`~~ ✅ цикл 6.
-9. **API держит ~180 МБ анонимной памяти** на свежем старте (замер 14.09). В
-   процессе загружены `_cffi_backend`, `_wrapper.abi3` — похоже, API при
-   импорте тянет yt-dlp/curl_cffi, хотя нужны они только живому поиску и
-   `/stream`. Проверить `python -X importtime`, перевести на ленивый импорт.
+9. **API держит ~180 МБ анонимной памяти** на свежем старте (замер 14.09).
+   Замер импортов (`tracemalloc`, аллокации Python, итого 91.5 МБ):
+   **aiogram.types+methods +38.4 МБ (42%)**, fastapi+sqlalchemy+pydantic
+   +26.5 МБ, остальной код +17.4 МБ, yt-dlp всего +9.2 МБ. По времени импорта
+   (`-X importtime`) aiogram — 6.5 из 8.6 сек. ⚠️ Первая гипотеза «виноват
+   yt-dlp» не подтвердилась. Рычаг — убрать aiogram из процесса API: заменить
+   `Bot` прямыми вызовами Bot API через aiohttp (getChatMember, sendAudio,
+   getFile). Ленивый импорт памяти не сэкономит: гейт подписки зовёт Telegram
+   почти у каждого, модели загрузятся на первом же запросе.
+   **Объём (grep 14.09)** — aiogram попадает в процесс API так:
+   - роутеры `api/routers/audio.py` (`Bot.download`), `contests.py` и
+     `subscription.py` (`Bot` → `getChatMember`);
+   - `services/subscription.py` (`Bot`, `ChatMemberStatus`, `TelegramAPIError`,
+     `ChatMemberRestricted`);
+   - `services/track_lookup/importer.py` — API нужна оттуда одна
+     `candidate_metadata`, а `Bot` висит в верхних импортах модуля;
+   - `services/catalog_import.py` (`Bot`, `BufferedInputFile`) — путь `/upload`.
+   Сервисы общие с ботом и воркерами → отдельный цикл: лёгкий клиент Bot API +
+   вынос `candidate_metadata` в модуль без aiogram + тест «импорт `app.api.app`
+   не загружает `aiogram`» (`sys.modules`).
 - 🔴 **`ensure_user` писал в SQLite на каждое действие в боте**: `get_or_create_user`
   безусловно ставил `last_login = now()` и делал `commit()` — пишущая транзакция
   на каждое сообщение и нажатие, в очереди за единственной блокировкой писателя
@@ -305,6 +321,8 @@ ssh -i "C:/Users/Илья/.ssh/id_ed25519" -o UserKnownHostsFile="C:/Users/Ил�
   `X-Accel-Redirect` наружу не утекает; подделанная подпись 403, internal 404;
   в журнале API аудиозапросы 200. Наблюдение деплоя: 0 ошибок, 0 ответов 5xx.
 - ⚠️ `Accept-Ranges` приходил дважды (API + nginx) → убран из ответа API.
+  Выкатка `d91f81b`: наблюдение 0/0, заголовок один, m4a `audio/mp4`, Range и
+  байты совпадают, 403/404 на месте.
 - RSS API 203 МБ сразу после рестарта против 81 МБ до включения — **не
   регрессия**. Проверено: `NRestarts=0`, OOM нет; «uptime 1 минута» — это мой же
   рестарт при включении переменной (09:58:05). Через 5 минут у процесса уже
