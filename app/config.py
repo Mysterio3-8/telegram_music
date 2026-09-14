@@ -209,6 +209,10 @@ class Settings(BaseSettings):
     # из Telegram/S3 на каждый плей. 0 МБ → кэш выключен.
     audio_cache_dir: str = "audio_cache"
     audio_cache_max_mb: int = 2048
+    # Отдача аудио через nginx (X-Accel-Redirect): API проверяет подпись и отвечает
+    # заголовком, байты и Range отдаёт nginx без Python. Пусто → стрим из API.
+    # Прод: /_audio_cache/ (internal-location в deploy/nginx-keybest.conf).
+    audio_accel_redirect_prefix: str = ""
     # Защита от переполнения диска (инцидент 2026-07-26): ниже этого запаса
     # свободного места не качаем и не пишем архив/кэш — иначе Redis/бот падают
     min_free_disk_mb: int = 1024

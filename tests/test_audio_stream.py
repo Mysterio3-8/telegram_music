@@ -108,3 +108,32 @@ async def test_failed_download_is_404_and_leaves_no_tmp(env, monkeypatch, tmp_pa
 async def test_bad_signature_still_403(env):
     response = await env.get("/tracks/1/audio?exp=9999999999&sig=forged")
     assert response.status_code == 403
+
+
+async def test_accel_redirect_hands_file_to_nginx(env, monkeypatch):
+    """С префиксом API не шлёт байты: nginx отдаёт файл кэша сам (цикл 6)."""
+    monkeypatch.setattr(settings, "audio_accel_redirect_prefix", "/_audio_cache/")
+    response = await env.get(build_audio_url(1), headers={"Range": "bytes=0-99"})
+    assert response.status_code == 200  # Range разбирает nginx, не API
+    assert response.headers["x-accel-redirect"] == "/_audio_cache/tracks_1"
+    assert response.headers["content-type"].startswith("audio/mpeg")
+    assert response.content == b""
+
+
+async def test_accel_redirect_still_checks_signature(env, monkeypatch):
+    monkeypatch.setattr(settings, "audio_accel_redirect_prefix", "/_audio_cache/")
+    response = await env.get("/tracks/1/audio?exp=9999999999&sig=forged")
+    assert response.status_code == 403
+    assert "x-accel-redirect" not in response.headers
+
+
+async def test_accel_redirect_only_for_cache_directory(env, monkeypatch, tmp_path):
+    from app.api.routers.audio import _accel_redirect
+
+    monkeypatch.setattr(settings, "audio_accel_redirect_prefix", "/_audio_cache/")
+    outside = tmp_path.parent / "elsewhere.mp3"
+    outside.write_bytes(b"x")
+    try:
+        assert _accel_redirect(outside, "audio/mpeg") is None
+    finally:
+        outside.unlink()

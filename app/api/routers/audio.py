@@ -243,6 +243,33 @@ def _file_response(path: Path, range_header: str | None, media_type: str) -> Res
     return StreamingResponse(body(), status_code=status_code, media_type=media_type, headers=headers)
 
 
+def _accel_redirect(path: Path, media_type: str) -> Response | None:
+    """Ответ-указание nginx отдать файл кэша самому (цикл 6, 14.09).
+
+    Даже кусками по 256 КБ байты гнал Python: каждый поток слушателя — это
+    итерации event loop и поток из пула на каждый кусок, на единственном ядре.
+    nginx отдаёт файл через sendfile и сам разбирает Range.
+
+    Только для файлов, лежащих прямо в каталоге кэша: имя в заголовке — это путь
+    внутри internal-location, и ничего за его пределами туда попасть не должно."""
+    prefix = settings.audio_accel_redirect_prefix
+    if not prefix:
+        return None
+    try:
+        if path.resolve().parent != Path(settings.audio_cache_dir).resolve():
+            return None
+    except OSError:
+        return None
+    return Response(
+        status_code=status.HTTP_200_OK,
+        headers={
+            **_CACHE_HEADERS,
+            "X-Accel-Redirect": f"{prefix.rstrip('/')}/{path.name}",
+            "Content-Type": media_type,
+        },
+    )
+
+
 async def _serve(
     storage_key: str,
     storage_path: str | None,
@@ -252,6 +279,9 @@ async def _serve(
 ) -> Response | None:
     path = await _audio_file(storage_key, storage_path, tg_file_id)
     if path is not None:
+        accel = _accel_redirect(path, media_type)
+        if accel is not None:
+            return accel
         return _file_response(path, range_header, media_type)
     if settings.audio_cache_max_mb > 0:
         return None  # кэш включён, а файла нет — закачка уже не удалась
