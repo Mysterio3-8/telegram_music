@@ -59,7 +59,20 @@ async def main():
         u1, u2 = 900000001 + int(time.time()) % 1000, 900002001 + int(time.time()) % 1000
         t1 = await login(http, u1)
         t2 = await login(http, u2)
+        # С 14.09 весь API Mini App закрыт пэйволом: u2 — платящий (гоняем на нём
+        # проверки прав и границ), u3 — бесплатный (проверяем сам пэйвол).
+        db.execute("update users set premium=1, premium_until=datetime('now','+30 days') where telegram_id=?", (u2,))
+        db.commit()
+        u3 = 900004001 + int(time.time()) % 1000
+        t3 = await login(http, u3)
         track_id = db.execute("select id from tracks order by id limit 1").fetchone()[0]
+
+        # 0. Серверный пэйвол: бесплатный не получает API в обход интерфейса
+        for method, path in [("GET", "/library/ids"), ("GET", "/tracks"), ("GET", "/search/live?q=a"), ("POST", "/transfer")]:
+            async with http.request(method, f"{BASE}{path}", headers=H(t3, "10.0.9.1"), json={"source": "A — B"}) as r:
+                rec(f"paywall: {method} {path} без Premium → 402", r.status == 402, f"status={r.status}")
+        async with http.get(f"{BASE}/premium/status", headers=H(t3, "10.0.9.2")) as r:
+            rec("paywall: статус Premium доступен бесплатному", r.status == 200, f"status={r.status}")
 
         # 1. Гонка пробного Premium: 10 параллельных нажатий
         async def trial():
@@ -71,8 +84,8 @@ async def main():
         rec("trial race: одна активация из 10", ok_count == 1, f"200×{ok_count}, statuses={sorted(set(statuses))}, until={row}")
 
         # 2. Текст песни: бесплатный пользователь перезаписывает чужой/общий текст
-        async with http.post(f"{BASE}/tracks/{track_id}/lyrics", headers=H(t2, "10.2.0.1"), json={"text": "VANDAL"}) as r:
-            rec("lyrics: не-Premium не может писать текст", r.status in (401, 403), f"status={r.status}")
+        async with http.post(f"{BASE}/tracks/{track_id}/lyrics", headers=H(t3, "10.2.0.1"), json={"text": "VANDAL"}) as r:
+            rec("lyrics: не-Premium не может писать текст", r.status in (401, 402, 403), f"status={r.status}")
         big = "A" * 5_000_000
         async with http.post(f"{BASE}/tracks/{track_id}/lyrics", headers=H(t2, "10.2.0.2"), json={"text": big}) as r:
             rec("lyrics: текст 5 МБ отклоняется", r.status in (400, 403, 413, 422), f"status={r.status}")
