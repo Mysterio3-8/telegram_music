@@ -61,7 +61,7 @@ from app.services.library import (
 from app.services.lyrics import get_or_fetch_lyrics, save_lyrics
 from app.services.playlists import (
     add_track_to_playlist,
-    count_playlist_tracks,
+    count_tracks_by_playlist,
     create_playlist,
     get_all_playlists,
     get_playlist,
@@ -259,10 +259,9 @@ async def my_playlists(
     session: AsyncSession = Depends(get_db),
 ) -> list[PlaylistSummaryOut]:
     playlists = await get_all_playlists(session, user.id)
+    counts = await count_tracks_by_playlist(session, [p.id for p in playlists])
     return [
-        PlaylistSummaryOut(
-            id=p.id, title=p.title, track_count=await count_playlist_tracks(session, p.id)
-        )
+        PlaylistSummaryOut(id=p.id, title=p.title, track_count=counts.get(p.id, 0))
         for p in playlists
     ]
 
@@ -299,12 +298,13 @@ async def curated_playlists(
             .order_by(Playlist.created_at.desc())
         )
     ).all()
-    out = []
-    for p in playlists:
-        count = await count_playlist_tracks(session, p.id)
-        if count:  # пустые подборки не показываем
-            out.append(PlaylistSummaryOut(id=p.id, title=p.title, track_count=count))
-    return out
+    counts = await count_tracks_by_playlist(session, [p.id for p in playlists])
+    # пустые подборки не показываем
+    return [
+        PlaylistSummaryOut(id=p.id, title=p.title, track_count=counts[p.id])
+        for p in playlists
+        if counts.get(p.id)
+    ]
 
 
 @router.get("/curators/{playlist_id}/tracks", response_model=list[TrackOut])

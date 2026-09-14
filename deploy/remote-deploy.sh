@@ -92,7 +92,7 @@ fi
 # --- 5. юниты ---------------------------------------------------------------
 # git pull их не доносит: systemd читает /etc/systemd/system.
 say "Юниты и системные конфиги"
-bash deploy/install-units.sh || echo "⚠️ install-units.sh отработал с ошибкой — смотри вывод выше"
+SKIP_SERVICE_RESTART=1 bash deploy/install-units.sh || echo "⚠️ install-units.sh отработал с ошибкой — смотри вывод выше"
 
 # --- 6. рестарт -------------------------------------------------------------
 say "Перезапуск сервисов"
@@ -136,8 +136,12 @@ if [ ${#failed[@]} -eq 0 ] && [ "$DEPLOY_WATCH" -gt 0 ]; then
     sleep "$DEPLOY_WATCH"
     unit_args=()
     for unit in "${SERVICES[@]}"; do unit_args+=(-u "$unit"); done
+    # Сбои сети источников (yt-dlp пишет их уровнем ERROR) не относятся к выкатке:
+    # SoundCloud, оборвавший соединение, не повод откатывать код. Список — как
+    # в healthcheck.sh.
+    SOURCE_NOISE='Unable to download|Connection reset|timed out|HTTP Error [0-9]+|Sign in to confirm|DRM protected|Unable to extract|Temporary failure in name resolution'
     journal_errors=$(journalctl "${unit_args[@]}" --since "@$RESTART_TS" --no-pager -o cat 2>/dev/null \
-        | grep -cE "ERROR|Traceback|CRITICAL" || true)
+        | grep -E "ERROR|Traceback|CRITICAL" | grep -vcE "$SOURCE_NOISE" || true)
     http_errors=0
     if [ -r "$ACCESS_LOG" ]; then
         size=$(stat -c %s "$ACCESS_LOG")

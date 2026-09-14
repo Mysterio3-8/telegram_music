@@ -19,7 +19,7 @@ from starlette.concurrency import run_in_threadpool
 from app.api.deps import get_db, require_premium
 from app.db.models import User
 from app.services.candidate_ref import decode_ref, encode_ref
-from app.services.search import find_track_by_metadata
+from app.services.search import find_tracks_by_metadata_bulk
 from app.services.search_cache import search_with_cache
 from app.services.shelves import SHELVES, build_personal_mix, build_shelf, get_shelf
 from app.services.stream_url import resolve_stream_url
@@ -74,18 +74,21 @@ class LiveSearchOut(BaseModel):
     items: list[LiveTrackOut]
 
 
-async def _to_out(session: AsyncSession, candidate: Candidate) -> LiveTrackOut:
-    artist, title = candidate_metadata(candidate)
-    existing = await find_track_by_metadata(session, artist, title)
-    return LiveTrackOut(
-        ref=encode_ref(candidate),
-        title=title,
-        artist=artist,
-        duration=candidate.duration,
-        source=candidate.source,
-        cover_url=candidate.cover_url,
-        track_id=existing.id if existing else None,
-    )
+async def _to_outs(session: AsyncSession, candidates: list[Candidate]) -> list[LiveTrackOut]:
+    metadata = [candidate_metadata(candidate) for candidate in candidates]
+    existing = await find_tracks_by_metadata_bulk(session, metadata)
+    return [
+        LiveTrackOut(
+            ref=encode_ref(candidate),
+            title=title,
+            artist=artist,
+            duration=candidate.duration,
+            source=candidate.source,
+            cover_url=candidate.cover_url,
+            track_id=track.id if track else None,
+        )
+        for candidate, (artist, title), track in zip(candidates, metadata, existing)
+    ]
 
 
 @router.get("/search/live", response_model=LiveSearchOut, dependencies=[Depends(require_premium)])
@@ -94,7 +97,7 @@ async def live_search(
     session: AsyncSession = Depends(get_db),
 ) -> LiveSearchOut:
     candidates = await search_with_cache(q)
-    return LiveSearchOut(items=[await _to_out(session, item) for item in candidates])
+    return LiveSearchOut(items=await _to_outs(session, candidates))
 
 
 class ShelfOut(BaseModel):
@@ -113,7 +116,7 @@ async def shelf_tracks(slug: str, session: AsyncSession = Depends(get_db)) -> Li
     if shelf is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Полка не найдена")
     candidates = await build_shelf(shelf)
-    return LiveSearchOut(items=[await _to_out(session, item) for item in candidates])
+    return LiveSearchOut(items=await _to_outs(session, candidates))
 
 
 @router.get("/shelves/mix/personal", response_model=LiveSearchOut)
@@ -121,7 +124,7 @@ async def personal_mix(
     user: User = Depends(require_premium), session: AsyncSession = Depends(get_db)
 ) -> LiveSearchOut:
     candidates = await build_personal_mix(session, user.id)
-    return LiveSearchOut(items=[await _to_out(session, item) for item in candidates])
+    return LiveSearchOut(items=await _to_outs(session, candidates))
 
 
 @router.post("/search/live/{ref}/fetch")

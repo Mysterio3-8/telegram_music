@@ -170,6 +170,15 @@ else
     echo 0 >"$lowmem_file"
 fi
 
+# --- 3б. Redis -------------------------------------------------------------
+# 01.08 Redis держал 651 МБ осиротевших задач, и `ps` этого не показывал: почти
+# всё лежало в свопе (RSS 5 МБ). Смотрим used_memory — сам Redis не врёт.
+# Норма на 14.09 — 1.6 МБ, потолок (install-units.sh) — 256 МБ.
+redis_mb=$(redis-cli -n "${redis_db:-0}" info memory 2>/dev/null | awk -F: '/^used_memory:/ {print int($2/1048576)}')
+if [ -n "$redis_mb" ] && [ "$redis_mb" -ge 100 ]; then
+    notify "redis" "Redis занял ${redis_mb} МБ (норма ~2 МБ, потолок 256). Скорее всего копится очередь: redis-cli --scan | cut -d: -f1 | sort | uniq -c; redis-cli llen youtube_user"
+fi
+
 # --- 4. Диск ---------------------------------------------------------------
 # 26.07 переполнение диска заблокировало запись в Redis и уронило бота целиком.
 free_pct=$(df --output=pcent / | tail -1 | tr -dc '0-9')
@@ -208,11 +217,25 @@ if [ -r "$access" ]; then
     fivexx=$(tail -c +"$(( off + 1 ))" "$access" | awk '$9 ~ /^5[0-9][0-9]$/ {print $4, $6, $7, $9}' | tr -d '["')
 fi
 
+# Сбои сети источников (SoundCloud/YouTube рвут соединение, антибот, DRM) yt-dlp
+# пишет уровнем ERROR, но человек их не видит: поиск уходит в соседний источник.
+# Первая же тревога 14.09 была именно такой — «Connection reset by peer» на
+# запросе к SoundCloud. Будить владельца на это — приучить его не читать
+# тревоги. Тревожим только массовым отказом: значит, источник лёг целиком.
+SOURCE_NOISE='Unable to download|Connection reset|timed out|HTTP Error [0-9]+|Sign in to confirm|DRM protected|Unable to extract|Temporary failure in name resolution'
+SOURCE_ALERT=20
+source_count=$(printf '%s\n' "$errors" | grep -cE "$SOURCE_NOISE" || true)
+errors=$(printf '%s\n' "$errors" | grep -vE "$SOURCE_NOISE" | grep . || true)
+
 err_count=$(printf '%s' "$errors" | grep -c . || true)
 fivexx_count=$(printf '%s' "$fivexx" | grep -c . || true)
+if [ "${source_count:-0}" -ge "$SOURCE_ALERT" ]; then
+    echo "=== $(date -Is) сбоев источников: $source_count" >>"$ERR_LOG"
+    notify "sources" "Источники музыки массово отказывают: $source_count сбоев за 2 минуты. Поиск может не находить треки — проверь YOUTUBE_PROXY и: journalctl -u tg-music-youtube-user -n 50"
+fi
 if [ "${err_count:-0}" -gt 0 ] || [ "${fivexx_count:-0}" -gt 0 ]; then
     {
-        echo "=== $(date -Is) ошибок в журнале: $err_count, ответов 5xx: $fivexx_count"
+        echo "=== $(date -Is) ошибок в журнале: $err_count, ответов 5xx: $fivexx_count, сбоев источников: $source_count"
         printf '%s\n' "$errors" | head -60
         printf '%s\n' "$fivexx" | head -30
     } >>"$ERR_LOG"

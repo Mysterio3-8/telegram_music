@@ -50,6 +50,22 @@ async def count_playlist_tracks(session: AsyncSession, playlist_id: int) -> int:
     return count or 0
 
 
+async def count_tracks_by_playlist(session: AsyncSession, playlist_ids: list[int]) -> dict[int, int]:
+    """Счётчики треков сразу для многих плейлистов ОДНИМ запросом.
+
+    /playlists и /curators звали count_playlist_tracks в цикле: у пользователя
+    с 140 плейлистами (столько было на проде 02.08) — 141 запрос к SQLite на
+    одно открытие экрана."""
+    if not playlist_ids:
+        return {}
+    rows = await session.execute(
+        select(PlaylistTrack.playlist_id, func.count())
+        .where(PlaylistTrack.playlist_id.in_(playlist_ids))
+        .group_by(PlaylistTrack.playlist_id)
+    )
+    return {playlist_id: count for playlist_id, count in rows.all()}
+
+
 async def get_playlist_tracks_page(
     session: AsyncSession, playlist_id: int, page: int
 ) -> list[Track]:

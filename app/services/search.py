@@ -58,6 +58,31 @@ async def find_track_by_metadata(
     return (await session.scalars(stmt.limit(1))).first()
 
 
+async def find_tracks_by_metadata_bulk(
+    session: AsyncSession, pairs: list[tuple[str, str]]
+) -> list[Track | None]:
+    """find_track_by_metadata сразу для всей выдачи, ОДНИМ запросом; порядок
+    ответа совпадает с порядком пар.
+
+    Живой поиск звал поштучную сверку на каждого кандидата: выдача в 30 треков
+    — 30 запросов к SQLite на каждое нажатие поиска и каждую полку."""
+    from app.services.search_index import build_search_index
+
+    indexes = [build_search_index(artist, title) for artist, title in pairs]
+    wanted = {index for index in indexes if index}
+    if not wanted:
+        return [None] * len(pairs)
+    rows = await session.scalars(
+        select(Track)
+        .where(Track.search_index.in_(wanted), Track.moderation_status == "approved")
+        .order_by(Track.id)
+    )
+    by_index: dict[str, Track] = {}
+    for track in rows.all():
+        by_index.setdefault(track.search_index, track)
+    return [by_index.get(index) if index else None for index in indexes]
+
+
 async def find_track_by_source_url(session: AsyncSession, url: str) -> Track | None:
     """Трек, уже залитый с этой самой страницы источника. None — такого нет.
 

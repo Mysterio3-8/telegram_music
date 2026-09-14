@@ -62,6 +62,44 @@ def test_artists_limit_bounds(client):
     assert client.get("/artists?limit=999999", headers=_auth()).status_code == 422
 
 
+def test_playlists_counts_in_one_query(client):
+    from sqlalchemy import event
+
+    created = [client.post("/playlist", headers=_auth(), json={"title": f"P{i}"}).json()["id"] for i in range(6)]
+    for pid in created[:3]:
+        for track_id in (1, 2):
+            assert client.post(f"/playlists/{pid}/tracks/{track_id}", headers=_auth()).status_code == 204
+
+    app = client.app
+    engine_holder = {}
+
+    from app.api.deps import get_db
+
+    original = app.dependency_overrides[get_db]
+
+    async def counting_db():
+        async for session in original():
+            engine = session.bind
+            statements = engine_holder.setdefault("n", [])
+
+            def before(*_args, **_kwargs):
+                statements.append(1)
+
+            event.listen(engine.sync_engine, "before_cursor_execute", before)
+            try:
+                yield session
+            finally:
+                event.remove(engine.sync_engine, "before_cursor_execute", before)
+
+    app.dependency_overrides[get_db] = counting_db
+    body = client.get("/playlists", headers=_auth()).json()
+    app.dependency_overrides[get_db] = original
+
+    assert sorted(p["track_count"] for p in body) == [0, 0, 0, 2, 2, 2]
+    # пользователь + плейлисты + один сгруппированный подсчёт; было 1 + N
+    assert len(engine_holder["n"]) <= 3
+
+
 def test_static_lists_are_cacheable(client):
     genres = client.get("/genres", headers=_auth())
     artists = client.get("/artists", headers=_auth())
