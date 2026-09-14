@@ -3,8 +3,8 @@
 Ранги и достижения — чистые функции от статистики. Реферальные Premium-награды
 выдаются идемпотентно по счётчику referral_milestones_claimed на пользователе.
 """
-from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from dataclasses import dataclass, replace
+from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import exists, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -153,10 +153,15 @@ def _extend_premium(user: User, days: int) -> None:
     user.premium_until = base + timedelta(days=days)
 
 
-async def grant_referral_milestones(session: AsyncSession, referrer: User) -> int:
+async def grant_referral_milestones(
+    session: AsyncSession, referrer: User, invited: int | None = None
+) -> int:
     """Выдаёт Premium-дни за достигнутые пороги приглашений. Идемпотентно по
-    referral_milestones_claimed. Возвращает число новых наград."""
-    invited = await count_referrals(session, referrer.telegram_id)
+    referral_milestones_claimed. Возвращает число новых наград.
+
+    invited — уже посчитанные приглашённые (профиль считает их один раз)."""
+    if invited is None:
+        invited = await count_referrals(session, referrer.telegram_id)
     granted = 0
     while referrer.referral_milestones_claimed < len(REFERRAL_MILESTONES):
         threshold, days = REFERRAL_MILESTONES[referrer.referral_milestones_claimed]
@@ -216,13 +221,23 @@ class UserStats:
 
 
 async def _listen_streak(session: AsyncSession, user_id: int) -> int:
-    """Самая длинная серия дней подряд с прослушиваниями."""
+    """Самая длинная серия дней подряд с прослушиваниями.
+
+    Даты считает база (DISTINCT по дню), а не Python: раньше в память тянулась
+    отметка КАЖДОГО прослушивания — у активного слушателя это десятки тысяч
+    строк на каждое открытие профиля, а профиль грузится при каждом входе."""
+    day = func.date(TrackEvent.created_at)
     rows = await session.scalars(
-        select(TrackEvent.created_at).where(
-            TrackEvent.user_id == user_id, TrackEvent.event == "listen"
-        )
+        select(day)
+        .where(TrackEvent.user_id == user_id, TrackEvent.event == "listen")
+        .distinct()
+        .order_by(day)
     )
-    dates = sorted({dt.date() for dt in rows.all() if dt is not None})
+    dates = [
+        value if isinstance(value, date) else date.fromisoformat(str(value)[:10])
+        for value in rows.all()
+        if value is not None
+    ]
     if not dates:
         return 0
     best = run = 1
@@ -235,7 +250,20 @@ async def _listen_streak(session: AsyncSession, user_id: int) -> int:
     return best
 
 
-async def collect_user_stats(session: AsyncSession, user: User) -> UserStats:
+def with_premium_stats(stats: UserStats, user: User) -> UserStats:
+    """Пересчёт полей Premium после начисления наград — без повторных запросов."""
+    premium_days = (user.premium_until - user.created_at).days if user.premium_until else 0
+    return replace(
+        stats,
+        has_premium_ever=user.premium_until is not None,
+        premium_year=premium_days >= 365,
+        premium_forever=premium_days >= 3650,
+    )
+
+
+async def collect_user_stats(
+    session: AsyncSession, user: User, invited: int | None = None
+) -> UserStats:
     listens = await session.scalar(
         select(func.count())
         .select_from(TrackEvent)
@@ -253,7 +281,8 @@ async def collect_user_stats(session: AsyncSession, user: User) -> UserStats:
     playlists = await session.scalar(
         select(func.count()).select_from(Playlist).where(Playlist.user_id == user.id)
     ) or 0
-    invited = await count_referrals(session, user.telegram_id)
+    if invited is None:
+        invited = await count_referrals(session, user.telegram_id)
     streak = await _listen_streak(session, user.id)
     uploads = await session.scalar(
         select(func.count()).select_from(Upload).where(Upload.user_id == user.id)
@@ -394,14 +423,17 @@ def build_achievements(stats: UserStats) -> list[Achievement]:
     return result
 
 
-async def grant_achievement_rewards(session: AsyncSession, user: User) -> list[Achievement]:
+async def grant_achievement_rewards(
+    session: AsyncSession, user: User, stats: UserStats | None = None
+) -> list[Achievement]:
     """Начисляет дни Premium за впервые открытые достижения.
 
     Награды за приглашения не дублируются здесь: их выдаёт grant_referral_milestones
     (у них свои пороги и суммы), поэтому reward_days у invite_* равны нулю.
     Идемпотентность — через уникальную пару (user_id, code) в user_achievements.
     """
-    stats = await collect_user_stats(session, user)
+    if stats is None:
+        stats = await collect_user_stats(session, user)
     unlocked = [a for a in build_achievements(stats) if a.unlocked and a.reward_days > 0]
     if not unlocked:
         return []

@@ -100,6 +100,26 @@ def test_playlists_counts_in_one_query(client):
     assert len(engine_holder["n"]) <= 3
 
 
+async def test_upload_refused_when_all_slots_busy(client):
+    """Файл до 50 МБ держится в памяти: одновременных загрузок не больше UPLOAD_SLOTS."""
+    from app.api.routers import me
+
+    for _ in range(me.UPLOAD_SLOTS):
+        await me._upload_slots.acquire()
+    try:
+        response = client.post(
+            "/upload",
+            headers=_auth(),
+            data={"title": "T", "artist": "A"},
+            files={"file": ("t.mp3", b"ID3" + b"\x00" * 100, "audio/mpeg")},
+        )
+    finally:
+        for _ in range(me.UPLOAD_SLOTS):
+            me._upload_slots.release()
+    assert response.status_code == 503
+    assert response.headers["retry-after"] == "60"
+
+
 def test_static_lists_are_cacheable(client):
     genres = client.get("/genres", headers=_auth())
     artists = client.get("/artists", headers=_auth())

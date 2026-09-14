@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -41,6 +43,7 @@ from app.services.gamification import (
     REFERRAL_MILESTONES,
     build_achievements,
     collect_user_stats,
+    count_referrals,
     grant_achievement_rewards,
     grant_referral_milestones,
     next_referral_reward,
@@ -50,6 +53,7 @@ from app.services.gamification import (
     start_trial,
     top_artists,
     top_tracks,
+    with_premium_stats,
 )
 from app.services.library import (
     add_to_library,
@@ -85,6 +89,8 @@ from app.storage import get_storage
 router = APIRouter(tags=["me"])
 
 UPLOAD_MAX_TITLE = 256  # как MAX_TITLE_LENGTH мастера загрузки в боте
+UPLOAD_SLOTS = 2
+_upload_slots = asyncio.Semaphore(UPLOAD_SLOTS)
 
 
 @router.get("/library", response_model=Page[TrackOut])
@@ -523,6 +529,23 @@ async def upload_track(
     if file_format is None:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Неподдерживаемый формат")
 
+    # Файл до 50 МБ живёт в памяти целиком (отпечаток, теги и архив берут байты),
+    # поэтому одновременных загрузок не больше UPLOAD_SLOTS: десять разом — это
+    # полгигабайта на боксе с 961 МБ. Лишнему — честный отказ, а не OOM всем.
+    if _upload_slots.locked():
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "Сейчас идёт много загрузок — попробуйте через минуту",
+            headers={"Retry-After": "60"},
+        )
+    async with _upload_slots:
+        return await _receive_upload(session, user, file, file_format, title, artist)
+
+
+async def _receive_upload(
+    session: AsyncSession, user: User, file: UploadFile, file_format: str, title: str, artist: str
+) -> TrackOut:
+
     # Кусками с остановкой на потолке: file.read() целиком тянул в память весь
     # присланный файл ещё до проверки размера.
     limit = settings.max_file_size_mb * 1024 * 1024
@@ -622,9 +645,14 @@ async def profile(
     # Открытие профиля — момент, когда начисляем заработанные дни Premium.
     # Реферальные вехи пересчитываем здесь же: «живые» приглашённые (антинакрутка,
     # блок E) становятся активными со временем, и награда доначисляется на их фоне.
-    await grant_referral_milestones(session, user)
-    fresh = await grant_achievement_rewards(session, user)
-    stats = await collect_user_stats(session, user)
+    # Профиль грузится при КАЖДОМ входе в приложение. Раньше статистика
+    # считалась дважды, а приглашённые — трижды (~25 запросов); теперь один проход.
+    invited = await count_referrals(session, user.telegram_id)
+    await grant_referral_milestones(session, user, invited=invited)
+    stats = await collect_user_stats(session, user, invited=invited)
+    fresh = await grant_achievement_rewards(session, user, stats=stats)
+    if fresh:
+        stats = with_premium_stats(stats, user)
     achievements = build_achievements(stats)
     progress = referral_rank(stats.invited)
     to_next_reward, next_reward_days = next_referral_reward(stats.invited)

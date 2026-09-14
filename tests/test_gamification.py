@@ -173,6 +173,25 @@ async def test_collect_stats_and_achievements(session):
     assert by_code["streak_7"].progress == 3
 
 
+async def test_streak_counts_days_in_database(session):
+    """Серия считается по DISTINCT-дням в SQL: несколько прослушиваний в день —
+    один день, разрыв обнуляет текущую серию, берётся лучшая."""
+    user = await _add_user(session, 1)
+    track = Track(title="T", artist="A", duration=60)
+    session.add(track)
+    await session.flush()
+    base = datetime(2026, 3, 1, 23, 59, 0)
+    for offset in (0, 0, 1, 2, 5, 6):  # 1-3 марта подряд, разрыв, 6-7 марта
+        session.add(
+            TrackEvent(user_id=user.id, track_id=track.id, event="listen", created_at=base + timedelta(days=offset))
+        )
+    session.add(TrackEvent(user_id=user.id, track_id=track.id, event="download", created_at=base + timedelta(days=3)))
+    await session.commit()
+
+    stats = await collect_user_stats(session, user)
+    assert stats.streak_days == 3
+
+
 async def test_achievement_rewards_granted_once(session, monkeypatch):
     from app.config import settings
     from app.services.gamification import grant_achievement_rewards
