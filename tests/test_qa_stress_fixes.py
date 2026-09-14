@@ -162,7 +162,7 @@ def test_rate_limit_answer_has_retry_after(env):
     client, _ = env
     last = None
     for _ in range(ratelimit.GENERAL_LIMIT + 1):
-        last = client.get("/health", headers={"X-Real-IP": "10.9.9.9"})
+        last = client.get("/health", headers={**_auth(777), "X-Real-IP": "10.9.9.9"})
     assert last.status_code == 429
     assert last.headers.get("Retry-After") == "60"
 
