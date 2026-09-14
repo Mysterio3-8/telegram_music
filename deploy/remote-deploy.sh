@@ -65,7 +65,13 @@ git --no-pager log --oneline "${PREVIOUS}..${NEW}" | head -10
 
 # --- 3. зависимости ---------------------------------------------------------
 say "Зависимости"
-./.venv/bin/pip install -q -r requirements.txt || {
+# Снимок версий ДО установки: откат кода без отката пакетов оставлял бы старый
+# код на новых библиотеках — сочетание, которое никто не тестировал.
+PIP_BEFORE=/root/pip-before-deploy.txt
+./.venv/bin/pip freeze >"$PIP_BEFORE" 2>/dev/null || true
+LOCK_ARGS=()
+[ -f requirements.lock ] && LOCK_ARGS=(-c requirements.lock)
+./.venv/bin/pip install -q -r requirements.txt "${LOCK_ARGS[@]}" || {
     echo "pip install не удался"
     notify "🔴 Деплой ${NEW:0:8}: не встали зависимости. Код НЕ тронут, прод жив на ${PREVIOUS:0:8}."
     git reset --hard "$PREVIOUS"
@@ -153,7 +159,11 @@ fi
 # --- откат ------------------------------------------------------------------
 say "🔴 Не поднялись: ${failed[*]} — откатываю код на ${PREVIOUS:0:8}"
 git reset --hard "$PREVIOUS"
-./.venv/bin/pip install -q -r requirements.txt || true
+if [ -s "$PIP_BEFORE" ]; then
+    ./.venv/bin/pip install -q -r "$PIP_BEFORE" || true
+else
+    ./.venv/bin/pip install -q -r requirements.txt || true
+fi
 for unit in "${SERVICES[@]}"; do
     [ "$(systemctl is-enabled "$unit" 2>/dev/null)" = "enabled" ] || continue
     systemctl reset-failed "$unit" 2>/dev/null || true
