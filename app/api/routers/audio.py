@@ -260,10 +260,11 @@ def _accel_redirect(path: Path, media_type: str) -> Response | None:
             return None
     except OSError:
         return None
+    # Accept-Ranges ставит nginx сам — из API он приходил вторым заголовком
     return Response(
         status_code=status.HTTP_200_OK,
         headers={
-            **_CACHE_HEADERS,
+            "Cache-Control": _CACHE_HEADERS["Cache-Control"],
             "X-Accel-Redirect": f"{prefix.rstrip('/')}/{path.name}",
             "Content-Type": media_type,
         },
