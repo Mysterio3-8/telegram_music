@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Upload
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user, get_db
+from app.api.deps import get_current_user, get_db, require_premium
 from app.api.schemas import (
     AchievementOut,
     AlbumOut,
@@ -91,7 +91,7 @@ UPLOAD_MAX_TITLE = 256  # как MAX_TITLE_LENGTH мастера загрузк�
 async def my_library(
     page: int = Query(1, ge=1),
     page_size: int = Query(None, ge=1, le=100),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_premium),
     session: AsyncSession = Depends(get_db),
 ) -> Page[TrackOut]:
     total = await count_library_tracks(session, user.id)
@@ -106,7 +106,7 @@ async def my_library(
 
 @router.get("/library/ids", response_model=list[int])
 async def my_library_ids(
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_premium),
     session: AsyncSession = Depends(get_db),
 ) -> list[int]:
     """Все id треков библиотеки — Mini App отмечает «в библиотеке» в любых списках."""
@@ -123,7 +123,7 @@ async def my_library_ids(
 @router.post("/library/{track_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def add_track_to_library(
     track_id: int,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_premium),
     session: AsyncSession = Depends(get_db),
 ) -> None:
     if await get_track(session, track_id) is None:
@@ -134,7 +134,7 @@ async def add_track_to_library(
 @router.delete("/library/{track_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_track_from_library(
     track_id: int,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_premium),
     session: AsyncSession = Depends(get_db),
 ) -> None:
     await remove_from_library(session, user.id, track_id)
@@ -142,7 +142,7 @@ async def remove_track_from_library(
 
 @router.get("/random", response_model=TrackOut)
 async def random_track(
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_premium),
     session: AsyncSession = Depends(get_db),
 ) -> TrackOut:
     track = await get_random_track(session, user.id)
@@ -156,7 +156,7 @@ async def personalized_mix(
     mood: str | None = Query(None),
     recognizability: str | None = Query(None),
     language: str | None = Query(None),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_premium),
     session: AsyncSession = Depends(get_db),
 ) -> list[TrackOut]:
     """Микс под настроение/тип/язык (доп. ТЗ, настройки рекомендаций)."""
@@ -187,7 +187,7 @@ async def personalized_mix(
 @router.post("/search/fetch", status_code=status.HTTP_202_ACCEPTED)
 async def fetch_from_web(
     payload: SearchFetchIn,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_premium),
 ) -> dict:
     """Поисковый парсер (скрытый): нет в базе — ищем в открытых источниках,
     трек падает в библиотеку. Возвращаем сразу, работа — в Celery.
@@ -255,7 +255,7 @@ async def choose_language(
 
 @router.get("/playlists", response_model=list[PlaylistSummaryOut])
 async def my_playlists(
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_premium),
     session: AsyncSession = Depends(get_db),
 ) -> list[PlaylistSummaryOut]:
     playlists = await get_all_playlists(session, user.id)
@@ -270,7 +270,7 @@ async def my_playlists(
 @router.get("/playlists/{playlist_id}/tracks", response_model=list[TrackOut])
 async def playlist_tracks(
     playlist_id: int,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_premium),
     session: AsyncSession = Depends(get_db),
 ) -> list[TrackOut]:
     playlist = await get_playlist(session, playlist_id)
@@ -281,7 +281,7 @@ async def playlist_tracks(
 
 @router.get("/curators", response_model=list[PlaylistSummaryOut])
 async def curated_playlists(
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_premium),
     session: AsyncSession = Depends(get_db),
 ) -> list[PlaylistSummaryOut]:
     """Кураторские подборки — публичные плейлисты админов (ADMIN_IDS)."""
@@ -310,7 +310,7 @@ async def curated_playlists(
 @router.get("/curators/{playlist_id}/tracks", response_model=list[TrackOut])
 async def curated_playlist_tracks(
     playlist_id: int,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_premium),
     session: AsyncSession = Depends(get_db),
 ) -> list[TrackOut]:
     playlist = await get_playlist(session, playlist_id)
@@ -324,7 +324,7 @@ async def curated_playlist_tracks(
 
 @router.get("/artists", response_model=list[ArtistOut])
 async def artists(
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_premium),
     session: AsyncSession = Depends(get_db),
 ) -> list[ArtistOut]:
     """Исполнители с дедупликацией по нормализованному имени (ТЗ §13)."""
@@ -334,7 +334,7 @@ async def artists(
 @router.get("/artists/tracks", response_model=list[TrackOut])
 async def tracks_by_artist(
     name: str = Query(..., min_length=1),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_premium),
     session: AsyncSession = Depends(get_db),
 ) -> list[TrackOut]:
     return [track_out(t) for t in await artist_tracks(session, name)]
@@ -343,7 +343,7 @@ async def tracks_by_artist(
 @router.post("/search/log", status_code=status.HTTP_204_NO_CONTENT)
 async def log_search(
     payload: SearchLogIn,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_premium),
     session: AsyncSession = Depends(get_db),
 ) -> None:
     """Mini App фиксирует «закоммиченный» запрос — сырьё для популярных (ТЗ §11)."""
@@ -352,7 +352,7 @@ async def log_search(
 
 @router.get("/search/popular", response_model=list[str])
 async def popular_search_queries(
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_premium),
     session: AsyncSession = Depends(get_db),
 ) -> list[str]:
     return await popular_queries(session)
@@ -361,7 +361,7 @@ async def popular_search_queries(
 @router.post("/transfer", response_model=TransferStartOut)
 async def start_transfer(
     payload: TransferIn,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_premium),
 ) -> TransferStartOut:
     """Перенос плейлиста из другого сервиса (экран «Перенос из других сервисов»).
     Разбор источника — здесь (быстро), сам перенос — в Celery с отчётом в чат."""
@@ -417,7 +417,7 @@ async def start_transfer(
 @router.post("/tracks/{track_id}/send", status_code=status.HTTP_204_NO_CONTENT)
 async def send_track_to_chat(
     track_id: int,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_premium),
     session: AsyncSession = Depends(get_db),
 ) -> None:
     """«Скачать» в Mini App: бот присылает аудиофайл в чат пользователя (ТЗ §9)."""
@@ -436,7 +436,7 @@ async def send_track_to_chat(
 
 @router.get("/albums", response_model=list[AlbumOut])
 async def albums(
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_premium),
     session: AsyncSession = Depends(get_db),
 ) -> list[AlbumOut]:
     rows = await session.execute(
@@ -451,7 +451,7 @@ async def albums(
 @router.get("/albums/tracks", response_model=list[TrackOut])
 async def album_tracks(
     name: str = Query(..., min_length=1),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_premium),
     session: AsyncSession = Depends(get_db),
 ) -> list[TrackOut]:
     rows = await session.scalars(select(Track).where(Track.album == name))
@@ -461,7 +461,7 @@ async def album_tracks(
 @router.post("/playlist", response_model=PlaylistOut, status_code=status.HTTP_201_CREATED)
 async def create_my_playlist(
     payload: PlaylistCreateIn,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_premium),
     session: AsyncSession = Depends(get_db),
 ) -> PlaylistOut:
     title = payload.title.strip()
@@ -476,7 +476,7 @@ async def create_my_playlist(
 async def add_to_playlist(
     playlist_id: int,
     track_id: int,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_premium),
     session: AsyncSession = Depends(get_db),
 ) -> None:
     """Добавить трек в плейлист (референс: шит «Добавить в плейлист»)."""
@@ -495,7 +495,7 @@ async def upload_track(
     title: str = Form(...),
     artist: str = Form(...),
     file: UploadFile = File(...),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_premium),
     session: AsyncSession = Depends(get_db),
 ) -> TrackOut:
     # Те же границы, что у мастера загрузки в боте (handlers/upload.py). Пробелы
@@ -559,7 +559,7 @@ async def premium_status(user: User = Depends(get_current_user)) -> PremiumStatu
 @router.post("/tracks/{track_id}/listen", status_code=status.HTTP_204_NO_CONTENT)
 async def record_listen(
     track_id: int,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_premium),
     session: AsyncSession = Depends(get_db),
 ) -> None:
     """Mini App отмечает старт воспроизведения — сырьё для достижений/статистики."""
@@ -571,7 +571,7 @@ async def record_listen(
 @router.get("/tracks/{track_id}/lyrics", response_model=LyricsOut)
 async def track_lyrics(
     track_id: int,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_premium),
     session: AsyncSession = Depends(get_db),
 ) -> LyricsOut:
     track = await get_track(session, track_id)
@@ -587,7 +587,7 @@ async def track_lyrics(
 async def submit_lyrics(
     track_id: int,
     payload: LyricsIn,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_premium),
     session: AsyncSession = Depends(get_db),
 ) -> LyricsOut:
     # Текст общий для всех слушателей трека, а правка перезаписывает его целиком.

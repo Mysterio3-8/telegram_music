@@ -16,7 +16,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 
-from app.api.deps import get_current_user, get_db
+from app.api.deps import get_db, require_premium
 from app.db.models import User
 from app.services.candidate_ref import decode_ref, encode_ref
 from app.services.search import find_track_by_metadata
@@ -88,7 +88,7 @@ async def _to_out(session: AsyncSession, candidate: Candidate) -> LiveTrackOut:
     )
 
 
-@router.get("/search/live", response_model=LiveSearchOut, dependencies=[Depends(get_current_user)])
+@router.get("/search/live", response_model=LiveSearchOut, dependencies=[Depends(require_premium)])
 async def live_search(
     q: str = Query(..., min_length=1),
     session: AsyncSession = Depends(get_db),
@@ -102,12 +102,12 @@ class ShelfOut(BaseModel):
     name: str
 
 
-@router.get("/shelves", response_model=list[ShelfOut], dependencies=[Depends(get_current_user)])
+@router.get("/shelves", response_model=list[ShelfOut], dependencies=[Depends(require_premium)])
 async def list_shelves() -> list[ShelfOut]:
     return [ShelfOut(slug=shelf.slug, name=shelf.name) for shelf in SHELVES]
 
 
-@router.get("/shelves/{slug}", response_model=LiveSearchOut, dependencies=[Depends(get_current_user)])
+@router.get("/shelves/{slug}", response_model=LiveSearchOut, dependencies=[Depends(require_premium)])
 async def shelf_tracks(slug: str, session: AsyncSession = Depends(get_db)) -> LiveSearchOut:
     shelf = get_shelf(slug)
     if shelf is None:
@@ -118,14 +118,14 @@ async def shelf_tracks(slug: str, session: AsyncSession = Depends(get_db)) -> Li
 
 @router.get("/shelves/mix/personal", response_model=LiveSearchOut)
 async def personal_mix(
-    user: User = Depends(get_current_user), session: AsyncSession = Depends(get_db)
+    user: User = Depends(require_premium), session: AsyncSession = Depends(get_db)
 ) -> LiveSearchOut:
     candidates = await build_personal_mix(session, user.id)
     return LiveSearchOut(items=[await _to_out(session, item) for item in candidates])
 
 
 @router.post("/search/live/{ref}/fetch")
-async def queue_fetch(ref: str, user: User = Depends(get_current_user)) -> dict:
+async def queue_fetch(ref: str, user: User = Depends(require_premium)) -> dict:
     """Ставит фоновую закачку выбранного трека: со второго раза он играет
     мгновенно по file_id и попадает в библиотеку пользователя.
 

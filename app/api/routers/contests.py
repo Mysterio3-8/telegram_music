@@ -7,7 +7,7 @@ from aiogram import Bot
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user, get_db
+from app.api.deps import get_db, require_premium
 from app.api.schemas import ContestJoinOut, ContestOut
 from app.config import settings
 from app.db.models import Contest, User
@@ -56,7 +56,7 @@ async def _to_out(session: AsyncSession, contest: Contest, eligibility: Eligibil
 
 @router.get("/contests", response_model=list[ContestOut])
 async def list_contests(
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_premium),
     session: AsyncSession = Depends(get_db),
 ) -> list[ContestOut]:
     contests = await active_contests(session)
@@ -78,7 +78,7 @@ async def list_contests(
 @router.post("/contests/{contest_id}/join", response_model=ContestJoinOut)
 async def join(
     contest_id: int,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_premium),
     session: AsyncSession = Depends(get_db),
 ) -> ContestJoinOut:
     contest = await get_contest(session, contest_id)

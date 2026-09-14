@@ -79,7 +79,7 @@ async def _count(factory, stmt) -> int:
 def test_free_user_cannot_overwrite_shared_lyrics(env):
     client, _ = env
     response = client.post("/tracks/1/lyrics", headers=_auth(555), json={"text": "VANDAL"})
-    assert response.status_code == 403
+    assert response.status_code == 402  # с 14.09 весь API Mini App закрыт пэйволом
 
 
 def test_lyrics_length_is_capped(env):
@@ -114,14 +114,14 @@ async def test_playlist_rejects_unknown_track_without_orphan(env):
 @pytest.mark.asyncio
 async def test_follow_unknown_artist_is_404_without_orphan(env):
     client, factory = env
-    assert client.post("/artists/999999/follow", headers=_auth(555)).status_code == 404
+    assert client.post("/artists/999999/follow", headers=_auth(777)).status_code == 404
     assert await _count(factory, select(func.count()).select_from(UserArtist)) == 0
-    assert client.post("/artists/1/follow", headers=_auth(555)).status_code == 204
+    assert client.post("/artists/1/follow", headers=_auth(777)).status_code == 204
 
 
 def test_huge_id_is_404_not_500(env):
     client, _ = env
-    response = client.get("/track/99999999999999999999", headers=_auth(555))
+    response = client.get("/track/99999999999999999999", headers=_auth(777))
     assert response.status_code == 404
 
 
@@ -288,13 +288,13 @@ async def test_transfer_is_capped_and_locked(env, monkeypatch):
     monkeypatch.setattr(transfer_task.transfer_playlist_task, "delay", lambda items, tid: queued.append(len(items)))
 
     text = "\n".join(f"Artist{i} — Title{i}" for i in range(1500))
-    first = client.post("/transfer", headers=_auth(555), json={"source": text})
+    first = client.post("/transfer", headers=_auth(777), json={"source": text})
     assert first.status_code == 200
     assert first.json()["queued"] == service.TRANSFER_MAX_ITEMS
     assert first.json()["skipped"] == 500
     assert queued == [service.TRANSFER_MAX_ITEMS]
 
-    second = client.post("/transfer", headers=_auth(555), json={"source": "A — B"})
+    second = client.post("/transfer", headers=_auth(777), json={"source": "A — B"})
     assert second.status_code == 409
 
 

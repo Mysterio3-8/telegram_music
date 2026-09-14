@@ -1,8 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user, get_db
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_db, require_premium
 from app.api.schemas import (
     ArtistAlbumOut,
     ArtistCardOut,
@@ -52,7 +51,7 @@ def instrumental_track_out(item: Instrumental) -> TrackOut:
         audio_url=build_instrumental_audio_url(item.id),
     )
 
-router = APIRouter(tags=["catalog"], dependencies=[Depends(get_current_user)])
+router = APIRouter(tags=["catalog"], dependencies=[Depends(require_premium)])
 
 MINIAPP_MAX_PAGE_SIZE = 100
 

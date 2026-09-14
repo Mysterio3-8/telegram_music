@@ -26,7 +26,14 @@ async def api():
     factory = async_sessionmaker(engine, expire_on_commit=False)
 
     async with factory() as seed:
-        seed.add(User(telegram_id=USER_TELEGRAM_ID, first_name="Ivan"))
+        seed.add(
+            User(
+                telegram_id=USER_TELEGRAM_ID,
+                first_name="Ivan",
+                premium=True,
+                premium_until=_utcnow() + timedelta(days=30),
+            )
+        )
         seed.add(
             Contest(
                 title="Розыгрыш Premium",

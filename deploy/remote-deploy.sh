@@ -90,6 +90,9 @@ bash deploy/install-units.sh || echo "⚠️ install-units.sh отработал
 
 # --- 6. рестарт -------------------------------------------------------------
 say "Перезапуск сервисов"
+RESTART_TS=$(date +%s)
+ACCESS_LOG=/var/log/nginx/access.log
+ACCESS_OFFSET=$(stat -c %s "$ACCESS_LOG" 2>/dev/null || echo 0)
 for unit in "${SERVICES[@]}"; do
     [ "$(systemctl is-enabled "$unit" 2>/dev/null)" = "enabled" ] || {
         echo "$unit не enabled — пропускаю (осознанно выключён)"
@@ -110,6 +113,36 @@ for unit in "${SERVICES[@]}"; do
     [ "$(systemctl is-enabled "$unit" 2>/dev/null)" = "enabled" ] || continue
     systemctl is-active --quiet "$unit" || failed+=("$unit")
 done
+
+# Юнит active ещё не значит, что API отвечает: uvicorn может висеть на импорте.
+if [ "$(curl -s -m 10 -o /dev/null -w '%{http_code}' http://127.0.0.1:8010/health)" != "200" ]; then
+    failed+=("tg-music-api(/health)")
+fi
+
+# --- 8. наблюдение: ошибки, которые видят люди ------------------------------
+# Решение владельца 14.09: деплой идёт без него. Сервисы живы, а человек ловит
+# 500 — такой деплой тоже откатывается. До включения за сутки на проде было
+# 0 ошибок и 0 ответов 5xx, поэтому порог в несколько штук — уже сигнал.
+DEPLOY_WATCH=${DEPLOY_WATCH:-90}
+DEPLOY_ERROR_LIMIT=${DEPLOY_ERROR_LIMIT:-5}
+if [ ${#failed[@]} -eq 0 ] && [ "$DEPLOY_WATCH" -gt 0 ]; then
+    say "Наблюдаю ${DEPLOY_WATCH} сек за ошибками пользователей"
+    sleep "$DEPLOY_WATCH"
+    unit_args=()
+    for unit in "${SERVICES[@]}"; do unit_args+=(-u "$unit"); done
+    journal_errors=$(journalctl "${unit_args[@]}" --since "@$RESTART_TS" --no-pager -o cat 2>/dev/null \
+        | grep -cE "ERROR|Traceback|CRITICAL" || true)
+    http_errors=0
+    if [ -r "$ACCESS_LOG" ]; then
+        size=$(stat -c %s "$ACCESS_LOG")
+        [ "$ACCESS_OFFSET" -le "$size" ] || ACCESS_OFFSET=0
+        http_errors=$(tail -c +"$(( ACCESS_OFFSET + 1 ))" "$ACCESS_LOG" | awk '$9 ~ /^5[0-9][0-9]$/' | wc -l)
+    fi
+    echo "Ошибок в журнале: ${journal_errors:-0}, ответов 5xx: ${http_errors:-0} (порог $DEPLOY_ERROR_LIMIT)"
+    if [ $(( ${journal_errors:-0} + ${http_errors:-0} )) -ge "$DEPLOY_ERROR_LIMIT" ]; then
+        failed+=("ошибки пользователей: журнал ${journal_errors:-0}, 5xx ${http_errors:-0}")
+    fi
+fi
 
 if [ ${#failed[@]} -eq 0 ]; then
     say "✅ Деплой ${NEW:0:8} прошёл, все сервисы живы"

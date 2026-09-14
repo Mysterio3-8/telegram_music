@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta
+
 import pytest
 import pytest_asyncio
 from fastapi.testclient import TestClient
@@ -19,7 +21,16 @@ async def api():
     factory = async_sessionmaker(engine, expire_on_commit=False)
 
     async with factory() as seed:
-        seed.add(User(telegram_id=555, first_name="Ivan"))
+        # Mini App закрыт пэйволом на сервере — тестовый пользователь с Premium
+        seed.add(
+            User(
+                telegram_id=555,
+                first_name="Ivan",
+                premium=True,
+                premium_until=datetime.utcnow() + timedelta(days=30),
+            )
+        )
+        seed.add(User(telegram_id=556, first_name="Free"))
         seed.add_all(
             [
                 Track(title="Believer", artist="Imagine Dragons", duration=204),
@@ -112,8 +123,8 @@ def test_login_rejects_bad_init_data(api):
 
 
 def test_premium_status_defaults_free(api):
-    client, token = api
-    response = client.get("/premium/status", headers=auth_header(token))
+    client, _ = api
+    response = client.get("/premium/status", headers=auth_header(create_access_token(556)))
     assert response.status_code == 200
     assert response.json()["active"] is False
 

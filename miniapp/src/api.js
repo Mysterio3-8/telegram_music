@@ -61,6 +61,10 @@ async function request(path, options = {}) {
     await login();
     return request(path, { ...options, _retried: true });
   }
+  if (response.status === 402) {
+    // Пэйвол на сервере: Premium истёк посреди сессии — main.js покажет экран оплаты
+    window.dispatchEvent(new CustomEvent("premium-required"));
+  }
   if (!response.ok) {
     // Текст ошибки от сервера полезнее кода: «плейлист приватный», «нет брокера» и т.п.
     const detail = await response

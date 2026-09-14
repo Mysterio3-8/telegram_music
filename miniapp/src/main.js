@@ -380,7 +380,12 @@ async function boot() {
     // Главная показывается сразу после двух лёгких запросов: ей нужен только
     // статус Premium и счётчик библиотеки (= число id). Тяжёлые списки —
     // каталог и страница библиотеки с подписанными ссылками — догружаются фоном.
-    const [libraryIds, premium] = await Promise.all([getLibraryIds(), getPremiumStatus()]);
+    // Без Premium сервер отвечает 402 на всё, кроме входа, оплаты и профиля:
+    // библиотека тогда пустая, а вместо главной — пэйвол.
+    const [libraryIds, premium] = await Promise.all([
+      getLibraryIds().catch((error) => (error && error.status === 402 ? [] : Promise.reject(error))),
+      getPremiumStatus(),
+    ]);
     mutate({
       bootStatus: "ready",
       user: telegramUser(),
@@ -398,8 +403,15 @@ async function boot() {
         }
       })
       .catch(() => {});
-    loadHeavyData();
-    maybeStartOnboarding();
+    if (premium && premium.active) {
+      loadHeavyData();
+      maybeStartOnboarding();
+    } else {
+      // Пэйволу нужен только профиль (доступен ли триал). Гейт подписки здесь не
+      // проверяем: без Premium он обещал «бесплатно, пока подписаны», а после
+      // подписки человек всё равно упирался в пэйвол — две стены и враньё.
+      loadProfile();
+    }
   } catch (error) {
     mutate({
       bootStatus: "error",
@@ -407,6 +419,36 @@ async function boot() {
     });
   }
 }
+
+// Premium появился посреди сессии (триал, оплата) — догружаем то, что пэйвол не грузил
+function unlockApp() {
+  getLibraryIds()
+    .then((ids) => mutate({ libraryIds: new Set(ids), libraryTotal: ids.length }))
+    .catch(() => {});
+  loadHeavyData();
+  maybeStartOnboarding();
+}
+
+// Premium истёк посреди сессии: сервер ответил 402 — показываем пэйвол
+window.addEventListener("premium-required", () => {
+  const { premium } = getState();
+  if (premium && premium.active) mutate({ premium: { ...premium, active: false } });
+});
+
+// Вернулись из кассы ЮKassa: оплата могла пройти, пока приложение было в фоне
+document.addEventListener("visibilitychange", () => {
+  const { premium, bootStatus } = getState();
+  if (document.visibilityState !== "visible" || bootStatus !== "ready" || !premium || premium.active) {
+    return;
+  }
+  getPremiumStatus()
+    .then((fresh) => {
+      if (!fresh.active) return;
+      mutate({ premium: fresh });
+      unlockApp();
+    })
+    .catch(() => {});
+});
 
 // Фоновая догрузка: каталог для миксов, страница библиотеки, популярные запросы
 function loadHeavyData() {
@@ -1196,6 +1238,7 @@ root.addEventListener("click", (event) => {
         .then((premium) => {
           mutate({ premium });
           showToast("Доступ открыт на 1 день");
+          unlockApp();
         })
         .catch(() => showToast("Не удалось активировать — попробуйте позже"));
       break;

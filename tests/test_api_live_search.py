@@ -1,4 +1,6 @@
 """API живого поиска: выдача, ref, полки. Сеть подменяем — проверяем контракт."""
+from datetime import datetime, timedelta
+
 import pytest
 import pytest_asyncio
 from fastapi.testclient import TestClient
@@ -47,7 +49,14 @@ async def api(monkeypatch):
     factory = async_sessionmaker(engine, expire_on_commit=False)
 
     async with factory() as seed:
-        seed.add(User(telegram_id=555, first_name="Ivan"))
+        seed.add(
+            User(
+                telegram_id=555,
+                first_name="Ivan",
+                premium=True,
+                premium_until=datetime.utcnow() + timedelta(days=30),
+            )
+        )
         await seed.commit()
 
     async def override_get_db():

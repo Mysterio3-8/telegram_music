@@ -177,4 +177,53 @@ if [ -n "$free_pct" ] && [ "$free_pct" -ge 90 ]; then
     notify "lowdisk" "Диск заполнен на ${free_pct}%. При 100% Redis перестаёт писать и бот падает — чисти /tmp, journal, бэкапы."
 fi
 
+# --- 5. Ошибки пользователей -------------------------------------------------
+# Решение владельца 14.09: деплой идёт без него, значит ошибки, которые видят
+# люди, должны доходить сами. Сервис жив, а человек ловит 500 — systemd и
+# пункты выше этого не видят. Замер перед включением: за сутки 0 ошибок в
+# журналах и 0 ответов 5xx, так что тревога будет редкой, а не шумом.
+ERR_UNITS=(tg-music-bot tg-music-api tg-music-worker tg-music-youtube-user tg-music-support)
+ERR_LOG="$STATE_DIR/errors.log"
+since_file="$STATE_DIR/errors-since"
+now_ts=$(date +%s)
+since_ts=$(cat "$since_file" 2>/dev/null | tr -dc '0-9')
+since_ts=${since_ts:-$(( now_ts - 120 ))}
+echo "$now_ts" >"$since_file"
+
+unit_args=()
+for u in "${ERR_UNITS[@]}"; do unit_args+=(-u "$u"); done
+errors=$(journalctl "${unit_args[@]}" --since "@$since_ts" --until "@$now_ts" --no-pager -o short-iso 2>/dev/null \
+    | grep -E "ERROR|Traceback|CRITICAL" || true)
+
+# 5xx по nginx — со смещения прошлого прогона; файл сменился ротацией — с начала.
+fivexx=""
+access=/var/log/nginx/access.log
+if [ -r "$access" ]; then
+    size=$(stat -c %s "$access")
+    off_file="$STATE_DIR/access-offset"
+    off=$(cat "$off_file" 2>/dev/null | tr -dc '0-9')
+    off=${off:-$size}
+    [ "$off" -le "$size" ] || off=0
+    echo "$size" >"$off_file"
+    fivexx=$(tail -c +"$(( off + 1 ))" "$access" | awk '$9 ~ /^5[0-9][0-9]$/ {print $4, $6, $7, $9}' | tr -d '["')
+fi
+
+err_count=$(printf '%s' "$errors" | grep -c . || true)
+fivexx_count=$(printf '%s' "$fivexx" | grep -c . || true)
+if [ "${err_count:-0}" -gt 0 ] || [ "${fivexx_count:-0}" -gt 0 ]; then
+    {
+        echo "=== $(date -Is) ошибок в журнале: $err_count, ответов 5xx: $fivexx_count"
+        printf '%s\n' "$errors" | head -60
+        printf '%s\n' "$fivexx" | head -30
+    } >>"$ERR_LOG"
+    sample=$(printf '%s\n' "$errors" | grep -E "ERROR|CRITICAL" | head -3 | cut -c1-300)
+    notify "errors" "Ошибки у пользователей: в журнале $err_count, ответов 5xx $fivexx_count.
+${sample}
+Полностью: $ERR_LOG"
+fi
+# Журнал читают глазами и забирает на компьютер владельца scripts/pull_prod_errors.ps1
+if [ -f "$ERR_LOG" ] && [ "$(wc -l <"$ERR_LOG")" -gt 5000 ]; then
+    tail -n 3000 "$ERR_LOG" >"$ERR_LOG.tmp" && mv "$ERR_LOG.tmp" "$ERR_LOG"
+fi
+
 exit 0
