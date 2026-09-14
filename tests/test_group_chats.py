@@ -163,3 +163,66 @@ async def test_ads_not_shown_in_groups():
     data = {"event_chat": _chat("supergroup"), "event_from_user": types.SimpleNamespace(id=1)}
     assert await middleware(handler, _message("x", "supergroup"), data) == "ok"
     assert not shown
+
+
+class _FakeMessage:
+    def __init__(self):
+        self.chat = _chat("private", 1)
+        self.text = "x"
+        self.reply_to_message = None
+        self.sent: list[str] = []
+
+    async def answer(self, text, reply_markup=None):
+        self.sent.append(text)
+
+
+@pytest.mark.asyncio
+async def test_ad_text_follows_user_language(monkeypatch):
+    """Текст рекламы вычислялся при импорте модуля на языке по умолчанию —
+    англоязычный пользователь получал рекламу по-русски (цикл 4, 14.09)."""
+    from contextlib import asynccontextmanager
+
+    from app.i18n import set_current_language, t
+    from app.middlewares import ads
+
+    @asynccontextmanager
+    async def fake_session():
+        yield None
+
+    async def no_user(_session, _telegram_id):
+        return None
+
+    monkeypatch.setattr(ads, "Message", _FakeMessage)
+    monkeypatch.setattr(ads, "session_factory", fake_session)
+    monkeypatch.setattr(ads, "get_user_by_telegram_id", no_user)
+
+    async def handler(event, data):
+        return "ok"
+
+    set_current_language("en")
+    try:
+        message = _FakeMessage()
+        data = {"event_chat": message.chat, "event_from_user": types.SimpleNamespace(id=42)}
+        assert await ads.AdMiddleware(frequency=1)(handler, message, data) == "ok"
+    finally:
+        set_current_language("ru")
+
+    assert message.sent == [t("ads.text", "en")]
+    assert message.sent[0] != t("ads.text", "ru")
+
+
+@pytest.mark.asyncio
+async def test_ad_counters_do_not_grow_forever(monkeypatch):
+    from app.middlewares import ads
+
+    monkeypatch.setattr(ads, "_COUNTERS_MAX", 100)
+
+    async def handler(event, data):
+        return "ok"
+
+    middleware = ads.AdMiddleware(frequency=1_000_000)  # реклама не должна показаться
+    for user_id in range(1_000):
+        message = _FakeMessage()
+        data = {"event_chat": message.chat, "event_from_user": types.SimpleNamespace(id=user_id)}
+        await middleware(handler, message, data)
+        assert len(middleware._counters) <= 100

@@ -11,16 +11,17 @@ from app.services.premium import is_premium_active
 from app.services.users import get_user_by_telegram_id
 from app.i18n import t
 
-AD_TEXT = (
-    t("ads.text")
-)
+# Потолок словаря счётчиков. Раньше запись оставалась навсегда на КАЖДОГО, кто
+# хоть раз написал боту: при виральном росте это десятки мегабайт, которые
+# процесс бота (15 МБ на 14.09) не вернёт. Сброс счётчиков безвреден — худшее,
+# что случится, реклама покажется на пару действий позже.
+_COUNTERS_MAX = 50_000
 
 
 class AdMiddleware(BaseMiddleware):
     """Показывает рекламу бесплатным пользователям после каждого N-го действия (SPEC §24).
 
-    Счётчики держатся в памяти: терять их при рестарте не страшно (как FSM),
-    durable-хранилище переедет в Redis на следующем этапе.
+    Счётчики держатся в памяти: терять их при рестарте не страшно (как FSM).
     """
 
     def __init__(self, frequency: int) -> None:
@@ -48,8 +49,10 @@ class AdMiddleware(BaseMiddleware):
         if user is None:
             return result
 
+        if len(self._counters) >= _COUNTERS_MAX and user.id not in self._counters:
+            self._counters.clear()
         count = self._counters.get(user.id, 0) + 1
-        self._counters[user.id] = count
+        self._counters[user.id] = count % self._frequency
         if count % self._frequency == 0:
             await self._show_ad(event, user.id)
         return result
@@ -62,4 +65,8 @@ class AdMiddleware(BaseMiddleware):
 
         target = event.message if isinstance(event, CallbackQuery) else event
         if isinstance(target, Message):
-            await target.answer(AD_TEXT, reply_markup=ad_keyboard())
+            # Текст берётся здесь, а не при импорте модуля: константа уровня модуля
+            # вычислялась один раз на языке по умолчанию, и англоязычный,
+            # испанский, турецкий пользователь получал рекламу по-русски.
+            # Язык запроса уже лежит в ContextVar — I18nMiddleware стоит раньше.
+            await target.answer(t("ads.text"), reply_markup=ad_keyboard())
