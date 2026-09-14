@@ -199,8 +199,8 @@ export function getAlbumTracks(name) {
 }
 
 // Исполнители с дедупликацией по нормализованному имени (ТЗ §13-14)
-export function getArtists() {
-  return request("/artists");
+export function getArtists(limit) {
+  return request(`/artists${limit ? `?limit=${limit}` : ""}`);
 }
 
 export function getArtistTracks(name) {

@@ -539,7 +539,7 @@ async function maybeStartOnboarding() {
   }
   setOnboarded();
   mutate({ onbActive: true, onbStep: 0 });
-  getArtists()
+  getArtists(24)
     .then((artists) => mutate({ onbArtists: artists.slice(0, 24) }))
     .catch(() => {});
 }

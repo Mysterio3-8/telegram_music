@@ -34,6 +34,42 @@ def cache_get(storage_key: str) -> bytes | None:
     return data
 
 
+def cache_file(storage_key: str) -> Path | None:
+    """Путь к закэшированному файлу без чтения в память — стрим отдаёт его кусками.
+
+    cache_get читал весь трек в RAM на КАЖДЫЙ Range-запрос (каждая перемотка),
+    и два десятка слушателей держали бы сотни мегабайт на боксе с 961 МБ."""
+    if settings.audio_cache_max_mb <= 0:
+        return None
+    path = _cache_path(storage_key)
+    try:
+        if not path.is_file() or path.stat().st_size == 0:
+            return None
+        os.utime(path, None)  # LRU-отметка «недавно использован»
+    except OSError:
+        return None
+    return path
+
+
+def cache_tmp_path(storage_key: str) -> Path:
+    """Куда качать мимо памяти; переносится в кэш через cache_commit."""
+    path = _cache_path(storage_key)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path.with_name(f"{path.name}.{os.getpid()}.tmp")
+
+
+def cache_commit(storage_key: str, tmp: Path) -> Path | None:
+    path = _cache_path(storage_key)
+    try:
+        tmp.replace(path)
+    except OSError:
+        logger.warning("Не удалось записать аудио-кэш %s", storage_key, exc_info=True)
+        tmp.unlink(missing_ok=True)
+        return None
+    _evict_lru()
+    return path if path.is_file() else None
+
+
 def cache_put(storage_key: str, data: bytes) -> None:
     if settings.audio_cache_max_mb <= 0:
         return

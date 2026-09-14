@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -324,11 +324,21 @@ async def curated_playlist_tracks(
 
 @router.get("/artists", response_model=list[ArtistOut])
 async def artists(
+    response: Response,
+    limit: int | None = Query(None, ge=1, le=5000),
     user: User = Depends(require_premium),
     session: AsyncSession = Depends(get_db),
 ) -> list[ArtistOut]:
-    """Исполнители с дедупликацией по нормализованному имени (ТЗ §13)."""
-    return [ArtistOut(name=a.name, track_count=a.track_count) for a in await list_artists(session)]
+    """Исполнители с дедупликацией по нормализованному имени (ТЗ §13).
+
+    limit: онбордингу нужны 24 имени, а он тянул весь список — 58 КБ на проде
+    (замер 14.09) на каждое первое открытие. Кэш вебвью на 5 минут: список
+    меняется только с пополнением каталога."""
+    response.headers["Cache-Control"] = "private, max-age=300"
+    return [
+        ArtistOut(name=a.name, track_count=a.track_count)
+        for a in await list_artists(session, limit=limit)
+    ]
 
 
 @router.get("/artists/tracks", response_model=list[TrackOut])

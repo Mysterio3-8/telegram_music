@@ -16,6 +16,10 @@ class LocalStorage:
         path.write_bytes(data)
         return f"local://{key}"
 
+    def path(self, key: str) -> Path:
+        """Файл на диске — API стримит его кусками, не читая целиком в память."""
+        return self._path(key)
+
     def load(self, key: str) -> bytes:
         return self._path(key).read_bytes()
 

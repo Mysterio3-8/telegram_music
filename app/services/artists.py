@@ -23,13 +23,16 @@ def _norm_expr():
     return func.lower(func.trim(Track.artist))
 
 
-async def list_artists(session: AsyncSession) -> list[ArtistSummary]:
-    rows = await session.execute(
+async def list_artists(session: AsyncSession, limit: int | None = None) -> list[ArtistSummary]:
+    stmt = (
         select(func.max(func.trim(Track.artist)), func.count())
         .where(Track.artist.is_not(None), func.trim(Track.artist) != "")
         .group_by(_norm_expr())
         .order_by(func.count().desc(), func.max(func.trim(Track.artist)))
     )
+    if limit:
+        stmt = stmt.limit(limit)
+    rows = await session.execute(stmt)
     return [ArtistSummary(name=name, track_count=count) for name, count in rows.all()]
 
 

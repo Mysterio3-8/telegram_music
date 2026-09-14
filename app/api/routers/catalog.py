@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db, require_premium
@@ -211,8 +211,12 @@ async def my_artists(
 
 
 @router.get("/genres", response_model=list[GenreOut])
-async def list_genres(session: AsyncSession = Depends(get_db)) -> list[GenreOut]:
-    """Дерево жанров каталога (SPEC-КАТАЛОГ §1) — чипы поиска Mini App."""
+async def list_genres(response: Response, session: AsyncSession = Depends(get_db)) -> list[GenreOut]:
+    """Дерево жанров каталога (SPEC-КАТАЛОГ §1) — чипы поиска Mini App.
+
+    70 КБ (замер 14.09) грузились на КАЖДОМ открытии приложения, хотя дерево
+    меняется только сидом из CLI. Кэш вебвью на час."""
+    response.headers["Cache-Control"] = "private, max-age=3600"
     return [GenreOut(**node) for node in await genre_tree(session)]
 
 
