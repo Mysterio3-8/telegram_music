@@ -56,3 +56,44 @@ async def test_new_user_has_empty_counters(session):
 
     assert await count_library_tracks(session, user.id) == 0
     assert await count_playlists(session, user.id) == 0
+
+
+async def test_repeat_action_without_changes_does_not_write(session, monkeypatch):
+    """ensure_user зовётся почти из каждого хендлера: раньше это был commit на
+    КАЖДОЕ действие в боте — пишущая транзакция SQLite без единого изменения."""
+    await get_or_create_user(session, PROFILE)
+
+    commits = []
+    original_commit = session.commit
+
+    async def counting_commit():
+        commits.append(1)
+        await original_commit()
+
+    monkeypatch.setattr(session, "commit", counting_commit)
+    for _ in range(5):
+        await get_or_create_user(session, PROFILE)
+    assert commits == []
+
+
+async def test_profile_change_is_still_saved(session, monkeypatch):
+    await get_or_create_user(session, PROFILE)
+    renamed = TelegramProfile(
+        telegram_id=PROFILE.telegram_id, username="renamed", first_name=PROFILE.first_name, language=PROFILE.language
+    )
+    user = await get_or_create_user(session, renamed)
+    await session.refresh(user)
+    assert user.username == "renamed"
+
+
+async def test_stale_last_login_is_bumped(session):
+    from datetime import datetime, timedelta
+
+    user = await get_or_create_user(session, PROFILE)
+    stale = datetime.utcnow() - timedelta(hours=2)  # наивное время — как отдаёт SQLite
+    user.last_login = stale
+    await session.commit()
+
+    user = await get_or_create_user(session, PROFILE)
+    await session.refresh(user)
+    assert user.last_login > stale

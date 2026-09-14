@@ -113,6 +113,10 @@ async def add_required_channel(
     row = RequiredChannel(channel=channel, label=label.strip(), kind=kind)
     session.add(row)
     await session.commit()
+    # Новый обязательный канал гейтит всех сразу, а не через минуту кэша вердиктов
+    from app.services.subscription import forget_subscription_verdicts
+
+    forget_subscription_verdicts()
     return row
 
 
@@ -126,4 +130,7 @@ async def remove_required_channel(session: AsyncSession, channel_id: int) -> boo
     )
     await session.delete(row)
     await session.commit()
+    from app.services.subscription import forget_subscription_verdicts
+
+    forget_subscription_verdicts()
     return True

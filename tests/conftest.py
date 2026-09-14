@@ -28,6 +28,18 @@ def _tmp_storage(tmp_path, monkeypatch):
         monkeypatch.setattr(settings, "bot_token", "0:test-only-not-a-real-token")
 
 
+@pytest.fixture(autouse=True)
+def _fresh_subscription_verdicts():
+    """Кэш вердиктов гейта живёт на уровне модуля, а тесты переиспользуют одни и
+    те же telegram_id: без сброса «подписан» из одного теста протекал бы в
+    следующий, где пользователь как раз не подписан."""
+    from app.services.subscription import forget_subscription_verdicts
+
+    forget_subscription_verdicts()
+    yield
+    forget_subscription_verdicts()
+
+
 @pytest_asyncio.fixture
 async def session():
     engine = create_async_engine("sqlite+aiosqlite://")

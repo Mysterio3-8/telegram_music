@@ -4,6 +4,7 @@
 корректный ответ getChatMember для чужих участников.
 """
 import logging
+import time
 from datetime import datetime, timedelta, timezone
 
 from aiogram import Bot
@@ -23,6 +24,30 @@ _SUBSCRIBED_STATUSES = {
     ChatMemberStatus.ADMINISTRATOR,
     ChatMemberStatus.CREATOR,
 }
+
+# Вердикт «подписан на всё» в памяти процесса (цикл 5, 14.09). Гейт стоит на
+# КАЖДОМ сообщении и нажатии: пользователь, список каналов и статус по каждому
+# каналу — ~4 запроса к SQLite на действие, хотя ответ не менялся с прошлой
+# минуты. Кэшируется ТОЛЬКО «подписан»: только что подписавшийся не ждёт, пока
+# протухнет отказ. Отписка ловится принудительной проверкой (/start, «Я
+# подписался») — она выбивает запись — или истечением TTL.
+_VERDICT_TTL = 60.0
+_VERDICTS_MAX = 50_000
+_verdicts: dict[int, float] = {}  # telegram_id → monotonic, до какого момента верим
+
+
+def forget_subscription_verdicts() -> None:
+    """Сбросить все вердикты: изменился список обязательных каналов."""
+    _verdicts.clear()
+
+
+def _remember_verdict(telegram_id: int, subscribed: bool) -> None:
+    if not subscribed:
+        _verdicts.pop(telegram_id, None)
+        return
+    if len(_verdicts) >= _VERDICTS_MAX and telegram_id not in _verdicts:
+        _verdicts.clear()  # сброс безвреден: следующий запрос просто спросит базу
+    _verdicts[telegram_id] = time.monotonic() + _VERDICT_TTL
 
 
 async def check_channel_membership(bot: Bot, telegram_id: int, channel: str) -> bool | None:
@@ -119,6 +144,10 @@ async def is_fully_subscribed(
     Каналы — из БД (управляются админкой); пустой список → гейт выключен."""
     if settings.admin_bypass_subscription and is_admin(telegram_id):
         return True
+    if not force:
+        until = _verdicts.get(telegram_id)
+        if until is not None and until > time.monotonic():
+            return True
     # Premium снимает обязательные подписки (запрос владельца): платишь — нет ОП
     from app.db.models import User
     from app.services.premium import is_premium_active
@@ -128,9 +157,14 @@ async def is_fully_subscribed(
         return True
     from app.services.required_channels import get_required_channels
 
+    subscribed = True
     for row in await get_required_channels(session):
         if row.kind == "bot":
             continue  # запуск чужого бота проверить нельзя — только кнопка в гейте
         if not await is_channel_subscribed(session, bot, user_id, telegram_id, row.channel, force):
-            return False
-    return True
+            subscribed = False
+            break
+    # Premium-вердикт выше не запоминается: истечение подписки должно вернуть
+    # гейт сразу, а не через минуту.
+    _remember_verdict(telegram_id, subscribed)
+    return subscribed

@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
@@ -33,15 +33,41 @@ async def create_user(session: AsyncSession, telegram_id: int) -> User:
         return existing
 
 
+# Как часто обновлять last_login. Его читает только статистика «заходил хоть раз»
+# (IS NOT NULL), точность до минут никому не нужна.
+_LAST_LOGIN_EVERY = timedelta(minutes=10)
+
+
 async def get_or_create_user(session: AsyncSession, profile: TelegramProfile) -> User:
+    """Пользователь по профилю Telegram; пишет в базу, только если что-то изменилось.
+
+    ⚠️ Зовётся почти из каждого хендлера бота (ensure_user). Раньше на КАЖДОЕ
+    сообщение и нажатие безусловно ставился last_login и делался commit — то есть
+    пишущая транзакция SQLite на каждое действие, в очереди за единственной
+    блокировкой писателя вместе с API и воркерами (цикл 5, 14.09)."""
     user = await session.scalar(select(User).where(User.telegram_id == profile.telegram_id))
+    changed = user is None
     if user is None:
         user = await create_user(session, profile.telegram_id)
-    user.username = profile.username
-    user.first_name = profile.first_name
-    user.language = profile.language
-    user.last_login = datetime.now(timezone.utc)
-    await session.commit()
+    for field, value in (
+        ("username", profile.username),
+        ("first_name", profile.first_name),
+        ("language", profile.language),
+    ):
+        if getattr(user, field) != value:
+            setattr(user, field, value)
+            changed = True
+
+    now = datetime.now(timezone.utc)
+    last = user.last_login
+    if last is not None and last.tzinfo is None:
+        last = last.replace(tzinfo=timezone.utc)  # SQLite отдаёт наивное время
+    if last is None or now - last >= _LAST_LOGIN_EVERY:
+        user.last_login = now
+        changed = True
+
+    if changed:
+        await session.commit()
     return user
 
 

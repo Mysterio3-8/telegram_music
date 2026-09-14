@@ -188,6 +188,75 @@ async def test_is_fully_subscribed_premium_bypass(session):
     assert bot.calls == 0
 
 
+# --- кэш вердиктов в памяти (цикл 5, 14.09) ------------------------------------
+# Гейт проверял подписку на КАЖДОЕ сообщение и нажатие: ~4 запроса к БД на
+# действие у каждого пользователя, даже когда вердикт давно известен.
+
+
+async def test_positive_verdict_skips_database_and_telegram(session, monkeypatch):
+    from app.services import subscription
+
+    await _seed_channels(session, "@chan1", "@chan2")
+    user = await make_user(session)
+    bot = FakeBot(status=ChatMemberStatus.MEMBER)
+    assert await is_fully_subscribed(session, bot, user.id, user.telegram_id) is True
+
+    async def must_not_query(*_args, **_kwargs):
+        raise AssertionError("вердикт в кэше — в базу ходить незачем")
+
+    monkeypatch.setattr(subscription, "is_channel_subscribed", must_not_query)
+    calls_before = bot.calls
+    assert await is_fully_subscribed(session, bot, user.id, user.telegram_id) is True
+    assert bot.calls == calls_before
+
+
+async def test_negative_verdict_is_never_cached(session):
+    """Только что подписавшийся не должен ждать, пока протухнет «не подписан»."""
+    from app.services import subscription
+
+    await _seed_channels(session, "@chan1")
+    user = await make_user(session)
+    assert await is_fully_subscribed(session, FakeBot(status=ChatMemberStatus.LEFT), user.id, user.telegram_id) is False
+    assert user.telegram_id not in subscription._verdicts
+
+
+async def test_forced_check_evicts_stale_positive_verdict(session):
+    """Отписался и нажал /start (force): доступ должен закрыться сразу, а не через TTL."""
+    from app.services import subscription
+
+    await _seed_channels(session, "@chan1")
+    user = await make_user(session)
+    assert await is_fully_subscribed(session, FakeBot(status=ChatMemberStatus.MEMBER), user.id, user.telegram_id) is True
+    assert user.telegram_id in subscription._verdicts
+
+    left = FakeBot(status=ChatMemberStatus.LEFT)
+    assert await is_fully_subscribed(session, left, user.id, user.telegram_id, force=True) is False
+    assert user.telegram_id not in subscription._verdicts
+
+
+async def test_new_required_channel_resets_verdicts(session):
+    from app.services import subscription
+    from app.services.required_channels import add_required_channel
+
+    await _seed_channels(session, "@chan1")
+    user = await make_user(session)
+    assert await is_fully_subscribed(session, FakeBot(status=ChatMemberStatus.MEMBER), user.id, user.telegram_id) is True
+    assert subscription._verdicts
+
+    await add_required_channel(session, "@chan_new", "Новый")
+    assert not subscription._verdicts
+
+
+async def test_verdict_cache_is_bounded(session, monkeypatch):
+    from app.services import subscription
+
+    monkeypatch.setattr(subscription, "_VERDICTS_MAX", 10)
+    user = await make_user(session)  # каналов нет — гейт выключен, вердикт «подписан»
+    for fake_tid in range(100):
+        await is_fully_subscribed(session, FakeBot(), user.id, 10_000 + fake_tid)
+        assert len(subscription._verdicts) <= 10
+
+
 class FakeBotWithMe(FakeBot):
     def __init__(self, status: str) -> None:
         super().__init__(status=status)
