@@ -11,7 +11,8 @@ import urllib.request
 from dataclasses import dataclass, field
 
 MB_ROOT = "https://musicbrainz.org/ws/2"
-_USER_AGENT = "TGMusicBot/1.0 (https://keybest.cc; iliyaestas@gmail.com)"
+# Контакт — ссылка на бота, а не домен: домен Mini App меняется при переезде.
+_USER_AGENT = "TGMusicBot/1.0 (https://t.me/muz_damn_bot; iliyaestas@gmail.com)"
 _MIN_INTERVAL_SECONDS = 1.1  # чуть больше 1 сек — запас на дрожание часов
 
 _last_request_at = 0.0

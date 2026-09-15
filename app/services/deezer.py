@@ -9,7 +9,8 @@ import urllib.request
 from dataclasses import dataclass
 
 _SEARCH_URL = "https://api.deezer.com/search/artist"
-_USER_AGENT = "TGMusicBot/1.0 (https://keybest.cc)"
+# Контакт — ссылка на бота, а не домен: домен Mini App меняется при переезде.
+_USER_AGENT = "TGMusicBot/1.0 (https://t.me/muz_damn_bot)"
 
 
 @dataclass

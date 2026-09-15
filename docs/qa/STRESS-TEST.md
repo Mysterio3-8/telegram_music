@@ -300,6 +300,18 @@ ssh -i "C:/Users/Илья/.ssh/id_ed25519" -o UserKnownHostsFile="C:/Users/Ил�
    сервера (тесты GitHub по публичному API → `remote-deploy.sh`). Тесты в CI
    были зелёными все 25 раз, падал только SSH-шаг. Осталось владельцу: удалить
    неиспользуемый SSH-ключ деплоя из `authorized_keys` и секреты `VPS_*`.
+6а. **Переезд домена** (владелец 15.09: «Deceptive Website Warning» и в Safari,
+   и в Telegram на iOS; Google Safe Browsing при этом показывает keybest.cc,
+   www и пути чистыми). ⏳ **Ждём домен от владельца** («позже»): купить,
+   лучше .ru/.com (не .cc), A-запись и www → 38.244.213.132. Готово к одной
+   команде: `bash deploy/migrate-domain.sh --check <домен>`, затем без `--check`.
+   Скрипт переписан: проверки DNS/порта 80/токена без изменений (`--check`),
+   замок деплоя, бэкап `.env` в `/root/env-backups`, HTTP/2 после certbot,
+   кнопка Mini App через Bot API `setChatMenuButton`, рестарт всех читающих
+   `PUBLIC_BASE_URL`. Файлы репозитория на сервере НЕ правит (автодеплой делает
+   `git reset --hard`). Домен убран из кода и статики Mini App —
+   `tests/test_no_hardcoded_domain.py`. После переезда руками: вебхук ЮKassa,
+   проверка на iPhone; `deploy/nginx-keybest.conf` и доки — коммитом.
 7. **8 копий `.env.bak-*` с секретами** в `/opt/tg-music-bot` на проде — вынести в
    `/root/env-backups` (решение владельца, не удалять самому).
 8. ~~План масштабирования 100 → 1 млн пользователей~~ ✅ [SCALING-PLAN.md](SCALING-PLAN.md).
