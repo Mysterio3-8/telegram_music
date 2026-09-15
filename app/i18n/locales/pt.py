@@ -40,7 +40,7 @@ MESSAGES: dict[str, str] = {
         "Um serviço de música completo, como o VK ou o Apple Music: mixes, playlists, "
         "letras, equalizador e modo offline."
     ),
-    "cabinet.price": "💎 {price} ₽/mês • Primeiro dia grátis",
+    "cabinet.price": "💎 {price} ₽/mês • 7 dias grátis",
     "menu.player": "🎧 Abrir o leitor",
     "menu.upload": "⬆️ Enviar uma faixa",
     "menu.premium": "💎 Abrir o leitor — {price} ₽/mês",

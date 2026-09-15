@@ -177,6 +177,9 @@ class PremiumStatusOut(BaseModel):
     price_rub: int
     price_rub_effective: int | None = None  # с учётом реферальной скидки, если есть
     discount_pct: int = 0
+    # Пробный период: Mini App включает его сам при старте, если он доступен
+    trial_available: bool = False
+    trial_days: int = 0
 
 
 class RankOut(BaseModel):

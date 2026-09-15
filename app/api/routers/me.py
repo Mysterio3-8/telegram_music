@@ -50,6 +50,7 @@ from app.services.gamification import (
     referral_leaderboard,
     referral_link,
     referral_rank,
+    TRIAL_DAYS,
     start_trial,
     top_artists,
     top_tracks,
@@ -602,13 +603,16 @@ def _premium_status_out(user: User) -> PremiumStatusOut:
     discount = user.premium_discount_pct or 0
     base = settings.premium_price_rub
     effective = base * (100 - discount) // 100 if discount else base
+    active = is_premium_active(user)
     return PremiumStatusOut(
-        active=is_premium_active(user),
-        until=user.premium_until if is_premium_active(user) else None,
+        active=active,
+        until=user.premium_until if active else None,
         price_stars=settings.premium_price_stars,
         price_rub=base,
         price_rub_effective=effective,
         discount_pct=discount,
+        trial_available=not user.trial_used and not active,
+        trial_days=TRIAL_DAYS,
     )
 
 

@@ -382,10 +382,23 @@ async function boot() {
     // каталог и страница библиотеки с подписанными ссылками — догружаются фоном.
     // Без Premium сервер отвечает 402 на всё, кроме входа, оплаты и профиля:
     // библиотека тогда пустая, а вместо главной — пэйвол.
-    const [libraryIds, premium] = await Promise.all([
+    const [libraryIds, statusAtBoot] = await Promise.all([
       getLibraryIds().catch((error) => (error && error.status === 402 ? [] : Promise.reject(error))),
       getPremiumStatus(),
     ]);
+    // Пробный период включается сам при первом открытии (решение владельца 15.09):
+    // замер — 0 живых входов и 0 оплат, человек упирался в пэйвол и уходил.
+    // Сервер выдаёт его один раз на аккаунт; не вышло — показываем пэйвол как раньше.
+    let premium = statusAtBoot;
+    let trialStarted = false;
+    if (premium && !premium.active && premium.trial_available) {
+      try {
+        premium = await startPremiumTrial();
+        trialStarted = Boolean(premium && premium.active);
+      } catch {
+        premium = statusAtBoot;
+      }
+    }
     mutate({
       bootStatus: "ready",
       user: telegramUser(),
@@ -403,7 +416,11 @@ async function boot() {
         }
       })
       .catch(() => {});
-    if (premium && premium.active) {
+    if (trialStarted) {
+      // Библиотеку грузили до триала и получили 402 — unlockApp догрузит всё
+      unlockApp();
+      showToast(`${premium.trial_days || 7} дней Premium бесплатно 🎁`);
+    } else if (premium && premium.active) {
       loadHeavyData();
       maybeStartOnboarding();
     } else {
@@ -892,8 +909,7 @@ async function activateTrial() {
     const premium = await startPremiumTrial();
     mutate({ premium });
     loadProfile(); // trial_available и достижения пересчитываются на сервере
-    // Без числа дней: пробный период задаёт сервер (TRIAL_DAYS = 1), а тост
-    // обещал «3 дня» — пэйвол рядом при этом честно писал «1 день»
+    // Без числа дней в коде: срок задаёт сервер (TRIAL_DAYS, приходит в trial_days)
     showToast("Пробный Premium активирован 🎁");
   } catch (error) {
     showToast((error && error.message) || "Не удалось активировать пробный период");
@@ -1233,11 +1249,11 @@ root.addEventListener("click", (event) => {
       navigateTo("premium");
       break;
     case "paywall-trial":
-      // 1 день бесплатно — после активации приложение открывается сразу
+      // Пробный период — после активации приложение открывается сразу
       startPremiumTrial()
         .then((premium) => {
           mutate({ premium });
-          showToast("Доступ открыт на 1 день");
+          showToast(`Доступ открыт на ${premium.trial_days || 7} дней`);
           unlockApp();
         })
         .catch(() => showToast("Не удалось активировать — попробуйте позже"));

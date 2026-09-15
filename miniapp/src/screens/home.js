@@ -64,7 +64,7 @@ function renderSubscription(state) {
   return `
     <div class="sub-card" data-action="${trial ? "start-trial" : "open-premium"}">
       <button class="sub-card__close" data-action="dismiss-sub" aria-label="Скрыть">${icon("close")}</button>
-      <div class="sub-card__title">${trial ? "3 дня Premium бесплатно" : `Целый месяц — ${state.premium.price_rub} ₽`}</div>
+      <div class="sub-card__title">${trial ? `${state.premium.trial_days || 7} дней Premium бесплатно` : `Целый месяц — ${state.premium.price_rub} ₽`}</div>
       <div class="sub-card__subtitle">${trial ? "Без карты: офлайн, без рекламы, эквалайзер" : "Premium: без рекламы и офлайн"}</div>
       <span class="sub-card__cta">${trial ? "Забрать" : "Подключить"}</span>
     </div>

@@ -39,7 +39,7 @@ MESSAGES: dict[str, str] = {
         "VK ya da Apple Music gibi tam bir müzik servisi: mixler, çalma listeleri, "
         "şarkı sözleri, ekolayzer ve çevrimdışı mod."
     ),
-    "cabinet.price": "💎 {price} ₽/ay • İlk gün ücretsiz",
+    "cabinet.price": "💎 {price} ₽/ay • 7 gün ücretsiz",
     "menu.player": "🎧 Oynatıcıyı aç",
     "menu.upload": "⬆️ Parça yükle",
     "menu.premium": "💎 Oynatıcıyı aç — {price} ₽/ay",

@@ -64,7 +64,7 @@ function trialBanner(state) {
   if (!state.profile || !state.profile.trial_available) return "";
   return `
     <div class="trial-banner">
-      <div class="trial-banner__title">🎁 3 дня Premium бесплатно</div>
+      <div class="trial-banner__title">🎁 ${(state.premium && state.premium.trial_days) || 7} дней Premium бесплатно</div>
       <div class="trial-banner__sub">Без карты и без автосписаний — просто попробуйте</div>
       <button class="btn btn--primary btn--block" style="margin-top:12px" data-action="start-trial">
         Забрать 3 дня
