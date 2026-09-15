@@ -1,6 +1,6 @@
 # Telegram Music Bot
 
-**Статус:** 🟢 прод (Этапы 1-5 задеплоены, Mini App живой на keybest.cc, 854 теста, автодеплой через GitHub Actions)
+**Статус:** 🟢 прод (Этапы 1-5 задеплоены, Mini App живой на keybest.cc, 898 тестов, автодеплой: сервер сам забирает main после зелёных тестов — [АВТОДЕПЛОЙ.md](docs/АВТОДЕПЛОЙ.md))
 **Что это:** Telegram-бот [@muz_damn_bot](https://t.me/muz_damn_bot) — музыкальная платформа: библиотека, плейлисты, поиск, загрузка треков, Premium. Полное ТЗ — в [SPEC.md](docs/архив/SPEC.md). Старый [@tgram_music_bot](https://t.me/tgram_music_bot) отвечал указателем «мы переехали» ([app/moved_bot.py](app/moved_bot.py), юнит `tg-music-moved`) — ⚠️ **сейчас не работает: токен отозван** (16.08, Telegram отдаёт Unauthorized). Юнит в `failed` и намеренно не перезапускается; чтобы вернуть указатель, нужен действующий `MOVED_BOT_TOKEN` в `.env`.
 
 **➡️ Инженерный свод — [docs/ai-engineer-os/](docs/ai-engineer-os/README.md).** Обязателен к применению: границы доверия, проходы самопроверки, гейт перед релизом, профиль Telegram, деньги, юридический слой. Текущий статус проекта по каждому пункту — [PROJECT-STATUS.md](docs/ai-engineer-os/PROJECT-STATUS.md), накопленные уроки — [LESSONS.md](docs/ai-engineer-os/LESSONS.md). Присланный владельцем материал разбирается по [INTAKE.md](docs/ai-engineer-os/INTAKE.md) (материал → проверка первоисточника → правило → проход проекта → исправление → тест). ⚠️ `PASS` без выполненной проверки запрещён — пишется `UNKNOWN` с причиной.
@@ -16,7 +16,7 @@
 - ⚠️ **nginx-конфиг тоже не доезжает.** Живой файл — `/etc/nginx/sites-available/keybest.cc`, его правит certbot, поэтому он не копия `deploy/nginx-keybest.conf`. Правки переносить руками, затем `nginx -t && systemctl reload nginx`. Бэкапы — в `/root/nginx-backups`
 - Redis (`redis-server`) — FSM + брокер Celery. ffmpeg + libchromaprint-tools (fpcalc) — отпечатки. yt-dlp (pip) — загрузка с YouTube
 - Repo: git@github.com:Mysterio3-8/telegram_music.git (пуш только по SSH — https-креды на машине от другого аккаунта)
-- Деплой: `/deploy` (push → pull → pip install → `alembic upgrade head` → restart bot+worker)
+- Деплой: **push в main — и всё.** GitHub гоняет тесты, таймер `tg-music-pull-deploy` на сервере раз в 2 мин выкатывает коммит с зелёным job `tests` ([deploy/pull-deploy.sh](deploy/pull-deploy.sh) → `remote-deploy.sh`: pip → миграции → юниты → рестарт → здоровье → 90 сек наблюдения → откат). Журнал: `/var/lib/tg-music-deploy/history.log`. SSH из Actions убран 15.09 — падал во всех 25 прогонах
 - ⚠️ Не запускать бота локально, пока работает сервис на VPS — двойной polling конфликтует
 
 ## Архитектура

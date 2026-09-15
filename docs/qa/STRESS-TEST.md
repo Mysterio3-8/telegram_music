@@ -90,9 +90,11 @@ curl -sI https://keybest.cc/ | grep -iE "^(server|strict|x-content|referrer|cach
 
 ## Выкатка исправлений
 
-⚠️ На 13.09 автодеплой из GitHub Actions падает на шаге SSH (подробности в
-PROJECT-STATUS). Пока его не починили, пуш в main код на прод НЕ доставляет.
-Выкатка руками, отвязанно от SSH-сессии (она на этом боксе рвётся):
+✅ С 15.09 выкатка — просто `git push origin main`: сервер сам забирает коммит
+после зелёного job `tests` (таймер `tg-music-pull-deploy`, раз в 2 мин,
+[docs/АВТОДЕПЛОЙ.md](../АВТОДЕПЛОЙ.md)). Журнал решений —
+`/var/lib/tg-music-deploy/history.log`. Прошлый SSH-путь из Actions падал во всех
+25 прогонах. Ручная выкатка (берёт тот же замок), если нужно без ожидания тестов:
 
 ```bash
 ssh -i "C:/Users/Илья/.ssh/id_ed25519" -o UserKnownHostsFile="C:/Users/Илья/.ssh/known_hosts" root@38.244.213.132 'cd /opt/tg-music-bot && setsid nohup bash deploy/remote-deploy.sh > /root/deploy.log 2>&1 < /dev/null &'
@@ -263,8 +265,10 @@ ssh -i "C:/Users/Илья/.ssh/id_ed25519" -o UserKnownHostsFile="C:/Users/Ил�
    Сборка в один файл или шире `modulepreload`.
 5. **`/upload`** держит до 50 МБ в памяти (сейчас ограничено 2 слотами) —
    потоковая запись во временный файл сняла бы это совсем.
-6. **Автодеплой GitHub Actions** падает на SSH — выкатки руками. Нужен лог джоба
-   и проверка секрета `VPS_HOST` / бана fail2ban.
+6. ~~Автодеплой GitHub Actions падает на SSH~~ ✅ 15.09: заменён pull-деплоем с
+   сервера (тесты GitHub по публичному API → `remote-deploy.sh`). Тесты в CI
+   были зелёными все 25 раз, падал только SSH-шаг. Осталось владельцу: удалить
+   неиспользуемый SSH-ключ деплоя из `authorized_keys` и секреты `VPS_*`.
 7. **8 копий `.env.bak-*` с секретами** в `/opt/tg-music-bot` на проде — вынести в
    `/root/env-backups` (решение владельца, не удалять самому).
 8. ~~План масштабирования 100 → 1 млн пользователей~~ ✅ [SCALING-PLAN.md](SCALING-PLAN.md).
