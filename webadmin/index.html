@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Infinity Music — админка</title>
+    <link rel="stylesheet" href="/static/app.css" />
+  </head>
+  <body>
+    <header class="top">
+      <h1>Infinity Music</h1>
+      <nav id="tabs">
+        <button class="tab is-active" data-tab="overview">Обзор</button>
+        <button class="tab" data-tab="users">Люди</button>
+        <button class="tab" data-tab="tracks">Каталог</button>
+        <button class="tab" data-tab="money">Деньги</button>
+      </nav>
+      <span class="hint">Локально · только через SSH-туннель</span>
+    </header>
+    <main id="screen"><p class="muted">Загружаю…</p></main>
+    <script src="/static/app.js"></script>
+  </body>
+</html>

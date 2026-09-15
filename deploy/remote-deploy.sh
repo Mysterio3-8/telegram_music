@@ -24,7 +24,7 @@ BRANCH=${DEPLOY_BRANCH:-main}
 # Сервисы, которые несут код и потому перезапускаются. Массовый парсер сюда не
 # входит намеренно — он выключен решением владельца, и деплой не должен его
 # воскрешать.
-SERVICES=(tg-music-bot tg-music-api tg-music-worker tg-music-youtube-user)
+SERVICES=(tg-music-bot tg-music-api tg-music-worker tg-music-youtube-user tg-music-webadmin)
 # Сколько ждать, пока сервисы поднимутся, прежде чем считать деплой неудачным.
 HEALTH_WAIT=${HEALTH_WAIT:-20}
 

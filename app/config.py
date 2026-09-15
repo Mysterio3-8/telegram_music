@@ -325,6 +325,11 @@ class Settings(BaseSettings):
     # проверкам на Python. Пусто → первый администратор, как раньше.
     health_alert_chat: int = 0
 
+    # Второй рубеж веб-админки: она и так слушает только 127.0.0.1 и доступна
+    # лишь через SSH-туннель, но если туннель прокинут наружу по ошибке —
+    # без этого заголовка страница не отдаст данные. Пусто = проверки нет.
+    webadmin_token: str = ""
+
     @property
     def health_alert_id(self) -> int | None:
         return self.health_alert_chat or self.first_admin_id

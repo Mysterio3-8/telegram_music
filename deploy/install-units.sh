@@ -97,6 +97,10 @@ systemctl enable --now tg-music-pull-deploy.timer
 
 # Еженедельный отчёт аналитики владельцу в Telegram (15.09)
 systemctl enable --now tg-music-analytics-report.timer
+
+# Веб-админка владельца (16.09): слушает только 127.0.0.1, в nginx НЕ заведена.
+# Открывается на машине владельца: python -m app.webadmin (SSH-туннель).
+systemctl enable --now tg-music-webadmin.service
 # Только включённые: массовый парсер (tg-music-soundcloud, tg-music-youtube)
 # выключен решением владельца 27.07 — поднимать его здесь значило бы тихо
 # отменять это решение и занимать 180 МБ из 961 МБ на боксе.
@@ -105,7 +109,8 @@ systemctl enable --now tg-music-analytics-report.timer
 # здесь и там, и Celery дважды убивал задачи на середине скачивания.
 if [ "${SKIP_SERVICE_RESTART:-0}" != "1" ]; then
     for unit in tg-music-bot tg-music-api tg-music-worker tg-music-youtube-user \
-                tg-music-soundcloud tg-music-youtube tg-music-support tg-music-moved; do
+                tg-music-soundcloud tg-music-youtube tg-music-support tg-music-moved \
+                tg-music-webadmin; do
         if [ "$(systemctl is-enabled "$unit" 2>/dev/null)" = "enabled" ]; then
             systemctl restart "$unit"
             echo "    перезапущен $unit"

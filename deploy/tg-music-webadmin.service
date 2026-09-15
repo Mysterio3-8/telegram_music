@@ -1,0 +1,24 @@
+[Unit]
+Description=Telegram Music Bot — веб-админка владельца (только 127.0.0.1, доступ по SSH-туннелю)
+After=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/tg-music-bot
+EnvironmentFile=/opt/tg-music-bot/.env
+# ⚠️ --host 127.0.0.1 обязателен: в nginx админка не заведена, наружу её быть не
+# должно. Владелец открывает её у себя: python -m app.webadmin (SSH-туннель).
+ExecStart=/opt/tg-music-bot/.venv/bin/python -m uvicorn app.webadmin.server:app --host 127.0.0.1 --port 8011 --log-level warning
+Restart=always
+RestartSec=5
+# Бокс на одном ядре и 961 МБ: админку смотрит один человек и изредка,
+# поэтому она уступает боту и API и не имеет права разрастись.
+Nice=10
+MemoryHigh=120M
+MemoryMax=200M
+OOMScoreAdjust=200
+
+[Install]
+WantedBy=multi-user.target

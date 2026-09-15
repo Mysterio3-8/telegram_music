@@ -1,0 +1,83 @@
+/* Админка владельца: плотная таблица и крупные числа, тёмная тема как у Mini App. */
+:root {
+  --bg: #0f0f10;
+  --card: #1a1a1c;
+  --line: #2a2a2e;
+  --text: #e9e9ec;
+  --muted: #9a9aa2;
+  --accent: #3b7bfe;
+  --good: #35c759;
+  --warn: #ff9f0a;
+  --bad: #ff453a;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.5 -apple-system, "Segoe UI", system-ui, sans-serif;
+}
+.top {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 22px;
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  z-index: 5;
+  flex-wrap: wrap;
+}
+.top h1 { font-size: 17px; margin: 0; }
+nav { display: flex; gap: 6px; }
+.tab {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  padding: 7px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+}
+.tab:hover { color: var(--text); }
+.tab.is-active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.hint { margin-left: auto; color: var(--muted); font-size: 13px; }
+main { padding: 22px; max-width: 1280px; }
+.muted { color: var(--muted); }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; margin-bottom: 22px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+.card .value { font-size: 26px; font-weight: 600; letter-spacing: -0.5px; }
+.card .label { color: var(--muted); font-size: 13px; margin-top: 2px; }
+.card .sub { color: var(--muted); font-size: 12px; margin-top: 6px; }
+h2 { font-size: 15px; margin: 24px 0 10px; font-weight: 600; }
+.chart { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { color: var(--muted); font-weight: 500; position: sticky; top: 56px; background: var(--bg); }
+td.wide, th.wide { white-space: normal; }
+tbody tr:hover { background: #17171a; }
+.tools { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+input[type="search"], select {
+  background: var(--card);
+  border: 1px solid var(--line);
+  color: var(--text);
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  min-width: 240px;
+}
+.pill { padding: 2px 8px; border-radius: 999px; font-size: 12px; border: 1px solid var(--line); }
+.pill.good { color: var(--good); border-color: #1f4d2c; }
+.pill.warn { color: var(--warn); border-color: #4d3a1f; }
+.pill.bad { color: var(--bad); border-color: #4d2020; }
+.pager { display: flex; gap: 8px; align-items: center; margin-top: 14px; }
+button.page { background: var(--card); border: 1px solid var(--line); color: var(--text); padding: 7px 12px; border-radius: 8px; cursor: pointer; }
+button.page[disabled] { opacity: 0.4; cursor: default; }
+.list { display: grid; gap: 4px; }
+.row-line { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.error { color: var(--bad); }
+@media (max-width: 720px) {
+  main { padding: 14px; }
+  th { top: 96px; }
+}
