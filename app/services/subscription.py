@@ -4,26 +4,49 @@
 корректный ответ getChatMember для чужих участников.
 """
 import logging
+import sys
 import time
 from datetime import datetime, timedelta, timezone
+from typing import TYPE_CHECKING
 
-from aiogram import Bot
-from aiogram.enums import ChatMemberStatus
-from aiogram.exceptions import TelegramAPIError
-from aiogram.types import ChatMemberRestricted
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.db.models import SubscriptionStatus
 from app.services.users import is_admin
 
+if TYPE_CHECKING:
+    from aiogram import Bot
+
+    from app.services.bot_api import BotApi
+
 logger = logging.getLogger(__name__)
 
-_SUBSCRIBED_STATUSES = {
-    ChatMemberStatus.MEMBER,
-    ChatMemberStatus.ADMINISTRATOR,
-    ChatMemberStatus.CREATOR,
-}
+# Статусы строками, а не enum aiogram (цикл 7, 15.09): сервис работает и с
+# aiogram.Bot (бот, воркеры), и с лёгким BotApi (процесс API — там aiogram не
+# загружается ради 38 МБ памяти).
+_SUBSCRIBED_STATUSES = {"member", "administrator", "creator"}
+_ADMIN_STATUSES = {"administrator", "creator"}
+
+
+def _status(member) -> str:
+    """Статус участника строкой. ⚠️ Не `status in {"member"}` напрямую: у enum
+    aiogram хэш считается от ИМЕНИ («MEMBER»), и поиск в множестве строк молча
+    промахивается при равенстве значений."""
+    return str(getattr(member.status, "value", member.status))
+
+
+def _telegram_errors() -> tuple[type[BaseException], ...]:
+    """Ошибки Telegram обоих клиентов. `aiogram.exceptions` берётся из sys.modules:
+    процесс с клиентом aiogram его уже загрузил, а процессу API импорт этого
+    модуля не должен тянуть aiogram целиком."""
+    from app.services.bot_api import BotApiError
+
+    errors: list[type[BaseException]] = [BotApiError]
+    aiogram_exceptions = sys.modules.get("aiogram.exceptions")
+    if aiogram_exceptions is not None:
+        errors.append(aiogram_exceptions.TelegramAPIError)
+    return tuple(errors)
 
 # Вердикт «подписан на всё» в памяти процесса (цикл 5, 14.09). Гейт стоит на
 # КАЖДОМ сообщении и нажатии: пользователь, список каналов и статус по каждому
@@ -50,7 +73,9 @@ def _remember_verdict(telegram_id: int, subscribed: bool) -> None:
     _verdicts[telegram_id] = time.monotonic() + _VERDICT_TTL
 
 
-async def check_channel_membership(bot: Bot, telegram_id: int, channel: str) -> bool | None:
+async def check_channel_membership(
+    bot: "Bot | BotApi", telegram_id: int, channel: str
+) -> bool | None:
     """Живой запрос к Telegram. True/False — ответ Telegram, None — спросить не удалось.
 
     ⚠️ None и False — РАЗНОЕ. «Не подписан» это факт, а сетевой сбой, 429 или
@@ -64,26 +89,27 @@ async def check_channel_membership(bot: Bot, telegram_id: int, channel: str) -> 
     """
     try:
         member = await bot.get_chat_member(chat_id=channel, user_id=telegram_id)
-    except TelegramAPIError:
+    except _telegram_errors():
         logger.warning("getChatMember недоступен channel=%s user=%s", channel, telegram_id, exc_info=True)
         return None
-    if member.status in _SUBSCRIBED_STATUSES:
+    status = _status(member)
+    if status in _SUBSCRIBED_STATUSES:
         return True
-    if isinstance(member, ChatMemberRestricted):
-        return member.is_member
+    if status == "restricted":
+        return bool(getattr(member, "is_member", False))
     return False
 
 
-async def is_bot_admin_of_channel(bot: Bot, channel: str) -> bool:
+async def is_bot_admin_of_channel(bot: "Bot | BotApi", channel: str) -> bool:
     """True — бот является администратором канала. Только это и нужно, чтобы гейт
     мог проверять подписчиков; подписка самого владельца-админа НЕ требуется."""
     try:
         me = await bot.get_me()
         member = await bot.get_chat_member(chat_id=channel, user_id=me.id)
-    except TelegramAPIError:
+    except _telegram_errors():
         logger.warning("не удалось проверить права бота в канале %s", channel, exc_info=True)
         return False
-    return member.status in {ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.CREATOR}
+    return _status(member) in _ADMIN_STATUSES
 
 
 async def _get_cached(session: AsyncSession, user_id: int, channel: str) -> SubscriptionStatus | None:
@@ -102,7 +128,7 @@ async def _store(session: AsyncSession, user_id: int, channel: str, is_subscribe
 
 async def is_channel_subscribed(
     session: AsyncSession,
-    bot: Bot,
+    bot: "Bot | BotApi",
     user_id: int,
     telegram_id: int,
     channel: str,
@@ -135,7 +161,7 @@ async def is_channel_subscribed(
 
 async def is_fully_subscribed(
     session: AsyncSession,
-    bot: Bot,
+    bot: "Bot | BotApi",
     user_id: int,
     telegram_id: int,
     force: bool = False,

@@ -271,8 +271,8 @@ async def test_successful_payment_consumes_discount(env, monkeypatch):
 async def test_transfer_is_capped_and_locked(env, monkeypatch):
     client, _ = env
     from app.config import settings
-    from app.services.playlist_transfer import service
-    from app.tasks import transfer as transfer_task
+    from app.services.playlist_transfer import locks as service
+    from app.tasks import queue_client
 
     queued = []
     locks = {"held": False}
@@ -285,7 +285,7 @@ async def test_transfer_is_capped_and_locked(env, monkeypatch):
 
     monkeypatch.setattr(settings, "celery_broker_url", "memory://")
     monkeypatch.setattr(service, "acquire_transfer_lock", acquire)
-    monkeypatch.setattr(transfer_task.transfer_playlist_task, "delay", lambda items, tid: queued.append(len(items)))
+    monkeypatch.setattr(queue_client, "enqueue", lambda name, items, tid: queued.append(len(items)))
 
     text = "\n".join(f"Artist{i} — Title{i}" for i in range(1500))
     first = client.post("/transfer", headers=_auth(777), json={"source": text})

@@ -16,7 +16,6 @@ import logging
 import os
 from pathlib import Path
 
-from aiogram import Bot
 from fastapi import APIRouter, HTTPException, Query, Request, Response, status
 from fastapi.responses import StreamingResponse
 from starlette.concurrency import run_in_threadpool
@@ -26,6 +25,7 @@ from app.config import settings
 from app.db.base import session_factory
 from app.db.models import Instrumental, Track
 from app.services.audio_cache import cache_commit, cache_file, cache_get, cache_put, cache_tmp_path
+from app.services.bot_api import BotApi
 from app.services.library import get_track
 
 logger = logging.getLogger(__name__)
@@ -60,11 +60,8 @@ async def _download_from_telegram(storage_key: str, tg_file_id: str) -> Path | N
                 return hit  # скачал параллельный запрос, пока ждали
             tmp = await run_in_threadpool(cache_tmp_path, storage_key)
             try:
-                bot = Bot(token=settings.bot_token)
-                try:
+                async with BotApi() as bot:
                     await bot.download(tg_file_id, destination=tmp)
-                finally:
-                    await bot.session.close()
             except Exception:  # noqa: BLE001
                 tmp.unlink(missing_ok=True)
                 logger.warning("Не удалось скачать %s из Telegram", storage_key, exc_info=True)
@@ -122,13 +119,10 @@ async def _load_audio_bytes(
         if cached is not None:
             return cached
         try:
-            bot = Bot(token=settings.bot_token)
-            try:
-                buffer = io.BytesIO()
+            buffer = io.BytesIO()
+            async with BotApi() as bot:
                 await bot.download(tg_file_id, destination=buffer)
-                return buffer.getvalue()
-            finally:
-                await bot.session.close()
+            return buffer.getvalue()
         except Exception:  # noqa: BLE001
             logger.warning("Не удалось скачать %s из Telegram", storage_key, exc_info=True)
     return None
@@ -160,9 +154,9 @@ async def _heal_dead_file_id(track_id: int) -> None:
             track.tg_file_id = None
             track.meta_synced = False
             await session.commit()
-        from app.tasks.search_fetch import repair_track
+        from app.tasks.queue_client import enqueue
 
-        repair_track.delay(track_id=track_id)
+        enqueue("search.repair_track", track_id=track_id)
         logger.warning("Мёртвый file_id у track=%s — поставил восстановление", track_id)
     except Exception:  # noqa: BLE001 — брокер лёг: вылечим при следующем обращении
         logger.warning("Не удалось поставить восстановление track=%s", track_id, exc_info=True)

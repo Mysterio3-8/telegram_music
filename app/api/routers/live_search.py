@@ -23,7 +23,7 @@ from app.services.search import find_tracks_by_metadata_bulk
 from app.services.search_cache import search_with_cache
 from app.services.shelves import SHELVES, build_personal_mix, build_shelf, get_shelf
 from app.services.stream_url import resolve_stream_url
-from app.services.track_lookup.importer import candidate_metadata
+from app.services.track_lookup.metadata import candidate_metadata
 from app.services.track_lookup.ranking import Candidate
 
 logger = logging.getLogger(__name__)
@@ -139,9 +139,10 @@ async def queue_fetch(ref: str, user: User = Depends(require_premium)) -> dict:
     if candidate is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Ссылка устарела — повторите поиск")
     try:
-        from app.tasks.search_fetch import search_fetch_candidate
+        from app.tasks.queue_client import enqueue
 
-        search_fetch_candidate.delay(
+        enqueue(
+            "search.fetch_candidate",
             candidate=asdict(candidate),
             telegram_id=user.telegram_id,
         )

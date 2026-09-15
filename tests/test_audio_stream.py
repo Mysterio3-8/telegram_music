@@ -81,7 +81,7 @@ async def test_cold_track_downloads_once_for_concurrent_plays(env, monkeypatch):
         await asyncio.sleep(0.05)  # окно, в которое влетают остальные «play»
         Path(destination).write_bytes(DATA)
 
-    monkeypatch.setattr(audio_router.Bot, "download", fake_download)
+    monkeypatch.setattr(audio_router.BotApi, "download", fake_download)
     url = build_audio_url(2)
     responses = await asyncio.gather(*[env.get(url) for _ in range(10)])
     assert [r.status_code for r in responses] == [200] * 10
@@ -98,7 +98,7 @@ async def test_failed_download_is_404_and_leaves_no_tmp(env, monkeypatch, tmp_pa
     async def no_heal(_track_id):
         return None
 
-    monkeypatch.setattr(audio_router.Bot, "download", broken)
+    monkeypatch.setattr(audio_router.BotApi, "download", broken)
     monkeypatch.setattr(audio_router, "_heal_dead_file_id", no_heal)
     response = await env.get(build_audio_url(2))
     assert response.status_code == 404

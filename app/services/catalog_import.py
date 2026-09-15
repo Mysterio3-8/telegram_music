@@ -1,7 +1,6 @@
 import logging
+from typing import TYPE_CHECKING
 
-from aiogram import Bot
-from aiogram.types import BufferedInputFile
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,6 +11,13 @@ from app.services.fingerprint import compute_fingerprint_from_bytes
 from app.services.track_meta import build_filename, embed_cover, retag_audio
 from app.services.uploads import DUPLICATE_DURATION_TOLERANCE, find_by_fingerprint, find_duplicate
 from app.storage.base import StorageBackend
+
+if TYPE_CHECKING:
+    from aiogram import Bot
+
+# aiogram — только в функциях минта (цикл 7, 15.09): модуль импортирует и API
+# Mini App ради `import_user_track`, а тот бот не использует. Сверху aiogram
+# стоил бы API 38 МБ памяти ни за что.
 
 logger = logging.getLogger(__name__)
 
@@ -148,7 +154,7 @@ async def find_existing_instrumental(
 
 async def import_instrumental_via_telegram_mint(
     session: AsyncSession,
-    bot: Bot,
+    bot: "Bot",
     *,
     title: str,
     artist: str,
@@ -162,6 +168,8 @@ async def import_instrumental_via_telegram_mint(
     """Зеркало import_via_telegram_mint для минусов: дедуп только среди
     instrumentals (TZ §9), файл минтится через бота + архивная копия в хранилище.
     Возвращает (минус, создан_ли_новый)."""
+    from aiogram.types import BufferedInputFile
+
     existing = await find_existing_instrumental(session, fingerprint, title, artist, duration)
     if existing is not None:
         return existing, False
@@ -300,7 +308,7 @@ async def create_track_from_telegram(
 
 async def import_via_telegram_mint(
     session: AsyncSession,
-    bot: Bot,
+    bot: "Bot",
     *,
     title: str,
     artist: str,
@@ -330,6 +338,8 @@ async def import_via_telegram_mint(
             track.source_url = source_url
             await session.commit()
         return track, False
+
+    from aiogram.types import BufferedInputFile
 
     tagged = retag_audio(data, file_format, title, artist)
     if cover:

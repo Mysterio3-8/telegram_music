@@ -17,6 +17,7 @@ from app.services.track_lookup.providers import (
     search_soundcloud,
     search_youtube,
 )
+from app.services.track_lookup.metadata import candidate_metadata  # noqa: F401 — прежнее место
 from app.services.track_lookup.ranking import Candidate
 from app.services.youtube.downloader import DownloadedAudio, download_audio
 from app.services.youtube.user_import import (
@@ -133,18 +134,6 @@ async def _user_by_telegram_id(session: AsyncSession, telegram_id: int):
     from app.services.users import get_user_by_telegram_id
 
     return await get_user_by_telegram_id(session, telegram_id)
-
-
-def candidate_metadata(candidate: Candidate) -> tuple[str, str]:
-    """(исполнитель, название) кандидата — теми же правилами, что и при импорте.
-
-    Нужна ДО скачивания: по этой паре смотрим, не залит ли трек уже, и экономим
-    целую загрузку. После скачивания метаданные пересчитываются по факту файла.
-    """
-    from app.services.title_parser import parse_title
-
-    fallback = (candidate.artist or "").removesuffix(" - Topic").strip() or "Исполнитель"
-    return parse_title(candidate.title, fallback)
 
 
 async def import_candidate(

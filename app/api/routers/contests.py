@@ -3,14 +3,13 @@
 Условия проверяются здесь, на сервере: клиент присылает только намерение
 участвовать. Подписка на канал — тем же getChatMember с TTL-кэшем, что и в гейте.
 """
-from aiogram import Bot
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, require_premium
 from app.api.schemas import ContestJoinOut, ContestOut
-from app.config import settings
 from app.db.models import Contest, User
+from app.services.bot_api import BotApi
 from app.services.contests import (
     Eligibility,
     active_contests,
@@ -26,7 +25,7 @@ router = APIRouter(tags=["contests"])
 
 
 async def _eligibility(
-    session: AsyncSession, contest: Contest, user: User, bot: Bot | None, force: bool = False
+    session: AsyncSession, contest: Contest, user: User, bot: BotApi | None, force: bool = False
 ) -> Eligibility:
     subscribed = True
     if contest.required_channel and bot is not None:
@@ -64,7 +63,7 @@ async def list_contests(
         return []
 
     needs_bot = any(contest.required_channel for contest in contests)
-    bot = Bot(token=settings.bot_token) if needs_bot else None
+    bot = BotApi() if needs_bot else None
     try:
         return [
             await _to_out(session, contest, await _eligibility(session, contest, user, bot))
@@ -72,7 +71,7 @@ async def list_contests(
         ]
     finally:
         if bot is not None:
-            await bot.session.close()
+            await bot.close()
 
 
 @router.post("/contests/{contest_id}/join", response_model=ContestJoinOut)
@@ -85,13 +84,13 @@ async def join(
     if contest is None or not contest.is_active:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Конкурс не найден")
 
-    bot = Bot(token=settings.bot_token) if contest.required_channel else None
+    bot = BotApi() if contest.required_channel else None
     try:
         # force=True: пользователь только что подписался — кэш обязан обновиться
         eligibility = await _eligibility(session, contest, user, bot, force=True)
     finally:
         if bot is not None:
-            await bot.session.close()
+            await bot.close()
 
     joined = await join_contest(session, contest, user, eligibility)
     if not joined and not eligibility.joined:

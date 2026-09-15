@@ -6,7 +6,6 @@ Mini App гейтит доступ так же, как бот: не подпис
 """
 import time
 
-from aiogram import Bot
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,6 +13,7 @@ from app.api.deps import get_current_user, get_db
 from app.api.schemas import SubChannelOut, SubscriptionStatusOut
 from app.config import settings
 from app.db.models import User
+from app.services.bot_api import BotApi
 from app.services.premium import is_premium_active
 from app.services.required_channels import (
     channel_url,
@@ -43,7 +43,7 @@ async def subscription_status(
     if not channels or bypass or is_premium_active(user):
         return SubscriptionStatusOut(required=False, subscribed=True, channels=[])
 
-    bot = Bot(token=settings.bot_token)
+    bot = BotApi()
     try:
         subscribed = True
         out: list[SubChannelOut] = []
@@ -65,7 +65,7 @@ async def subscription_status(
                 )
             )
     finally:
-        await bot.session.close()
+        await bot.close()
 
     return SubscriptionStatusOut(required=True, subscribed=subscribed, channels=out)
 

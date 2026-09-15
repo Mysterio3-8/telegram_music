@@ -204,9 +204,10 @@ async def fetch_from_web(
     if not query:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Пустой запрос")
     try:
-        from app.tasks.search_fetch import search_fetch
+        from app.tasks.queue_client import enqueue
 
-        search_fetch.delay(
+        enqueue(
+            "search.fetch",
             query=query,
             telegram_id=user.telegram_id,
             chat_id=user.telegram_id,
@@ -402,12 +403,12 @@ async def start_transfer(
 
     from starlette.concurrency import run_in_threadpool
 
-    from app.services.playlist_transfer.service import (
+    from app.services.playlist_transfer.locks import (
         TRANSFER_MAX_ITEMS,
         acquire_transfer_lock,
         release_transfer_lock,
     )
-    from app.tasks.transfer import transfer_playlist_task
+    from app.tasks.queue_client import enqueue
 
     skipped = max(0, len(items) - TRANSFER_MAX_ITEMS)
     items = items[:TRANSFER_MAX_ITEMS]
@@ -417,8 +418,10 @@ async def start_transfer(
             "Предыдущий перенос ещё идёт — дождитесь отчёта в чате бота",
         )
     try:
-        transfer_playlist_task.delay(
-            [{"artist": i.artist, "title": i.title} for i in items], user.telegram_id
+        enqueue(
+            "transfer.playlist",
+            [{"artist": i.artist, "title": i.title} for i in items],
+            user.telegram_id,
         )
     except Exception as exc:  # noqa: BLE001 — брокер лёг: замок не должен висеть сутки
         await run_in_threadpool(release_transfer_lock, user.telegram_id)
