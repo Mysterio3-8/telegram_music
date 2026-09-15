@@ -48,6 +48,8 @@ MESSAGES: dict[str, str] = {
     "remind.share_button": "🎁 Bağlantımı paylaş",
     "remind.open_player": "🎧 Oynatıcıyı aç",
     "remind.share_text": "Infinity Music'te müzik dinliyorum — sen de gel",
+    "remind.comeback_trial": "👋 Görüşmeyeli uzun zaman oldu! Oynatıcıda seni {days} gün ücretsiz Premium bekliyor — ödeme yok, ilk açılışta kendiliğinden başlar.",
+    "remind.comeback": "👋 Görüşmeyeli uzun zaman oldu! Bana herhangi bir şarkının adını yaz — birkaç saniyede göndereyim.",
     "menu.player": "🎧 Oynatıcıyı aç",
     "menu.upload": "⬆️ Parça yükle",
     "menu.premium": "💎 Oynatıcıyı aç — {price} ₽/ay",

@@ -1,4 +1,5 @@
-"""Ежедневные напоминания «продлите Premium бесплатно» (app/services/reminders.py).
+"""Ежедневные напоминания «продлите Premium бесплатно» и разовое «давно не виделись»
+(app/services/reminders.py).
 
     python -m app.cli.reminders          # отправить
     python -m app.cli.reminders --dry    # только посчитать, никому не писать

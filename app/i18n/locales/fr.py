@@ -49,6 +49,8 @@ MESSAGES: dict[str, str] = {
     "remind.share_button": "🎁 Partager mon lien",
     "remind.open_player": "🎧 Ouvrir le lecteur",
     "remind.share_text": "J'écoute de la musique sur Infinity Music — rejoins-moi",
+    "remind.comeback_trial": "👋 Ça fait longtemps ! {days} jours de Premium gratuits t'attendent dans le lecteur — sans paiement, ils démarrent à la première ouverture.",
+    "remind.comeback": "👋 Ça fait longtemps ! Envoie-moi le nom de n'importe quel morceau — je te l'envoie en quelques secondes.",
     "menu.player": "🎧 Ouvrir le lecteur",
     "menu.upload": "⬆️ Envoyer un morceau",
     "menu.premium": "💎 Ouvrir le lecteur — {price} ₽/mois",
