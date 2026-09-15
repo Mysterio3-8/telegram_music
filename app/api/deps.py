@@ -31,11 +31,17 @@ async def get_current_user(
     return user
 
 
-async def require_premium(user: User = Depends(get_current_user)) -> User:
+async def require_premium(
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+) -> User:
     """Mini App — по подписке (бот бесплатный). Пэйвол жил только в интерфейсе, и
     любой бесплатный аккаунт получал весь API прямыми запросами. Без Premium
     открыты лишь вход, оплата, профиль и документы — они на get_current_user.
     Админы и триал проходят через is_premium_active."""
     if not is_premium_active(user):
+        from app.services.funnel import record_step
+
+        await record_step(session, user.id, "paywall_hit")
         raise HTTPException(status.HTTP_402_PAYMENT_REQUIRED, "Нужен Premium")
     return user

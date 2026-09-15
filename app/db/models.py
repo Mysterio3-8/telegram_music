@@ -512,6 +512,20 @@ class SearchQuery(Base):
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
 
+class FunnelEvent(Base):
+    """Первое прохождение шага воронки новичка (15.09). Одна строка на пользователя
+    и шаг: замер 15.09 показал, что 46% подписавшихся уходят из кабинета, а куда
+    они нажимают — видно не было. Список шагов — app/services/funnel.py."""
+
+    __tablename__ = "funnel_events"
+    __table_args__ = (Index("ix_funnel_events_step_user", "step", "user_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    step: Mapped[str] = mapped_column(String(24))
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
 class Contest(Base):
     """Конкурс с розыгрышем Premium (SPEC-2.0 §28): условия участия и дата итогов."""
 

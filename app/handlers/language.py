@@ -36,6 +36,9 @@ async def cb_language_setup(callback: CallbackQuery) -> None:
     async with session_factory() as session:
         user = await ensure_user(session, callback.from_user)
         lang = await set_user_language(session, user, code)
+        from app.services.funnel import record_step
+
+        await record_step(session, user.id, "lang_chosen")
         await show_start_screen(session, user, callback.message)
     await callback.answer(t("lang.saved", lang))
 

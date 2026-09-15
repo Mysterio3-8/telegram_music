@@ -13,6 +13,7 @@ from app.handlers.common import ensure_user
 from app.keyboards.main_menu import language_setup_keyboard, main_menu_keyboard
 from app.keyboards.subscription import subscription_gate_keyboard
 from app.i18n import t
+from app.services.funnel import record_step
 from app.services.gamification import register_referral
 from app.services.library import get_track
 from app.services.premium import is_premium_active
@@ -85,12 +86,15 @@ async def show_start_screen(session: AsyncSession, user: User, message: Message)
         session, message.bot, user.id, user.telegram_id, force=True
     )
     if subscribed:
+        await record_step(session, user.id, "gate_passed")
+        await record_step(session, user.id, "cabinet_shown")
         text, markup, parse_mode = (
             await build_cabinet_text(session, user),
             main_menu_keyboard(lang),
             "HTML",
         )
     else:
+        await record_step(session, user.id, "gate_shown")
         text, markup = await _gate_view(session, lang)
         parse_mode = None
     await message.edit_text(text, reply_markup=markup, parse_mode=parse_mode)
@@ -107,6 +111,8 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
             referrer_raw = command.args.removeprefix("ref_")
             if _DB_ID_RE.fullmatch(referrer_raw):
                 await register_referral(session, user, int(referrer_raw))
+        if is_new:
+            await record_step(session, user.id, "start")
         # Первый вход — сначала язык (решение владельца). ui_language хранит только
         # осознанный выбор, поэтому пустое поле и есть признак «ещё не спрашивали»;
         # подсвечиваем то, что определилось по языку устройства.
@@ -123,9 +129,13 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
             session, message.bot, user.id, user.telegram_id, force=True
         )
         if not subscribed:
+            await record_step(session, user.id, "gate_shown")
             text, markup = await _gate_view(session, lang)
             await message.answer(text, reply_markup=markup)
             return
+        await record_step(session, user.id, "gate_passed")
+        if not command.args or command.args.startswith("ref_"):
+            await record_step(session, user.id, "cabinet_shown")
         text = await build_cabinet_text(session, user)
     # Кнопка «Поддержать» под постами канала ведёт сюда: t.me/bot?start=donate.
     # Идёт ПОСЛЕ гейта подписки (решение владельца) — тот стоит выше и уже

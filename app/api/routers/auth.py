@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_db
 from app.api.schemas import LoginIn, TokenOut
 from app.api.security import create_access_token, validate_init_data
+from app.services.funnel import record_step
 from app.services.users import TelegramProfile, get_or_create_user
 
 router = APIRouter(tags=["auth"])
@@ -22,5 +23,6 @@ async def login(payload: LoginIn, session: AsyncSession = Depends(get_db)) -> To
         first_name=user_data.get("first_name"),
         language=user_data.get("language_code"),
     )
-    await get_or_create_user(session, profile)
+    user = await get_or_create_user(session, profile)
+    await record_step(session, user.id, "miniapp_login")
     return TokenOut(access_token=create_access_token(profile.telegram_id))

@@ -7,6 +7,7 @@ from app.handlers.common import ensure_user
 from app.handlers.start import build_cabinet_text
 from app.i18n import t
 from app.keyboards.main_menu import main_menu_keyboard
+from app.services.funnel import record_step
 from app.services.subscription import is_fully_subscribed
 from app.services.users import user_language
 
@@ -24,6 +25,8 @@ async def cb_subscription_check(callback: CallbackQuery) -> None:
         if not subscribed:
             await callback.answer(t("gate.not_subscribed", lang), show_alert=True)
             return
+        await record_step(session, user.id, "gate_passed")
+        await record_step(session, user.id, "cabinet_shown")
         text = await build_cabinet_text(session, user)
     await callback.message.edit_text(
         text, reply_markup=main_menu_keyboard(lang), parse_mode="HTML"
