@@ -31,6 +31,11 @@ ROOT = Path(__file__).resolve().parents[1] / "miniapp"
 SRC = ROOT / "src"
 ENTRY = SRC / "main.js"
 BUNDLE = ROOT / "app.bundle.js"
+CSS_BUNDLE = ROOT / "app.bundle.css"
+# Порядок как в index.html; tokens.css первым — из него берут переменные остальные.
+# Он подключался через @import в каждом файле, а это лишний круг ожидания:
+# браузер узнаёт о нём, только скачав и разобрав импортёра.
+CSS_FILES = ("tokens.css", "base.css", "components.css", "screens.css")
 
 IMPORT_NAMED = re.compile(r"^import\s*\{([\s\S]*?)\}\s*from\s*[\"']([^\"']+)[\"'];?\s*$", re.MULTILINE)
 IMPORT_BARE = re.compile(r"^import\s+[\"']([^\"']+)[\"'];?\s*$", re.MULTILINE)
@@ -106,10 +111,16 @@ def order(modules: dict[str, dict]) -> list[str]:
 
 
 def fingerprint(modules: dict[str, dict]) -> str:
+    """Отпечаток по ТЕКСТУ, а не по байтам.
+
+    ⚠️ Грабля 16.09: на Windows рабочая копия может лежать с CRLF, в репозитории
+    LF — байты разные, отпечаток разный, и CI валил сборку, собранную локально.
+    read_text приводит переводы строк к одному виду на обеих системах.
+    """
     digest = hashlib.sha256()
     for mid in sorted(modules):
         digest.update(mid.encode("utf-8"))
-        digest.update(modules[mid]["path"].read_bytes())
+        digest.update(modules[mid]["path"].read_text(encoding="utf-8").encode("utf-8"))
     return digest.hexdigest()[:16]
 
 
@@ -135,9 +146,20 @@ def render(modules: dict[str, dict]) -> str:
     return "\n\n".join(parts) + "\n"
 
 
+def render_css() -> str:
+    parts = ["/* СОБРАНО АВТОМАТИЧЕСКИ из miniapp/src/styles/**. Пересборка: python tools/build_miniapp.py */"]
+    for name in CSS_FILES:
+        text = (SRC / "styles" / name).read_text(encoding="utf-8")
+        # @import подключал tokens.css — в сборке он уже первым файлом
+        text = re.sub(r'^@import\s+url\("tokens\.css"\);\s*$', "", text, flags=re.MULTILINE)
+        parts.append(f"/* --- {name} --- */\n{text.strip()}")
+    return "\n\n".join(parts) + "\n"
+
+
 def build(check: bool) -> int:
     modules = collect()
     content = render(modules)
+    css = render_css()
     if check:
         if not BUNDLE.is_file():
             print("Сборка отсутствует: python tools/build_miniapp.py")
@@ -145,10 +167,17 @@ def build(check: bool) -> int:
         if BUNDLE.read_text(encoding="utf-8") != content:
             print("Сборка отстала от miniapp/src: python tools/build_miniapp.py")
             return 1
+        if not CSS_BUNDLE.is_file() or CSS_BUNDLE.read_text(encoding="utf-8") != css:
+            print("Стили отстали от miniapp/src/styles: python tools/build_miniapp.py")
+            return 1
         print(f"Сборка свежая: {len(modules)} модулей, {BUNDLE.stat().st_size // 1024} КБ")
         return 0
-    BUNDLE.write_text(content, encoding="utf-8")
+    # Явный перевод строки: иначе на Windows файл уезжает в репозиторий с CRLF,
+    # а отпечаток и сравнение в CI считаются по другому виду строк
+    BUNDLE.write_text(content, encoding="utf-8", newline="\n")
+    CSS_BUNDLE.write_text(css, encoding="utf-8", newline="\n")
     print(f"Собрано модулей: {len(modules)}, файл {BUNDLE.name}, {len(content) // 1024} КБ")
+    print(f"Стили: {len(CSS_FILES)} файла, {CSS_BUNDLE.name}, {len(css) // 1024} КБ")
     return 0
 
 

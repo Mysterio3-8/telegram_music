@@ -30,8 +30,18 @@ def test_every_module_reached_and_no_cycles():
 
 def test_index_html_loads_bundle_not_modules():
     html = (ROOT / "miniapp" / "index.html").read_text(encoding="utf-8")
-    assert "/app.bundle.js" in html
+    assert "/app.bundle.js" in html and "/app.bundle.css" in html
     assert 'src="/src/main.js"' not in html
+    assert "/src/styles/" not in html
+
+
+def test_css_bundle_has_tokens_once_and_no_imports():
+    css = build_miniapp.CSS_BUNDLE.read_text(encoding="utf-8")
+    # tokens.css подключался @import из трёх файлов — лишний круг ожидания
+    assert "@import" not in css
+    assert css.count("--bg-base") >= 1
+    for name in build_miniapp.CSS_FILES:
+        assert f"--- {name} ---" in css
 
 
 def test_bundle_keeps_module_scope():

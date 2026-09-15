@@ -2,7 +2,7 @@
 
 // Источник: miniapp/src/**. Пересборка: python tools/build_miniapp.py
 
-// отпечаток исходников: af3aab3f8e62ff76
+// отпечаток исходников: 6ba98ad0676fdbf4
 
 (function () {
   "use strict";
