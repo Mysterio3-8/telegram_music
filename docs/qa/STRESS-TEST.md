@@ -312,8 +312,11 @@ ssh -i "C:/Users/Илья/.ssh/id_ed25519" -o UserKnownHostsFile="C:/Users/Ил�
    `git reset --hard`). Домен убран из кода и статики Mini App —
    `tests/test_no_hardcoded_domain.py`. После переезда руками: вебхук ЮKassa,
    проверка на iPhone; `deploy/nginx-keybest.conf` и доки — коммитом.
-7. **8 копий `.env.bak-*` с секретами** в `/opt/tg-music-bot` на проде — вынести в
-   `/root/env-backups` (решение владельца, не удалять самому).
+7. ~~**8 копий `.env.bak-*` с секретами** в `/opt/tg-music-bot`~~ ✅ 15.09 (владелец:
+   «сделай сам»): перенесены в `/root/env-backups` (каталог 700, файлы 600), не
+   удалены. В каталоге проекта остались только `.env` и `.env.example`. Там же
+   убран ключ старого SSH-деплоя из `authorized_keys` (бэкап —
+   `/root/ssh-backups/`, файлы ключа — `/root/old-deploy-key/`).
 8. ~~План масштабирования 100 → 1 млн пользователей~~ ✅ [SCALING-PLAN.md](SCALING-PLAN.md).
    Из него в очередь: ~~аудио через nginx `X-Accel-Redirect`~~ ✅ цикл 6.
 9. ~~**API держит ~180 МБ анонимной памяти**~~ ✅ **цикл 7, 15.09, `8c85828`.**
