@@ -157,6 +157,42 @@ async def cb_admin_stats(callback: CallbackQuery) -> None:
     await callback.answer("Обновлено")
 
 
+# --- Аналитика (15.09): тот же отчёт, что python -m app.cli.analytics, без SSH ---
+
+ANALYTICS_PERIODS = (1, 7, 30)
+
+
+def _analytics_keyboard(days: int):
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+    periods = [
+        InlineKeyboardButton(text=f"{'• ' if d == days else ''}{d} дн.", callback_data=f"adm:analytics:{d}")
+        for d in ANALYTICS_PERIODS
+    ]
+    return InlineKeyboardMarkup(
+        inline_keyboard=[periods, [InlineKeyboardButton(text="◀️ В админку", callback_data="adm:stats")]]
+    )
+
+
+@router.callback_query(F.data.startswith("adm:analytics:"))
+async def cb_admin_analytics(callback: CallbackQuery) -> None:
+    if not is_admin(callback.from_user.id):
+        await callback.answer("Недоступно", show_alert=True)
+        return
+    from app.cli.analytics import build_analytics_report, format_report, split_message
+
+    raw = callback.data.rsplit(":", 1)[-1]
+    days = int(raw) if raw.isdigit() and int(raw) in ANALYTICS_PERIODS else 7
+    await callback.answer("Считаю…")
+    async with session_factory() as session:
+        report = await build_analytics_report(session, days)
+    chunks = split_message(format_report(report))
+    # Отчёт длиннее одного сообщения — новыми сообщениями, клавиатура под последним
+    for index, chunk in enumerate(chunks):
+        markup = _analytics_keyboard(days) if index == len(chunks) - 1 else None
+        await callback.message.answer(chunk, reply_markup=markup)
+
+
 # --- Модерация загруженных треков (блок D) ---
 
 
