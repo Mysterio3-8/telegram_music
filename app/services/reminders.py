@@ -17,7 +17,7 @@ comeback — разовое «давно не виделись» тем, кто 
 30 дней (замер 15.09: удержание через сутки 9%, через неделю 3%, а напоминания
 выше доходят только до людей с Premium). Не взявшим пробную неделю — про неё,
 остальным — «напишите название трека» и строка про друзей. Один раз за всю
-жизнь аккаунта, не больше COMEBACK_LIMIT за запуск: старше 30 дней не трогаем —
+жизнь аккаунта, не больше COMEBACK_LIMIT (30) за ночь: старше 30 дней не трогаем —
 человек нас уже забыл, и сообщение от незнакомого бота выглядит спамом.
 """
 import asyncio
@@ -48,7 +48,7 @@ logger = logging.getLogger(__name__)
 KINDS = ("ends_in_4", "ends_tomorrow", "ended", "comeback")
 COMEBACK_AFTER = timedelta(days=3)
 COMEBACK_WINDOW = timedelta(days=30)
-COMEBACK_LIMIT = 100
+COMEBACK_LIMIT = 30  # потолок сообщений за ночь: владелец 16.09 — «главное не спамить»
 COMEBACK_ANCHOR = "once"
 SEND_PAUSE_SECONDS = 0.05  # Telegram держит ~30 сообщений в секунду — с запасом
 _BLOCKED_MARKERS = ("bot was blocked", "user is deactivated", "chat not found")
