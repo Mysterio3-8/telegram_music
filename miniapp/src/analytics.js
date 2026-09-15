@@ -29,11 +29,20 @@ export function flushAnalytics() {
   if (!queue.length) return;
   const batch = queue.splice(0, MAX_BATCH);
   try {
-    Promise.resolve(sendAnalyticsEvents(batch)).catch(() => {});
+    Promise.resolve(sendAnalyticsEvents(batch)).catch(() => retry(batch));
   } catch {
-    // нет сети или токена — событие не критично
+    retry(batch);
   }
   if (queue.length) timer = setTimeout(flushAnalytics, FLUSH_MS);
+}
+
+// Пачка не ушла — возвращаем её в очередь и пробуем позже. Первая пачка уходит
+// раньше, чем приложение успело войти («открыл приложение» копится с загрузки),
+// и без возврата это событие терялось бы у каждого — проверено в браузере 16.09.
+function retry(batch) {
+  queue.unshift(...batch);
+  if (queue.length > MAX_QUEUE) queue.length = MAX_QUEUE;
+  if (!timer) timer = setTimeout(flushAnalytics, FLUSH_MS);
 }
 
 if (typeof document !== "undefined") {
