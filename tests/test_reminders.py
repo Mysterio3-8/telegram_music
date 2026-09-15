@@ -94,40 +94,42 @@ async def test_temporary_failure_is_retried_next_run(session):
     assert (await send_due_reminders(session, retry, now=NOW)).sent == 1
 
 
-async def test_comeback_once_for_silent_users_only(session, monkeypatch):
+async def test_comeback_once_after_thirty_days_of_silence(session, monkeypatch):
+    """Владелец 16.09: сообщение редкое — только когда прошло 30 дней тишины."""
     monkeypatch.setattr(settings, "bot_username", "muz_damn_bot")
-    silent_new = User(telegram_id=2001, ui_language="ru", created_at=NOW - timedelta(days=10))
-    silent_tried = User(telegram_id=2002, ui_language="ru", trial_used=True, created_at=NOW - timedelta(days=10))
-    recent = User(telegram_id=2003, ui_language="ru", created_at=NOW - timedelta(days=10))
-    forgotten = User(telegram_id=2004, ui_language="ru", created_at=NOW - timedelta(days=90))
-    premium = User(telegram_id=2005, ui_language="ru", created_at=NOW - timedelta(days=10),
-                   premium=True, premium_until=NOW + timedelta(days=10))
-    fresh = User(telegram_id=2006, ui_language="ru", created_at=NOW - timedelta(days=1))
-    session.add_all([silent_new, silent_tried, recent, forgotten, premium, fresh])
+    silent = User(telegram_id=2001, ui_language="ru", created_at=NOW - timedelta(days=60))
+    silent_tried = User(telegram_id=2002, ui_language="ru", trial_used=True, created_at=NOW - timedelta(days=60))
+    recent = User(telegram_id=2003, ui_language="ru", created_at=NOW - timedelta(days=60))
+    forgotten = User(telegram_id=2004, ui_language="ru", created_at=NOW - timedelta(days=300))
+    premium = User(telegram_id=2005, ui_language="ru", created_at=NOW - timedelta(days=60),
+                   premium=True, premium_until=NOW + timedelta(days=200))
+    fresh = User(telegram_id=2006, ui_language="ru", created_at=NOW - timedelta(days=5))
+    session.add_all([silent, silent_tried, recent, forgotten, premium, fresh])
     await session.flush()
     session.add_all(
         [
-            FunnelEvent(user_id=silent_new.id, step="start", created_at=NOW - timedelta(days=5)),
-            SearchQuery(user_id=silent_tried.id, query="кизару", created_at=NOW - timedelta(days=4)),
-            SearchQuery(user_id=recent.id, query="bones", created_at=NOW - timedelta(days=1)),
+            FunnelEvent(user_id=silent.id, step="start", created_at=NOW - timedelta(days=40)),
+            SearchQuery(user_id=silent_tried.id, query="кизару", created_at=NOW - timedelta(days=35)),
+            SearchQuery(user_id=recent.id, query="bones", created_at=NOW - timedelta(days=10)),
+            SearchQuery(user_id=premium.id, query="macan", created_at=NOW - timedelta(days=40)),
+            FunnelEvent(user_id=forgotten.id, step="start", created_at=NOW - timedelta(days=250)),
         ]
     )
     await session.commit()
 
     bot = FakeBot()
     report = await send_due_reminders(session, bot, now=NOW)
-    assert report.by_kind == {"comeback": 2}
     texts = {chat_id: text for chat_id, text, _ in bot.sent}
-    assert set(texts) == {2001, 2002}
+    # 10 дней тишины, действующий Premium, полгода молчания и новичок — мимо
+    assert report.by_kind == {"comeback": 2} and set(texts) == {2001, 2002}
     assert "7 дней Premium бесплатно" in texts[2001]  # не брал пробную неделю
     assert "название любого трека" in texts[2002]
 
     # Повтор таймера не пишет тем же людям второй раз
     assert (await send_due_reminders(session, bot, now=NOW + timedelta(hours=1))).by_kind == {}
-    # Через 5 дней «недавний» и «новичок» сами становятся молчащими — а первые двое нет
-    later = await send_due_reminders(session, bot, now=NOW + timedelta(days=5))
-    assert later.by_kind == {"comeback": 2}
-    assert {chat_id for chat_id, _, _ in bot.sent[-2:]} == {2003, 2006}
+    # «Недавний» доходит до 30 дней тишины позже и получает своё единственное письмо
+    later = await send_due_reminders(session, bot, now=NOW + timedelta(days=21))
+    assert later.by_kind == {"comeback": 1} and bot.sent[-1][0] == 2003
 
 
 async def test_skips_admins_and_far_dates(session, monkeypatch):
