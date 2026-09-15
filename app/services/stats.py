@@ -19,9 +19,12 @@ def _utcnow() -> datetime:
 LISTEN_DEDUP_SECONDS = 30
 
 
-async def record_event(session: AsyncSession, user_id: int, track_id: int, event: str) -> None:
+async def record_event(
+    session: AsyncSession, user_id: int, track_id: int, event: str, source: str = "unknown"
+) -> None:
     """event: listen | download. Коммитит.
-    Для listen — дедуп: повтор того же трека в пределах LISTEN_DEDUP_SECONDS не считается."""
+    Для listen — дедуп: повтор того же трека в пределах LISTEN_DEDUP_SECONDS не считается.
+    source — откуда (bot | miniapp | worker): пишется в журнал аналитики тем же коммитом."""
     if event == "listen":
         recent = await session.scalar(
             select(func.count())
@@ -36,6 +39,9 @@ async def record_event(session: AsyncSession, user_id: int, track_id: int, event
         if recent:
             return
     session.add(TrackEvent(user_id=user_id, track_id=track_id, event=event))
+    from app.services.analytics import build_event
+
+    session.add(build_event(event, source=source, user_id=user_id, track_id=track_id))
     await session.commit()
 
 

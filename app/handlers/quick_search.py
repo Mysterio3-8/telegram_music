@@ -168,6 +168,14 @@ async def quick_search(message: Message, state: FSMContext) -> None:
 
     status = await message.answer(t("quick.searching"))
     candidates = await search_with_cache(query)
+    # Сколько нашлось — ради доли пустых поисков в аналитике (15.09)
+    from app.services.analytics import track_event
+
+    async with session_factory() as session:
+        await track_event(
+            session, "search", source="bot", user_id=user.id,
+            props={"results": len(candidates or [])},
+        )
     if not candidates:
         await status.edit_text(t("quick.nothing"))
         return

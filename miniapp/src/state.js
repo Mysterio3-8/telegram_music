@@ -8,6 +8,14 @@ import {
 } from "./api.js";
 import { pushRecentTrack, getRecSettings } from "./prefs.js";
 import { isOffline, offlineBlobUrl } from "./offline.js";
+import { trackClient } from "./analytics.js";
+
+// Трек переключается сам по окончании — это не пропуск (аналитика 15.09)
+let advancingOnEnd = false;
+
+function currentQueueTrack() {
+  return state.queue && state.queueIndex >= 0 ? state.queue[state.queueIndex] : null;
+}
 
 // Плеер — настоящий <audio>: событие ended переключает следующий трек само,
 // без действий пользователя (ТЗ §3-4). Прогресс (timeupdate, ~4 раза/сек)
@@ -123,7 +131,14 @@ audio.addEventListener("timeupdate", () => {
 });
 
 audio.addEventListener("ended", () => {
-  playNext();
+  const finished = currentQueueTrack();
+  if (finished) trackClient("play_complete", { trackId: finished.id });
+  advancingOnEnd = true;
+  try {
+    playNext();
+  } finally {
+    advancingOnEnd = false;
+  }
 });
 
 audio.addEventListener("play", () => {
@@ -217,6 +232,7 @@ function applyScrollTop(value) {
 }
 
 export function navigateTo(screen, patch = {}) {
+  trackClient("screen_view", { props: { screen } });
   navStack[navStack.length - 1].scroll = readScrollTop();
   navStack.push({ screen, patch, scroll: 0 });
   Object.assign(state, patch);
@@ -442,6 +458,15 @@ export function togglePlay() {
 
 export function playNext() {
   if (!state.queue.length) return;
+  if (!advancingOnEnd) {
+    // Переключил сам раньше конца — пропуск; позиция в процентах говорит, «не зашло
+    // с первых секунд» это или «дослушал почти до конца»
+    const skipped = currentQueueTrack();
+    if (skipped && audio.currentTime > 0) {
+      const positionPct = audio.duration ? Math.round((audio.currentTime / audio.duration) * 100) : null;
+      trackClient("play_skip", { trackId: skipped.id, props: { position_pct: positionPct } });
+    }
+  }
   let next = state.queueIndex + 1;
   if (next >= state.queue.length) {
     // очередь закончилась — новая случайная из того же пула (ТЗ §5)

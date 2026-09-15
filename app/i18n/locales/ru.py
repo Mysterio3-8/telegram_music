@@ -48,6 +48,15 @@ MESSAGES: dict[str, str] = {
         "тексты песен, эквалайзер и офлайн-режим."
     ),
     "cabinet.price": "💎 {price} ₽/месяц • 7 дней бесплатно",
+    # --- напоминания «продлите Premium бесплатно» (app/services/reminders.py)
+    "remind.ends_in_4": "🎧 До конца Premium осталось {days} дн.\n\nПродлить его можно бесплатно:",
+    "remind.ends_tomorrow": "⏳ Завтра заканчивается Premium.\n\nПродлите его бесплатно:",
+    "remind.ended": "💎 Premium закончился — вернуть его можно бесплатно:",
+    "remind.referral_line": "🤝 Друзей до награды: {friends} → +{days} дн. Premium\nВаша ссылка: {link}",
+    "remind.achievement_line": "🏆 Ближайшее достижение «{title}»: {progress}/{target} → +{days} дн. Premium",
+    "remind.share_button": "🎁 Поделиться ссылкой",
+    "remind.open_player": "🎧 Открыть плеер",
+    "remind.share_text": "Слушаю музыку в Infinity Music — присоединяйся",
     "menu.player": "🎧 Открыть плеер",
     "menu.upload": "⬆️ Загрузить трек",
     "menu.premium": "💎 Открыть плеер — {price} ₽/мес",

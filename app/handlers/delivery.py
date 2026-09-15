@@ -117,7 +117,7 @@ async def send_track_audio(
                 return None
 
     if message is not None:
-        await record_event(session, user.id, track.id, event)
+        await record_event(session, user.id, track.id, event, source="bot")
         await _maybe_send_cover(bot, chat_id, user, track)
     return message
 

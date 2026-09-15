@@ -32,6 +32,8 @@ OPEN_ROUTES = {
     ("POST", "/premium/pay"),
     ("POST", "/premium/trial"),
     ("GET", "/premium/status"),
+    # аналитика: пэйвол и первые экраны видят как раз бесплатные (15.09)
+    ("POST", "/analytics/events"),
     ("POST", "/premium/autorenew"),
     ("POST", "/webhook/yookassa"),
     ("POST", "/webhook/cryptopay"),

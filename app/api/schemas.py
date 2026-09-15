@@ -87,6 +87,18 @@ class ArtistOut(BaseModel):
 
 class SearchLogIn(BaseModel):
     query: str
+    # Сколько нашлось — для доли пустых поисков в аналитике (старый клиент не шлёт)
+    results: int | None = Field(default=None, ge=0, le=10_000)
+
+
+class ClientEventIn(BaseModel):
+    name: str = Field(max_length=32)
+    track_id: int | None = Field(default=None, ge=-(2**62), le=2**62)
+    props: dict | None = None
+
+
+class ClientEventsIn(BaseModel):
+    events: list[ClientEventIn] = Field(max_length=50)
 
 
 class SearchArtistOut(BaseModel):

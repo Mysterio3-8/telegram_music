@@ -40,7 +40,8 @@ async def _record_listen(session, telegram_id: int, track_id: int) -> None:
 
     user = await get_user_by_telegram_id(session, telegram_id)
     if user is not None:
-        await record_event(session, user.id, track_id, "listen")
+        # worker: трек выдан фоновой задачей поиска (бот или Mini App поставили её)
+        await record_event(session, user.id, track_id, "listen", source="worker")
 
 
 async def _try_best_quality(

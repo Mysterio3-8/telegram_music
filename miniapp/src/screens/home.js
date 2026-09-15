@@ -71,9 +71,40 @@ function renderSubscription(state) {
   `;
 }
 
+// Для тех, у кого Premium идёт (в том числе пробная неделя): напоминание, что его
+// можно продлить бесплатно — друзьями и достижениями (владелец 15.09: «чтобы
+// больше было взаимодействий»). Цифры — с сервера, из профиля.
+function renderEarnDays(state) {
+  const profile = state.profile;
+  if (!profile || !profile.referral) return "";
+  const referral = profile.referral;
+  const nearest = (profile.achievements || [])
+    .filter((a) => !a.unlocked && a.reward_days > 0)
+    .sort((a, b) => b.progress / b.target - a.progress / a.target || a.target - b.target)[0];
+  const parts = [];
+  if (referral.next_reward_days > 0 && referral.to_next_reward > 0) {
+    parts.push(`+${referral.next_reward_days} дн. за друзей: ещё ${referral.to_next_reward}`);
+  }
+  if (nearest) {
+    parts.push(`«${nearest.title}» ${nearest.progress}/${nearest.target} → +${nearest.reward_days} дн.`);
+  }
+  if (!parts.length) return "";
+  return `
+    <button class="ref-teaser" data-action="open-referral">
+      <span class="ref-teaser__emoji">⏳</span>
+      <span class="ref-teaser__text">
+        <span class="ref-teaser__title">Продлите Premium бесплатно</span>
+        <span class="ref-teaser__sub">${parts.join(" · ")}</span>
+      </span>
+      ${icon("chevron")}
+    </button>
+  `;
+}
+
 // Рефералка на главной: заметная точка входа для не-Premium (запрос владельца)
 function renderReferralTeaser(state) {
-  if (!state.premium || state.premium.active) return "";
+  if (!state.premium) return "";
+  if (state.premium.active) return renderEarnDays(state);
   return `
     <button class="ref-teaser" data-action="open-referral">
       <span class="ref-teaser__emoji">🎁</span>

@@ -249,6 +249,11 @@ export function logSearchQuery(query) {
   return request("/search/log", { method: "POST", body: JSON.stringify({ query }) }).catch(() => {});
 }
 
+// Пачка событий аналитики (analytics.js копит и шлёт раз в несколько секунд)
+export function sendAnalyticsEvents(events) {
+  return request("/analytics/events", { method: "POST", body: JSON.stringify({ events }) });
+}
+
 // «Скачать»: бот присылает аудиофайл в чат пользователя (ТЗ §9)
 export function sendTrackToChat(trackId) {
   return request(`/tracks/${trackId}/send`, { method: "POST" });

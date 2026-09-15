@@ -67,6 +67,20 @@ class BotApi:
             raise BotApiError(f"{method}: {description or f'HTTP {status}'}")
         return payload.get("result")
 
+    async def send_message(
+        self, chat_id: int | str, text: str, reply_markup: dict | None = None
+    ) -> dict:
+        """sendMessage без превью ссылок. Ошибка Telegram — BotApiError с его описанием
+        («Forbidden: bot was blocked by the user» и т.п.)."""
+        params: dict = {
+            "chat_id": chat_id,
+            "text": text,
+            "link_preview_options": {"is_disabled": True},
+        }
+        if reply_markup:
+            params["reply_markup"] = reply_markup
+        return await self._call("sendMessage", **params)
+
     async def get_me(self) -> SimpleNamespace:
         return SimpleNamespace(**await self._call("getMe"))
 

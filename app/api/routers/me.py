@@ -366,6 +366,12 @@ async def log_search(
 ) -> None:
     """Mini App фиксирует «закоммиченный» запрос — сырьё для популярных (ТЗ §11)."""
     await log_search_query(session, user.id, payload.query)
+    from app.services.analytics import track_event
+
+    await track_event(
+        session, "search", source="miniapp", user_id=user.id,
+        props={"results": payload.results} if payload.results is not None else None,
+    )
 
 
 @router.get("/search/popular", response_model=list[str])
@@ -451,7 +457,7 @@ async def send_track_to_chat(
     )
     if not sent:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Не удалось отправить файл")
-    await record_event(session, user.id, track_id, "download")
+    await record_event(session, user.id, track_id, "download", source="miniapp")
 
 
 @router.get("/albums", response_model=list[AlbumOut])
@@ -630,7 +636,7 @@ async def record_listen(
     """Mini App отмечает старт воспроизведения — сырьё для достижений/статистики."""
     if await get_track(session, track_id) is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Трек не найден")
-    await record_event(session, user.id, track_id, "listen")
+    await record_event(session, user.id, track_id, "listen", source="miniapp")
 
 
 @router.get("/tracks/{track_id}/lyrics", response_model=LyricsOut)

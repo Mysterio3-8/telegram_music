@@ -512,6 +512,47 @@ class SearchQuery(Base):
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
 
+class AnalyticsEvent(Base):
+    """Сырьё аналитики (владелец 15.09: «собирать всё подряд — бизнес,
+    прослушивания, жанры, настроения — чтобы анализировать и улучшать»).
+
+    Один журнал на всё: имя события, откуда оно (bot | miniapp | worker | system),
+    кто, какой трек и свойства JSON-строкой. Жанр и настроение не копируются —
+    они джойнятся из треков в отчёте, так правка тегов задним числом не врёт.
+    Список имён и источников — app/services/analytics.py."""
+
+    __tablename__ = "analytics_events"
+    __table_args__ = (
+        Index("ix_analytics_events_name_created", "name", "created_at"),
+        Index("ix_analytics_events_user_created", "user_id", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(32))
+    source: Mapped[str] = mapped_column(String(12))
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    track_id: Mapped[int | None] = mapped_column(ForeignKey("tracks.id"))
+    props: Mapped[str | None] = mapped_column(String(1024))
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
+class UserReminder(Base):
+    """Отправленное напоминание (15.09): «Premium можно продлить бесплатно —
+    друзья и достижения». anchor — дата окончания Premium, к которой относится
+    напоминание: одно сообщение на человека, вид и срок, повтор таймера не дублирует."""
+
+    __tablename__ = "user_reminders"
+    __table_args__ = (
+        Index("uq_user_reminders_user_kind_anchor", "user_id", "kind", "anchor", unique=True),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(24))
+    anchor: Mapped[str] = mapped_column(String(16))
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
 class FunnelEvent(Base):
     """Первое прохождение шага воронки новичка (15.09). Одна строка на пользователя
     и шаг: замер 15.09 показал, что 46% подписавшихся уходят из кабинета, а куда

@@ -13,6 +13,9 @@ ExecStart=/opt/tg-music-bot/.venv/bin/python -m app.cli.artists bind-tracks
 # ExecStart=/opt/tg-music-bot/.venv/bin/python -m app.cli.genres make-playlists
 # Автопродление Premium (блок E): списание с сохранённых способов у истекающих подписок
 ExecStart=/opt/tg-music-bot/.venv/bin/python -m app.cli.autorenew
+# Напоминания «продлите Premium бесплатно» — после автопродления (продлённым не пишем).
+# «-»: сбой Telegram не должен останавливать ремонт каталога и прогрев ниже.
+ExecStart=-/opt/tg-music-bot/.venv/bin/python -m app.cli.reminders
 # Защита диска (инцидент 2026-07-26): чистим брошенный temp yt-dlp старше 2 часов
 ExecStart=/bin/sh -c "find /tmp -mindepth 1 -maxdepth 1 -mmin +120 -exec rm -rf {} + 2>/dev/null || true"
 # Сторож диска: кэш аудио вытесняет себя только при записи, поэтому диск, забитый

@@ -5,6 +5,7 @@ from fastapi.responses import JSONResponse
 from app.api.ratelimit import RateLimitMiddleware
 
 from app.api.routers import (
+    analytics,
     audio,
     auth,
     catalog,
@@ -40,6 +41,7 @@ def create_app() -> FastAPI:
     app.include_router(subscription.router)
     app.include_router(contests.router)
     app.include_router(live_search.router)
+    app.include_router(analytics.router)
 
     @app.exception_handler(OverflowError)
     async def id_out_of_range(request: Request, exc: OverflowError) -> JSONResponse:

@@ -1,3 +1,4 @@
+import { trackClient } from "./analytics.js";
 import {
   addToLibrary,
   createPaymentLink,
@@ -287,6 +288,8 @@ function render() {
   if (state.premium && !state.premium.active) {
     const paywallHtml = renderPaywall(state);
     if (paywallHtml !== lastHtml) {
+      // Показ пэйвола — один раз при переходе на него, не на каждую перерисовку
+      if (!lastHtml || !lastHtml.includes('class="paywall"')) trackClient("paywall_view");
       lastHtml = paywallHtml;
       root.innerHTML = paywallHtml;
     }
@@ -1301,6 +1304,7 @@ root.addEventListener("click", (event) => {
     case "invite-friend": {
       const profile = getState().profile;
       if (!profile) break;
+      trackClient("share_click", { props: { kind: "referral" } });
       const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(profile.referral.link)}&text=${encodeURIComponent("Слушай музыку в Infinity Music 🎧")}`;
       if (tg) tg.openTelegramLink(shareUrl);
       else window.open(shareUrl, "_blank");
@@ -1711,6 +1715,7 @@ root.addEventListener("click", (event) => {
     case "share": {
       const track = findTrack(id);
       if (track) {
+        trackClient("share_click", { trackId: track.id, props: { kind: "track" } });
         const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(`https://t.me/${BOT_USERNAME}?start=track_${track.id}`)}&text=${encodeURIComponent(`${track.artist} — ${track.title}`)}`;
         if (tg) tg.openTelegramLink(shareUrl);
         else window.open(shareUrl, "_blank");
