@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import TYPE_CHECKING
 
@@ -196,11 +197,25 @@ async def import_instrumental_via_telegram_mint(
     return instrumental, True
 
 
+_NOT_COMPUTED = object()
+
+
 async def import_user_track(
-    session: AsyncSession, storage: StorageBackend, user_id: int, item: ImportItem
+    session: AsyncSession,
+    storage: StorageBackend,
+    user_id: int,
+    item: ImportItem,
+    *,
+    fingerprint: "str | None | object" = _NOT_COMPUTED,
 ) -> Track:
-    """Загрузка трека через API: дедуп, создание в базе, привязка к библиотеке пользователя."""
-    fingerprint = compute_fingerprint_from_bytes(item.data, suffix=f".{item.file_format or 'audio'}")
+    """Загрузка трека через API: дедуп, создание в базе, привязка к библиотеке пользователя.
+
+    fingerprint — уже посчитанный отпечаток (API считает его по временному файлу в
+    пуле потоков). Не передан — считается здесь, синхронно."""
+    if fingerprint is _NOT_COMPUTED:
+        fingerprint = compute_fingerprint_from_bytes(
+            item.data, suffix=f".{item.file_format or 'audio'}"
+        )
 
     track = None
     if fingerprint:
@@ -222,7 +237,8 @@ async def import_user_track(
         )
         session.add(track)
         await session.flush()
-        track.storage_path = storage.save(f"tracks/{track.id}", item.data)
+        # В потоке: запись 50 МБ на диск или в S3 не должна стопорить event loop API.
+        track.storage_path = await asyncio.to_thread(storage.save, f"tracks/{track.id}", item.data)
 
     if await session.get(UserLibrary, (user_id, track.id)) is None:
         session.add(UserLibrary(user_id=user_id, track_id=track.id))

@@ -120,6 +120,89 @@ async def test_upload_refused_when_all_slots_busy(client):
     assert response.headers["retry-after"] == "60"
 
 
+def _wav_bytes(seconds: int = 2) -> bytes:
+    import io
+    import wave
+
+    buffer = io.BytesIO()
+    with wave.open(buffer, "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(8000)
+        wav.writeframes(b"\x00\x00" * 8000 * seconds)
+    return buffer.getvalue()
+
+
+class _MemoryStorage:
+    def __init__(self) -> None:
+        self.saved: dict[str, int] = {}
+
+    def save(self, key: str, data: bytes) -> str:
+        self.saved[key] = len(data)
+        return f"memory://{key}"
+
+
+def test_upload_streams_to_temp_file_and_offloads_heavy_work(client, monkeypatch, tmp_path):
+    """Цикл 8: отпечаток (fpcalc) и длительность — в пуле потоков, а не в event
+    loop; временный файл убирается; байты доходят до хранилища целиком."""
+    import asyncio
+    import tempfile
+
+    from app.api.routers import me
+    from app.services import fingerprint
+
+    spool = tmp_path / "spool"
+    spool.mkdir()
+    monkeypatch.setattr(tempfile, "tempdir", str(spool))
+    storage = _MemoryStorage()
+    monkeypatch.setattr(me, "get_storage", lambda: storage)
+    seen = {}
+
+    def fake_fingerprint(path: str) -> str:
+        seen["path_exists"] = __import__("os").path.exists(path)
+        try:
+            asyncio.get_running_loop()
+            seen["in_event_loop"] = True
+        except RuntimeError:
+            seen["in_event_loop"] = False
+        return "FP-UPLOAD"
+
+    monkeypatch.setattr(fingerprint, "compute_fingerprint", fake_fingerprint)
+    data = _wav_bytes()
+    response = client.post(
+        "/upload",
+        headers=_auth(),
+        data={"title": "Своя", "artist": "Автор"},
+        files={"file": ("mine.wav", data, "audio/wav")},
+    )
+    assert response.status_code == 201, response.text
+    assert response.json()["duration"] == 2
+    assert seen == {"path_exists": True, "in_event_loop": False}
+    assert list(storage.saved.values()) == [len(data)]
+    assert list(spool.iterdir()) == []
+
+
+def test_upload_over_limit_is_400_and_leaves_no_temp(client, monkeypatch, tmp_path):
+    import tempfile
+
+    from app.api.routers import me
+    from app.config import settings
+
+    spool = tmp_path / "spool"
+    spool.mkdir()
+    monkeypatch.setattr(tempfile, "tempdir", str(spool))
+    monkeypatch.setattr(settings, "max_file_size_mb", 0)
+    monkeypatch.setattr(me, "get_storage", lambda: _MemoryStorage())
+    response = client.post(
+        "/upload",
+        headers=_auth(),
+        data={"title": "T", "artist": "A"},
+        files={"file": ("big.wav", _wav_bytes(), "audio/wav")},
+    )
+    assert response.status_code == 400
+    assert list(spool.iterdir()) == []
+
+
 def test_static_lists_are_cacheable(client):
     genres = client.get("/genres", headers=_auth())
     artists = client.get("/artists", headers=_auth())

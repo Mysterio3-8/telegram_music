@@ -37,7 +37,7 @@ from app.config import settings
 from app.db.models import Playlist, Track, User
 from app.i18n import LANGUAGES, is_translated
 from app.importers.base import ImportItem
-from app.services.audio import duration_from_bytes
+from app.services.audio import duration_from_path
 from app.services.catalog_import import import_user_track
 from app.services.gamification import (
     REFERRAL_MILESTONES,
@@ -532,9 +532,10 @@ async def upload_track(
     if file_format is None:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Неподдерживаемый формат")
 
-    # Файл до 50 МБ живёт в памяти целиком (отпечаток, теги и архив берут байты),
-    # поэтому одновременных загрузок не больше UPLOAD_SLOTS: десять разом — это
-    # полгигабайта на боксе с 961 МБ. Лишнему — честный отказ, а не OOM всем.
+    # Байты файла до 50 МБ всё ещё поднимаются в память один раз (хранилище берёт
+    # bytes), а fpcalc занимает поток, поэтому одновременных загрузок не больше
+    # UPLOAD_SLOTS: десять разом — это полгигабайта на боксе с 961 МБ. Лишнему —
+    # честный отказ, а не OOM всем.
     if _upload_slots.locked():
         raise HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -549,19 +550,43 @@ async def _receive_upload(
     session: AsyncSession, user: User, file: UploadFile, file_format: str, title: str, artist: str
 ) -> TrackOut:
 
-    # Кусками с остановкой на потолке: file.read() целиком тянул в память весь
-    # присланный файл ещё до проверки размера.
-    limit = settings.max_file_size_mb * 1024 * 1024
-    buffer = bytearray()
-    while chunk := await file.read(1024 * 1024):
-        buffer.extend(chunk)
-        if len(buffer) > limit:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Файл больше {settings.max_file_size_mb} МБ")
-    data = bytes(buffer)
+    import tempfile
+    from pathlib import Path
 
-    duration = duration_from_bytes(data, suffix=f".{file_format}")
-    if duration <= 0:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Не удалось прочитать аудио")
+    from starlette.concurrency import run_in_threadpool
+
+    from app.services.fingerprint import compute_fingerprint
+
+    # 🔴 Цикл 8, 15.09. Раньше файл копился в bytearray и копировался в bytes —
+    # две копии до 50 МБ разом, а длительность (mutagen), отпечаток (fpcalc через
+    # subprocess.run) и запись в хранилище шли синхронно прямо в event loop: пока
+    # одна загрузка считала отпечаток, Mini App стоял у всех. Теперь поток пишется
+    # во временный файл с остановкой на потолке, тяжёлое — в пуле потоков, а байты
+    # поднимаются в память один раз, только для хранилища.
+    limit = settings.max_file_size_mb * 1024 * 1024
+    with tempfile.NamedTemporaryFile(suffix=f".{file_format}", delete=False) as tmp:
+        tmp_path = Path(tmp.name)
+        size = 0
+        try:
+            while chunk := await file.read(1024 * 1024):
+                size += len(chunk)
+                if size > limit:
+                    raise HTTPException(
+                        status.HTTP_400_BAD_REQUEST, f"Файл больше {settings.max_file_size_mb} МБ"
+                    )
+                tmp.write(chunk)
+        except BaseException:
+            tmp.close()
+            tmp_path.unlink(missing_ok=True)
+            raise
+    try:
+        duration = await run_in_threadpool(duration_from_path, tmp_path)
+        if duration <= 0:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Не удалось прочитать аудио")
+        fingerprint = await run_in_threadpool(compute_fingerprint, str(tmp_path))
+        data = await run_in_threadpool(tmp_path.read_bytes)
+    finally:
+        tmp_path.unlink(missing_ok=True)
 
     item = ImportItem(
         title=title.strip(),
@@ -570,7 +595,7 @@ async def _receive_upload(
         data=data,
         file_format=file_format,
     )
-    return await import_user_track(session, get_storage(), user.id, item)
+    return await import_user_track(session, get_storage(), user.id, item, fingerprint=fingerprint)
 
 
 def _premium_status_out(user: User) -> PremiumStatusOut:
