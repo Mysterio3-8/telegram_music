@@ -9,7 +9,13 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.api.app import create_app
 from app.api.deps import get_db
 from app.api.security import create_access_token
-from app.cli.analytics import build_analytics_report, format_report
+from app.cli.analytics import (
+    build_analytics_report,
+    export_events_csv,
+    format_report,
+    split_message,
+    split_sessions,
+)
 from app.db import models  # noqa: F401
 from app.db.base import Base
 from app.db.models import (
@@ -72,6 +78,45 @@ async def test_report_counts_people_listens_genres_moods_and_money(session):
     assert report.premium_active == 1 and report.trials_total == 1
     text = format_report(report)
     assert "Хип-хоп 3" in text and "пустых 1 (50%)" in text
+
+
+def test_split_sessions_by_half_hour_gap():
+    t = NOW
+    times = [t, t + timedelta(minutes=5), t + timedelta(minutes=20), t + timedelta(hours=2)]
+    assert split_sessions(times) == [20 * 60, 0]
+    assert split_sessions([]) == []
+
+
+def test_split_message_respects_telegram_limit():
+    text = "\n".join(["x" * 30] * 400)
+    chunks = split_message(text, limit=1000)
+    assert all(len(c) <= 1000 for c in chunks)
+    assert "\n".join(chunks) == text
+
+
+async def test_report_sessions_and_csv_export(session, tmp_path):
+    user = User(telegram_id=7, created_at=NOW - timedelta(days=2))
+    session.add(user)
+    await session.flush()
+    stamps = [("app_open", 0), ("screen_view", 3), ("play_complete", 9), ("app_open", 120)]
+    events = [build_event(name, source="miniapp", user_id=user.id, props={"screen": "дом"}) for name, _ in stamps]
+    session.add_all(events)
+    await session.commit()
+    for event, (_, minutes) in zip(events, stamps):
+        event.created_at = NOW - timedelta(hours=3) + timedelta(minutes=minutes)
+    await session.commit()
+
+    report = await build_analytics_report(session, days=7, now=NOW)
+    assert report.app_opens == 2
+    assert (report.sessions, report.session_users) == (2, 1)
+    assert report.session_avg_sec == 9 * 60 // 2
+    assert "сессий 2 у 1" in format_report(report)
+
+    path = tmp_path / "events.csv"
+    assert await export_events_csv(session, 7, str(path), now=NOW) == 4
+    content = path.read_text(encoding="utf-8-sig")
+    assert content.splitlines()[0] == "created_at,name,source,user_id,track_id,props"
+    assert "дом" in content
 
 
 @pytest_asyncio.fixture

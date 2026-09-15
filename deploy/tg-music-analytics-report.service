@@ -1,0 +1,10 @@
+[Unit]
+Description=Telegram Music Bot — еженедельный отчёт аналитики владельцу в Telegram
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/tg-music-bot
+Nice=10
+# Отчёт за 7 дней уходит дежурному админу (HEALTH_ALERT_CHAT, иначе первый из ADMIN_IDS).
+ExecStart=/opt/tg-music-bot/.venv/bin/python -m app.cli.analytics --days 7 --send

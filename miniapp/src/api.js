@@ -245,8 +245,9 @@ export function getPopularQueries() {
   return request("/search/popular");
 }
 
-export function logSearchQuery(query) {
-  return request("/search/log", { method: "POST", body: JSON.stringify({ query }) }).catch(() => {});
+// results — сколько нашлось (null, если поиск упал): доля пустых поисков в аналитике
+export function logSearchQuery(query, results = null) {
+  return request("/search/log", { method: "POST", body: JSON.stringify({ query, results }) }).catch(() => {});
 }
 
 // Пачка событий аналитики (analytics.js копит и шлёт раз в несколько секунд)

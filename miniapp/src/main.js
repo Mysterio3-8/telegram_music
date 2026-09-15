@@ -749,6 +749,29 @@ async function openCollection(title, type, fetcher) {
 let searchTimer = null;
 let searchSeq = 0;
 
+// Открытие приложения — начало сессии для отчёта аналитики (длительность считает
+// сервер по промежуткам между событиями). Уйдёт первой пачкой, когда будет токен.
+trackClient("app_open");
+
+// Запрос логируется с числом результатов, а оно известно только после ответа.
+// Enter нажали, пока поиск шёл, — запоминаем и логируем по приходу выдачи.
+let pendingSearchLog = null;
+
+function commitSearchLog(value) {
+  const state = getState();
+  if (state.searchStatus === "done" && (state.searchQuery || "").trim() === value) {
+    logSearchQuery(value, state.searchTotal || 0);
+  } else {
+    pendingSearchLog = value;
+  }
+}
+
+function settleSearchLog(query, results) {
+  if (pendingSearchLog === null || pendingSearchLog !== query.trim()) return;
+  pendingSearchLog = null;
+  logSearchQuery(query.trim(), results);
+}
+
 function scheduleSearch(query) {
   const state = getState();
   state.searchQuery = query;
@@ -769,6 +792,7 @@ function scheduleSearch(query) {
           searchResults: page.items, searchTotal: page.total,
           searchSections: null, searchStatus: "done",
         });
+        settleSearchLog(query, page.total || 0);
         return;
       }
       // Треки берём живьём из источников, артистов/альбомы/плейлисты — из базы.
@@ -785,12 +809,14 @@ function scheduleSearch(query) {
         searchTotal: live.items.length,
         searchStatus: "done",
       });
+      settleSearchLog(query, live.items.length);
     } catch {
       if (seq !== searchSeq) return;
       mutateSearch({
         searchResults: [], liveResults: [], searchSections: null,
         searchTotal: 0, searchStatus: "done",
       });
+      settleSearchLog(query, null); // поиск упал — «пусто» здесь не ответ источника
     }
   }, 300);
 }
@@ -834,7 +860,7 @@ function runSearch(query) {
   const input = root.querySelector('[data-role="search-input"]');
   if (input) input.value = value;
   pushRecentSearch(value);
-  logSearchQuery(value);
+  pendingSearchLog = value; // лог уйдёт с числом результатов, когда поиск ответит
   scheduleSearch(value);
 }
 
@@ -1828,7 +1854,7 @@ root.addEventListener("keydown", (event) => {
     const value = event.target.value.trim();
     if (value) {
       pushRecentSearch(value);
-      logSearchQuery(value);
+      commitSearchLog(value);
     }
     event.target.blur();
   }

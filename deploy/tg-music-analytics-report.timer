@@ -1,0 +1,10 @@
+[Unit]
+Description=Еженедельный отчёт аналитики — понедельник 09:00 МСК
+
+[Timer]
+# 06:00 UTC = 09:00 МСК: вне ночного окна нагрузки 03:00–05:00 и до начала дня владельца
+OnCalendar=Mon *-*-* 06:00:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

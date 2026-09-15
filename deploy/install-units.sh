@@ -94,6 +94,9 @@ systemctl enable --now tg-music-ton-check.timer
 # из GitHub Actions, который падал во всех прогонах).
 mkdir -p /var/lib/tg-music-deploy
 systemctl enable --now tg-music-pull-deploy.timer
+
+# Еженедельный отчёт аналитики владельцу в Telegram (15.09)
+systemctl enable --now tg-music-analytics-report.timer
 # Только включённые: массовый парсер (tg-music-soundcloud, tg-music-youtube)
 # выключен решением владельца 27.07 — поднимать его здесь значило бы тихо
 # отменять это решение и занимать 180 МБ из 961 МБ на боксе.

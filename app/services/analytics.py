@@ -29,6 +29,7 @@ EVENT_NAMES = frozenset(
         "play_complete",   # Mini App: дослушал до конца
         "play_skip",       # Mini App: переключил раньше конца (props.position_pct)
         # поиск и навигация
+        "app_open",        # Mini App: открыли приложение (начало сессии)
         "search",          # запрос (props.results — сколько нашлось, если известно)
         "screen_view",     # Mini App: открыт экран (props.screen)
         # рост и деньги

@@ -15,7 +15,9 @@ from app.services.analytics import build_event
 
 router = APIRouter(tags=["analytics"])
 
-CLIENT_EVENTS = frozenset({"play_complete", "play_skip", "screen_view", "share_click", "paywall_view"})
+CLIENT_EVENTS = frozenset(
+    {"app_open", "play_complete", "play_skip", "screen_view", "share_click", "paywall_view"}
+)
 
 
 @router.post("/analytics/events", status_code=status.HTTP_204_NO_CONTENT)

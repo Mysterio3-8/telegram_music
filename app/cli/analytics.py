@@ -70,6 +70,34 @@ class AnalyticsReport:
     reminders_returned: tuple[int, int] = (0, 0)  # (вернулись за 48 ч, отправлено)
     paywall_views: int = 0
     shares: int = 0
+    app_opens: int = 0
+    sessions: int = 0
+    session_users: int = 0
+    session_median_sec: int = 0
+    session_avg_sec: int = 0
+
+
+# Пауза дольше получаса между событиями Mini App — это уже новая сессия
+SESSION_GAP = timedelta(minutes=30)
+
+
+def split_sessions(times: list[datetime]) -> list[int]:
+    """Длительности сессий в секундах по отсортированным меткам событий одного человека."""
+    durations: list[int] = []
+    start = prev = None
+    for at in sorted(times):
+        if prev is None or at - prev > SESSION_GAP:
+            if start is not None:
+                durations.append(int((prev - start).total_seconds()))
+            start = at
+        prev = at
+    if start is not None:
+        durations.append(int((prev - start).total_seconds()))
+    return durations
+
+
+def _short(text: str, limit: int = 60) -> str:
+    return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
 def _utcnow() -> datetime:
@@ -160,9 +188,33 @@ async def build_analytics_report(session, days: int, now: datetime | None = None
     report.skips = per_name["play_skip"]
     report.paywall_views = per_name["paywall_view"]
     report.shares = per_name["share_click"]
+    report.app_opens = per_name["app_open"]
+
+    # Сессии Mini App: все его события (включая серверный listen с source=miniapp).
+    # Сессия из одного события длится 0 сек — открыл и закрыл, это тоже ответ.
+    miniapp_rows = (
+        await session.execute(
+            select(AnalyticsEvent.user_id, AnalyticsEvent.created_at).where(
+                AnalyticsEvent.source == "miniapp",
+                AnalyticsEvent.created_at >= since,
+                AnalyticsEvent.user_id.is_not(None),
+            )
+        )
+    ).all()
+    per_user_times: dict[int, list[datetime]] = {}
+    for user_id, at in miniapp_rows:
+        per_user_times.setdefault(user_id, []).append(at)
+    durations = sorted(d for times in per_user_times.values() for d in split_sessions(times))
+    report.sessions = len(durations)
+    report.session_users = len(per_user_times)
+    if durations:
+        report.session_median_sec = durations[len(durations) // 2]
+        report.session_avg_sec = sum(durations) // len(durations)
 
     report.top_tracks = [
-        (f"{artist} — {title}", count)
+        # Имена из источников бывают на 200 символов (замер прода 15.09) — режем,
+        # иначе один мусорный трек съедает сообщение отчёта в Telegram
+        (_short(f"{artist} — {title}"), count)
         for artist, title, count in (
             await session.execute(
                 select(Track.artist, Track.title, func.count())
@@ -287,6 +339,52 @@ def _pct(part: int, whole: int) -> str:
     return f"{part * 100 // whole}%" if whole else "—"
 
 
+def _mins(seconds: int) -> str:
+    return f"{seconds // 60} мин {seconds % 60} сек"
+
+
+CSV_COLUMNS = ("created_at", "name", "source", "user_id", "track_id", "props")
+
+
+async def export_events_csv(session, days: int, path: str, now: datetime | None = None) -> int:
+    """Сырые события аналитики за окно — в CSV для таблиц. user_id внутренний, не Telegram."""
+    import csv
+
+    since = (now or _utcnow()) - timedelta(days=days)
+    rows = (
+        await session.execute(
+            select(*(getattr(AnalyticsEvent, c) for c in CSV_COLUMNS))
+            .where(AnalyticsEvent.created_at >= since)
+            .order_by(AnalyticsEvent.created_at)
+        )
+    ).all()
+    # utf-8-sig: Excel иначе показывает кириллицу в props кракозябрами
+    with open(path, "w", newline="", encoding="utf-8-sig") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(CSV_COLUMNS)
+        writer.writerows(rows)
+    return len(rows)
+
+
+TELEGRAM_LIMIT = 4000
+
+
+def split_message(text: str, limit: int = TELEGRAM_LIMIT) -> list[str]:
+    """Режем по строкам: у Telegram потолок 4096 символов на сообщение."""
+    chunks: list[str] = []
+    current = ""
+    for line in text.split("\n"):
+        line = line[:limit]
+        if current and len(current) + 1 + len(line) > limit:
+            chunks.append(current)
+            current = line
+        else:
+            current = f"{current}\n{line}" if current else line
+    if current:
+        chunks.append(current)
+    return chunks
+
+
 def format_report(r: AnalyticsReport) -> str:
     lines = [
         f"=== Аналитика за {r.days} дн. ===",
@@ -300,6 +398,8 @@ def format_report(r: AnalyticsReport) -> str:
         "ПРОСЛУШИВАНИЯ",
         f"  {r.listens} прослушиваний у {r.listeners} человек, скачиваний {r.downloads}",
         f"  по источникам: {r.listens_by_source or '—'}",
+        f"  Mini App: открытий {r.app_opens}, сессий {r.sessions} у {r.session_users} человек, "
+        f"длина медиана {_mins(r.session_median_sec)}, в среднем {_mins(r.session_avg_sec)}",
         f"  Mini App: дослушали {r.completes}, пропустили {r.skips} ({_pct(r.skips, r.completes + r.skips)} пропусков)",
         "  топ треков: " + ("; ".join(f"{n} ×{c}" for n, c in r.top_tracks) or "—"),
         "  жанры: " + (", ".join(f"{n} {c}" for n, c in r.top_genres) or "—"),
@@ -322,16 +422,38 @@ def format_report(r: AnalyticsReport) -> str:
     return "\n".join(lines)
 
 
-async def _main(days: int) -> None:
+async def _main(days: int, csv_path: str | None, send: bool) -> int:
     async with session_factory() as session:
         report = await build_analytics_report(session, days)
-    print(format_report(report))
+        if csv_path:
+            count = await export_events_csv(session, days, csv_path)
+            print(f"CSV: {count} событий → {csv_path}")
+    text = format_report(report)
+    print(text)
+    if not send:
+        return 0
+    from app.config import settings
+    from app.services.telegram_send import send_message
+
+    chat_id = settings.health_alert_id
+    if chat_id is None:
+        print("Отправка: не задан ни HEALTH_ALERT_CHAT, ни ADMIN_IDS")
+        return 1
+    for chunk in split_message(f"📊 {text}"):
+        if not await send_message(chat_id, chunk):
+            print("Отправка в Telegram не удалась — подробности в журнале")
+            return 1
+    print(f"Отчёт отправлен в чат {chat_id}")
+    return 0
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--days", type=int, default=30)
-    asyncio.run(_main(parser.parse_args().days))
+    parser.add_argument("--csv", metavar="PATH", help="выгрузить сырые события за окно в CSV")
+    parser.add_argument("--send", action="store_true", help="отправить отчёт дежурному админу в Telegram")
+    args = parser.parse_args()
+    raise SystemExit(asyncio.run(_main(args.days, args.csv, args.send)))
 
 
 if __name__ == "__main__":
