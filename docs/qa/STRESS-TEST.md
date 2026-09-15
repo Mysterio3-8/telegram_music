@@ -273,8 +273,22 @@ ssh -i "C:/Users/Илья/.ssh/id_ed25519" -o UserKnownHostsFile="C:/Users/Ил�
    `/root/env-backups` (решение владельца, не удалять самому).
 8. ~~План масштабирования 100 → 1 млн пользователей~~ ✅ [SCALING-PLAN.md](SCALING-PLAN.md).
    Из него в очередь: ~~аудио через nginx `X-Accel-Redirect`~~ ✅ цикл 6.
-9. **API держит ~180 МБ анонимной памяти** на свежем старте (замер 14.09).
-   Замер импортов (`tracemalloc`, аллокации Python, итого 91.5 МБ):
+9. ~~**API держит ~180 МБ анонимной памяти**~~ ✅ **цикл 7, 15.09, `8c85828`.**
+   Сделано: `services/bot_api.py` (aiohttp: getChatMember, getMe, getFile +
+   скачивание; токен не попадает в текст ошибок), `tasks/queue_client.py`
+   (`send_task` по имени без импорта модулей задач), вынесены
+   `track_lookup/metadata.py` и `playlist_transfer/locks.py`, aiogram в
+   `catalog_import`/`subscription` — только лениво или в TYPE_CHECKING.
+   Статусы участника сравниваются строкой: ⚠️ у enum aiogram хэш от ИМЕНИ,
+   `ChatMemberStatus.MEMBER in {"member"}` молча даёт False.
+   Замеры: Python-аллокации импорта 91.5 → **58.2 МБ**; прод, API (RssAnon+VmSwap)
+   ≈186 МБ до → **≈76 МБ** после свежего старта; aiogram в `/proc/PID/maps` — 0.
+   Выкатка автодеплоем: 0 ошибок / 0 5xx, аудио 206/403/404 проверено.
+   Стерегут: `test_api_process_imports.py` (API не грузит aiogram; имена и
+   очереди задач = воркер), `test_bot_api.py`. Осталось: yt-dlp (+9 МБ) всё ещё
+   в API — первым его импортирует `services/soundcloud.py` (проверено трассировкой
+   `__import__`); отдельный пункт, если понадобится.
+   Исходный замер импортов (`tracemalloc`, аллокации Python, итого 91.5 МБ):
    **aiogram.types+methods +38.4 МБ (42%)**, fastapi+sqlalchemy+pydantic
    +26.5 МБ, остальной код +17.4 МБ, yt-dlp всего +9.2 МБ. По времени импорта
    (`-X importtime`) aiogram — 6.5 из 8.6 сек. ⚠️ Первая гипотеза «виноват
