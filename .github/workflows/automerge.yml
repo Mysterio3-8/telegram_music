@@ -20,6 +20,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  actions: write  # запуск тестов по коммиту слияния (gh workflow run)
 
 concurrency:
   group: automerge-${{ github.event.pull_request.number }}
@@ -90,10 +91,7 @@ jobs:
           # --delete-branch: отработавшие ветки не копятся.
           gh pr merge "$PR" --repo "$REPO" --squash --delete-branch
           echo "PR #$PR слит в main"
-
-  deploy:
-    needs: merge
-    # Выкатку зовём явно: слияние под GITHUB_TOKEN не порождает push, и ждать
-    # его было бы ожиданием того, чего не произойдёт.
-    uses: ./.github/workflows/deploy.yml
-    secrets: inherit
+          # Тесты по коммиту слияния зовём явно: слияние под GITHUB_TOKEN не
+          # порождает push. Без зелёных тестов ИМЕННО этого коммита сервер его
+          # не выкатит (deploy/pull-deploy.sh).
+          gh workflow run deploy.yml --repo "$REPO" --ref main

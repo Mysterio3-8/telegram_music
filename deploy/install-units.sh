@@ -89,6 +89,11 @@ systemctl enable --now tg-music-health.timer
 # Разбор входящих TON-переводов. Нужен только прямому переводу на кошелёк:
 # у Crypto Pay есть вебхук, и ему таймер ни к чему.
 systemctl enable --now tg-music-ton-check.timer
+
+# Автодеплой: сервер сам забирает main после зелёных тестов (15.09, вместо SSH
+# из GitHub Actions, который падал во всех прогонах).
+mkdir -p /var/lib/tg-music-deploy
+systemctl enable --now tg-music-pull-deploy.timer
 # Только включённые: массовый парсер (tg-music-soundcloud, tg-music-youtube)
 # выключен решением владельца 27.07 — поднимать его здесь значило бы тихо
 # отменять это решение и занимать 180 МБ из 961 МБ на боксе.

@@ -1,30 +1,26 @@
-# Автодеплой: пуш в main → тесты → выкатка на VPS.
+# Тесты на каждый пуш в main. Выкатку отсюда больше НЕ делаем.
 #
-# Тесты гоняются здесь, на раннере GitHub, а не на сервере. Это принципиально:
-# на VPS одно ядро и 961 МБ, и прогон 658 тестов там отнимал бы ресурс у живых
-# пользователей. Здесь он бесплатный и никого не трогает.
+# 🔴 15.09: шаг «Выкатка на VPS» (SSH с раннера на сервер) падал во всех 25
+# прогонах с 08.09 при зелёных тестах. Теперь сервер сам раз в 2 минуты смотрит
+# main и выкатывает коммит, у которого зелёный job `tests` отсюда
+# (deploy/pull-deploy.sh, таймер tg-music-pull-deploy). Ни SSH, ни секретов.
 #
-# На сервер ходим только если тесты зелёные. Дальше решает deploy/remote-deploy.sh:
-# он же проверяет здоровье и откатывает код, если бот не поднялся.
+# ⚠️ Имя job `tests` — часть контракта: сервер ищет проверку ровно с этим именем
+# (check-runs?check_name=tests). Переименуешь — автодеплой будет ждать вечно
+# (и через час напишет дежурному).
+#
+# Тесты гоняются здесь, а не на сервере: на VPS одно ядро и 961 МБ.
 name: Deploy
 
 on:
   push:
     branches: [main]
-  # Кнопка «выкатить руками» на вкладке Actions — на случай, когда нужно
-  # повторить деплой без нового коммита.
+  # Ручной перезапуск тестов — и вызов из automerge.yml: слияние под GITHUB_TOKEN
+  # не порождает push, поэтому automerge запускает этот workflow явно.
   workflow_dispatch:
-  # 🔴 Вызов из automerge.yml. Без этого автомат молча не работал бы: слияние,
-  # сделанное встроенным GITHUB_TOKEN, НЕ порождает событие push — так GitHub
-  # защищается от бесконечных циклов workflow. То есть PR сливался бы, а
-  # выкатка не происходила, и никакой ошибки при этом видно бы не было.
-  # Поэтому automerge вызывает выкатку явно, а не надеется на push.
-  workflow_call:
 
 concurrency:
-  # Два деплоя одновременно — это гонка за один и тот же git-каталог на сервере.
-  # Новый пуш отменяет предыдущую невыполненную выкатку.
-  group: deploy-production
+  group: tests-${{ github.sha }}
   cancel-in-progress: false
 
 jobs:
@@ -48,35 +44,3 @@ jobs:
 
       - name: Тесты
         run: python -m pytest -q
-
-  deploy:
-    needs: tests
-    runs-on: ubuntu-latest
-    # На форках секретов нет, и деплой оттуда не должен даже пытаться.
-    if: github.repository == 'Mysterio3-8/telegram_music'
-    steps:
-      - name: Выкатка на VPS
-        env:
-          SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
-          VPS_HOST: ${{ secrets.VPS_HOST }}
-          VPS_USER: ${{ secrets.VPS_USER }}
-        run: |
-          if [ -z "$SSH_KEY" ] || [ -z "$VPS_HOST" ]; then
-            echo "::error::Не заданы секреты VPS_SSH_KEY / VPS_HOST."
-            echo "Как их завести — docs/АВТОДЕПЛОЙ.md"
-            exit 1
-          fi
-
-          mkdir -p ~/.ssh
-          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-
-          # Отпечаток сервера берём при первом подключении. Строгая проверка
-          # ключа здесь дала бы ложные отказы при переезде на новый сервер, а
-          # выигрыш мал: канал и так внутри TLS до GitHub, а ключ одноразовый
-          # и умеет только запускать деплой (см. command= в authorized_keys).
-          ssh -i ~/.ssh/deploy_key \
-              -o StrictHostKeyChecking=accept-new \
-              -o ConnectTimeout=20 \
-              "${VPS_USER:-root}@${VPS_HOST}" \
-              'bash /opt/tg-music-bot/deploy/remote-deploy.sh'

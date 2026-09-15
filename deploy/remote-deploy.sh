@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Выкатка на сервере. Запускается автоматически из GitHub Actions после того,
-# как тесты позеленели. Руками звать не нужно, но можно:
+# Выкатка на сервере. Запускается автоматически таймером tg-music-pull-deploy
+# (deploy/pull-deploy.sh), когда тесты по коммиту позеленели. Руками звать не
+# нужно, но можно:
 #   cd /opt/tg-music-bot && bash deploy/remote-deploy.sh
 #
 # Порядок шагов не случаен и меняться не должен:
@@ -29,6 +30,16 @@ HEALTH_WAIT=${HEALTH_WAIT:-20}
 
 cd "$REPO_DIR" || { echo "Нет каталога $REPO_DIR"; exit 1; }
 
+# Один деплой за раз: таймер автодеплоя (pull-deploy.sh) и ручной запуск делят
+# один git-каталог. pull-deploy.sh держит замок сам и зовёт нас с DEPLOY_LOCK_HELD=1.
+if [ "${DEPLOY_LOCK_HELD:-0}" != "1" ]; then
+    exec 9>"${DEPLOY_LOCK_FILE:-/run/tg-music-deploy.lock}"
+    flock -n 9 || { echo "Уже идёт другой деплой — дождись его конца"; exit 1; }
+fi
+# Что выкатывать. Автодеплой передаёт ТОЧНЫЙ коммит с зелёными тестами: за время
+# прогона тестов main мог уйти вперёд на непроверенный коммит.
+TARGET=${DEPLOY_REF:-origin/$BRANCH}
+
 say() { printf '\n==> %s\n' "$*"; }
 
 env_value() {
@@ -54,7 +65,7 @@ say "Текущий коммит: ${PREVIOUS:0:8} — сюда откатимс�
 # --- 2. код -----------------------------------------------------------------
 say "Забираю код из $BRANCH"
 git fetch --quiet origin "$BRANCH" || { echo "git fetch не удался"; exit 1; }
-git reset --hard "origin/$BRANCH" || { echo "git reset не удался"; exit 1; }
+git reset --hard "$TARGET" || { echo "git reset не удался"; exit 1; }
 NEW=$(git rev-parse HEAD)
 if [ "$NEW" = "$PREVIOUS" ]; then
     say "Изменений нет — деплой не нужен"

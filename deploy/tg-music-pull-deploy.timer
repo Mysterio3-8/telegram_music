@@ -1,0 +1,11 @@
+[Unit]
+Description=TG Music: проверять main на GitHub раз в 2 минуты
+
+[Timer]
+OnBootSec=3min
+# Отсчёт от конца прошлого тика: выкатка идёт минуты, и тики не наслаиваются.
+OnUnitInactiveSec=2min
+Persistent=false
+
+[Install]
+WantedBy=timers.target

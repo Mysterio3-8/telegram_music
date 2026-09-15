@@ -1,0 +1,12 @@
+[Unit]
+Description=TG Music: автодеплой — забрать main с GitHub после зелёных тестов
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/bash /opt/tg-music-bot/deploy/pull-deploy.sh
+# Полная выкатка — pip, миграции, рестарт и 90 сек наблюдения за ошибками.
+TimeoutStartSec=20min
+# Деплой не должен отнимать ядро у живых пользователей сильнее обычного.
+Nice=10
