@@ -33,8 +33,15 @@ async def _language(session, telegram_id: int) -> str:
     return user_language(user) if user else "ru"
 
 
-async def run_album(album: dict, tracks: list[dict], telegram_id: int, chat_id: int, bot=None, factory=None) -> tuple[int, list[str]]:
-    """Возвращает (сколько дошло, названия неудачных). bot/factory — для тестов."""
+async def run_album(
+    album: dict, tracks: list[dict], telegram_id: int, chat_id: int | None, bot=None, factory=None
+) -> tuple[int, list[str]]:
+    """Возвращает (сколько дошло, названия неудачных). bot/factory — для тестов.
+
+    chat_id=None — «тихо в библиотеку» для Mini App: человек уже в плеере, файлы
+    и прогресс в чате бота ему не нужны (та же логика, что у одиночной закачки).
+    """
+    quiet = chat_id is None
     from app.i18n import t
     from app.services.albums import release_album_lock
     from app.services.stats import record_event
@@ -56,19 +63,22 @@ async def run_album(album: dict, tracks: list[dict], telegram_id: int, chat_id: 
         async with factory() as session:
             lang = await _language(session, telegram_id)
             user_id = await _user_id(session, telegram_id)
-            progress = await bot.send_message(chat_id, t("album.progress", lang, title=title, done=0, count=total))
+            progress = None
+            if not quiet:
+                progress = await bot.send_message(chat_id, t("album.progress", lang, title=title, done=0, count=total))
             for number, row in enumerate(tracks, 1):
                 candidate = Candidate(**row)
                 name = f"{candidate.artist} — {candidate.title}" if candidate.artist else candidate.title
                 try:
                     track, _ = await import_candidate(
-                        session, bot, candidate, telegram_id, save_to_library=False
+                        session, bot, candidate, telegram_id, save_to_library=quiet
                     )
                     if not track.tg_file_id:
                         raise RuntimeError("у трека нет file_id после импорта")
-                    await bot.send_audio(
-                        chat_id, track.tg_file_id, caption=f"💿 {number}/{total} · {track.artist} — {track.title}"
-                    )
+                    if not quiet:
+                        await bot.send_audio(
+                            chat_id, track.tg_file_id, caption=f"💿 {number}/{total} · {track.artist} — {track.title}"
+                        )
                     if user_id:
                         await record_event(session, user_id, track.id, "download", source="worker")
                     delivered += 1
@@ -79,17 +89,19 @@ async def run_album(album: dict, tracks: list[dict], telegram_id: int, chat_id: 
                         await session.rollback()
                     except Exception:  # noqa: BLE001
                         pass
-                try:
-                    await progress.edit_text(t("album.progress", lang, title=title, done=number, count=total))
-                except Exception:  # noqa: BLE001 — прогресс косметика, не повод падать
-                    pass
-                await asyncio.sleep(SEND_PAUSE_SECONDS)
+                if progress is not None:
+                    try:
+                        await progress.edit_text(t("album.progress", lang, title=title, done=number, count=total))
+                    except Exception:  # noqa: BLE001 — прогресс косметика, не повод падать
+                        pass
+                    await asyncio.sleep(SEND_PAUSE_SECONDS)
 
-            summary = t("album.done", lang, title=title, ok=delivered, count=total)
-            if failed:
-                shown = ", ".join(failed[:_FAILED_SHOWN]) + (" …" if len(failed) > _FAILED_SHOWN else "")
-                summary += "\n" + t("album.failed", lang, names=shown)
-            await bot.send_message(chat_id, summary)
+            if not quiet:
+                summary = t("album.done", lang, title=title, ok=delivered, count=total)
+                if failed:
+                    shown = ", ".join(failed[:_FAILED_SHOWN]) + (" …" if len(failed) > _FAILED_SHOWN else "")
+                    summary += "\n" + t("album.failed", lang, names=shown)
+                await bot.send_message(chat_id, summary)
     finally:
         release_album_lock(telegram_id)
         if own_bot:
@@ -108,7 +120,7 @@ async def _user_id(session, telegram_id: int) -> int | None:
 
 
 @celery_app.task(name="album.fetch_all", bind=True, max_retries=0)
-def album_fetch_all(self, album: dict, tracks: list[dict], telegram_id: int, chat_id: int) -> None:  # noqa: ARG001
+def album_fetch_all(self, album: dict, tracks: list[dict], telegram_id: int, chat_id: int | None) -> None:  # noqa: ARG001
     try:
         asyncio.run(run_album(album, tracks, telegram_id, chat_id))
     except Exception:  # noqa: BLE001 — замок снят в finally; человеку говорим, что не вышло

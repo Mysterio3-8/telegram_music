@@ -19,6 +19,9 @@ import {
   addTrackToPlaylist,
   searchAll,
   liveSearch,
+  searchLiveAlbums,
+  getLiveAlbumTracks,
+  addLiveAlbumToLibrary,
   liveStreamUrl,
   queueLiveFetch,
   getInstrumentals,
@@ -737,6 +740,9 @@ async function openCollection(title, type, fetcher) {
     collectionTitle: title,
     collectionType: type,
     collectionTracks: [],
+    collectionLive: [],
+    collectionAlbumId: null,
+    collectionCover: null,
     collectionStatus: "loading",
   });
   try {
@@ -797,13 +803,16 @@ function scheduleSearch(query) {
       }
       // Треки берём живьём из источников, артистов/альбомы/плейлисты — из базы.
       // Оба запроса параллельно: живой поиск не должен ждать локальные секции.
-      const [sections, live] = await Promise.all([
+      const [sections, live, albums] = await Promise.all([
         searchAll(query.trim()).catch(() => null),
         liveSearch(query.trim()).catch(() => ({ items: [] })),
+        // Альбомы — третьим параллельным запросом: выдача треков их не ждёт дольше
+        searchLiveAlbums(query.trim()).catch(() => []),
       ]);
       if (seq !== searchSeq) return; // пришёл более свежий запрос
       mutateSearch({
         searchSections: sections,
+        liveAlbums: albums || [],
         liveResults: live.items,
         searchResults: live.items,
         searchTotal: live.items.length,
@@ -823,6 +832,45 @@ function scheduleSearch(query) {
 
 // Кандидат живого поиска в вид, понятный плееру. Уже залитый трек играем по его
 // id обычной подписанной ссылкой; новый — потоком, а в фон ставим закачку, чтобы
+// Альбом из живого поиска (16.09): экран подборки, треки играют потоком по номеру.
+// Отдельно от openCollection: у живых треков id вида «live:…», и обычные строки
+// подборки, которые ищут трек по числовому id, их бы не проиграли.
+async function openLiveAlbum(album) {
+  navigateTo("collection", {
+    collectionTitle: `${album.artist} — ${album.title}`,
+    collectionType: "album",
+    collectionTracks: [],
+    collectionLive: [],
+    collectionAlbumId: album.id,
+    collectionCover: album.cover_url || null,
+    collectionStatus: "loading",
+  });
+  try {
+    const { items } = await getLiveAlbumTracks(album.id);
+    mutate({ collectionLive: items, collectionTracks: items.map(liveTrack), collectionStatus: "ready" });
+  } catch {
+    mutate({ collectionLive: [], collectionTracks: [], collectionStatus: "ready" });
+    showToast("Не удалось открыть альбом — попробуйте позже");
+  }
+}
+
+let albumAddRunning = false;
+
+async function addWholeAlbum() {
+  const { collectionAlbumId, collectionLive } = getState();
+  if (!collectionAlbumId || albumAddRunning) return;
+  albumAddRunning = true;
+  try {
+    const result = await addLiveAlbumToLibrary(collectionAlbumId);
+    showToast(`Добавляю альбом в библиотеку: ${result.count} тр., около ${result.minutes} мин`);
+  } catch (error) {
+    showToast(error && error.status === 409 ? "Альбом уже добавляется — дождитесь окончания" : "Не удалось добавить альбом");
+  } finally {
+    albumAddRunning = false;
+  }
+  return collectionLive;
+}
+
 // со следующего раза он играл мгновенно у всех и лежал в библиотеке.
 function liveTrack(item) {
   if (item.track_id) {
@@ -1688,6 +1736,23 @@ root.addEventListener("click", (event) => {
       openPlayer();
       break;
     }
+    case "open-live-album": {
+      const album = (getState().liveAlbums || [])[Number(el.dataset.index)];
+      if (album) openLiveAlbum(album);
+      break;
+    }
+    case "play-album-live": {
+      const items = getState().collectionLive || [];
+      const chosen = items[Number(el.dataset.index)];
+      if (!chosen) break;
+      if (!chosen.track_id) queueLiveFetch(chosen.ref).catch(() => {});
+      playTrack(liveTrack(chosen), items.map(liveTrack));
+      openPlayer();
+      break;
+    }
+    case "album-add-all":
+      addWholeAlbum();
+      break;
     case "play-live": {
       const items = getState().liveResults || [];
       const index = Number(el.dataset.index);

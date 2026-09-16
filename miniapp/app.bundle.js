@@ -2,7 +2,7 @@
 
 // Источник: miniapp/src/**. Пересборка: python tools/build_miniapp.py
 
-// отпечаток исходников: 6ba98ad0676fdbf4
+// отпечаток исходников: 8d68c7c5ec55991f
 
 (function () {
   "use strict";
@@ -148,6 +148,20 @@
     // Живой поиск: выдача идёт прямо из источников, каталог для этого не нужен.
     function liveSearch(query) {
       return request(`/search/live?q=${encodeURIComponent(query)}`);
+    }
+
+    // Альбомы целиком (16.09): карточки под выдачей, треки альбома потоком,
+    // «добавить весь альбом» — воркер импортирует треки в библиотеку.
+    function searchLiveAlbums(query) {
+      return request(`/search/live/albums?q=${encodeURIComponent(query)}`);
+    }
+
+    function getLiveAlbumTracks(albumId) {
+      return request(`/albums/live/${albumId}`);
+    }
+
+    function addLiveAlbumToLibrary(albumId) {
+      return request(`/albums/live/${albumId}/library`, { method: "POST" });
     }
 
     // Фоновая закачка выбранного трека: играет он уже потоком, а это — чтобы в
@@ -359,7 +373,7 @@
       }
       return result;
     }
-    return { API_BASE, ApiError, telegramUser, login, resolveAudioUrl, getTracks, getTrackById, getInstrumentals, getLibrary, getLibraryIds, addToLibrary, removeFromLibrary, getPremiumStatus, getSubscriptionStatus, logChannelClick, fetchFromWeb, liveSearch, queueLiveFetch, liveStreamUrl, getProfile, getContests, joinContest, getMix, getPlaylists, createPlaylist, getPlaylistTracks, addTrackToPlaylist, getAlbums, getAlbumTracks, getArtists, getArtistTracks, getGenres, getGenreTracks, getArtistCard, followArtist, unfollowArtist, getMyArtists, searchAll, getPopularQueries, logSearchQuery, sendAnalyticsEvents, sendTrackToChat, recordListen, getLanguages, saveLanguage, getLyrics, submitLyrics, uploadTrack, startPremiumTrial, getReferralTop, getProfileTop, startTransfer, createPaymentLink, formatDuration, shuffle };
+    return { API_BASE, ApiError, telegramUser, login, resolveAudioUrl, getTracks, getTrackById, getInstrumentals, getLibrary, getLibraryIds, addToLibrary, removeFromLibrary, getPremiumStatus, getSubscriptionStatus, logChannelClick, fetchFromWeb, liveSearch, searchLiveAlbums, getLiveAlbumTracks, addLiveAlbumToLibrary, queueLiveFetch, liveStreamUrl, getProfile, getContests, joinContest, getMix, getPlaylists, createPlaylist, getPlaylistTracks, addTrackToPlaylist, getAlbums, getAlbumTracks, getArtists, getArtistTracks, getGenres, getGenreTracks, getArtistCard, followArtist, unfollowArtist, getMyArtists, searchAll, getPopularQueries, logSearchQuery, sendAnalyticsEvents, sendTrackToChat, recordListen, getLanguages, saveLanguage, getLyrics, submitLyrics, uploadTrack, startPremiumTrial, getReferralTop, getProfileTop, startTransfer, createPaymentLink, formatDuration, shuffle };
   })();
 
   __m["analytics.js"] = (function () {
@@ -718,6 +732,7 @@
       searchQuery: "",
       searchStatus: "idle", // idle | loading | done
       liveResults: [], // выдача живого поиска: кандидаты из источников, ещё не треки базы
+      liveAlbums: [], // альбомы живого поиска (16.09): карточки под выдачей треков
       queue: [],
       queueIndex: -1,
       currentTrack: null,
@@ -752,6 +767,9 @@
       searchMode: "tracks", // tracks | instrumentals — вкладки в поиске
       collectionTitle: "",
       collectionTracks: [],
+      collectionLive: [], // живые треки альбома из источника — играют потоком по номеру
+      collectionAlbumId: null, // id альбома источника: есть — показываем «Добавить весь альбом»
+      collectionCover: null,
       collectionStatus: "idle",
       collectionType: "playlist", // playlist | album | artist — влияет на шапку экрана
       popularQueries: [], // реальные популярные запросы с сервера (ТЗ §11)
@@ -1000,6 +1018,13 @@
     // Свежая подписанная ссылка по id: для треков из «Недавних» (audio_url не хранится)
     // и при ошибке воспроизведения (кэшированная ссылка старше 6 часов → 403).
     async function refreshAndPlay(track) {
+      // Живой трек из источника (id «live:…») в базе не лежит: обновлять ссылку негде.
+      // Раньше здесь уходил /track/live:… и получал 422 — лишний запрос перед тем же пропуском.
+      if (typeof track.id === "string" && track.id.startsWith("live:")) {
+        showToast("Не удалось загрузить трек — пропускаю");
+        playNext();
+        return;
+      }
       try {
         const fresh = await getTrackById(track.id);
         if (state.currentTrack !== track) return; // трек сменился, пока ходили за ссылкой
@@ -2212,6 +2237,32 @@
       `;
     }
 
+    // Альбомы целиком из источника (16.09). Карточки — те же, что у альбомов
+    // каталога, но открывают живой альбом: треки потоком, «добавить весь альбом».
+    function renderLiveAlbums(state) {
+      const albums = state.liveAlbums || [];
+      if (!albums.length) return "";
+      const cards = albums
+        .map(
+          (a, i) => `
+            <button class="artist-album" data-action="open-live-album" data-index="${i}">
+              ${
+                a.cover_url
+                  ? `<img class="artist-album__cover" src="${escapeHtml(a.cover_url)}" alt="" loading="lazy" />`
+                  : `<span class="artist-album__cover artist-album__cover--letter">${escapeHtml((a.title[0] || "♪").toUpperCase())}</span>`
+              }
+              <span class="artist-album__name">${escapeHtml(a.title)}</span>
+              <span class="artist-album__count">${escapeHtml(a.artist)} · ${a.track_count} тр.</span>
+            </button>
+          `
+        )
+        .join("");
+      return `
+        <div class="section-head"><span class="section-title">Альбомы</span></div>
+        <div class="artist-albums">${cards}</div>
+      `;
+    }
+
     function renderLiveTracks(state) {
       const items = state.liveResults || [];
       if (!items.length) return "";
@@ -2245,14 +2296,15 @@
 
       const sections = state.searchSections;
       const liveTracks = renderLiveTracks(state);
+      const liveAlbums = renderLiveAlbums(state);
       const hasSections =
         sections && (sections.artists.length || sections.albums.length || sections.playlists.length);
-      if (!liveTracks && !hasSections) {
+      if (!liveTracks && !liveAlbums && !hasSections) {
         return `<div class="empty-state">Ничего не найдено по «${escapeHtml(query)}»
           <button class="btn btn--primary search-web-btn" data-action="search-web">Поискать ещё</button>
         </div>`;
       }
-      return `${hasSections ? renderSections(sections, state) : ""}${liveTracks}`;
+      return `${hasSections ? renderSections(sections, state) : ""}${liveAlbums}${liveTracks}`;
     }
 
     function renderSearch(state) {
@@ -3800,6 +3852,7 @@
   __m["screens/collection.js"] = (function () {
     const { icon } = __m["components/icons.js"];
     const { renderTrackList, escapeHtml } = __m["components/trackRow.js"];
+    const { renderCover } = __m["components/cover.js"];
     // Страница плейлиста/альбома/исполнителя по референсу VK Music (ТЗ §6):
     // крупная обложка, название, счётчик и длительность, кнопки Слушать/Перемешать.
 
@@ -3810,6 +3863,28 @@
       const minutes = Math.round(total / 60);
       if (minutes < 60) return `${minutes} мин`;
       return `${Math.floor(minutes / 60)} ч ${minutes % 60} мин`;
+    }
+
+    function formatDuration(seconds) {
+      const s = Math.max(0, Math.round(seconds || 0));
+      return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+    }
+
+    // Живые треки альбома (16.09): играют по номеру, а не по id — у них id «live:…»
+    function renderLiveRows(items) {
+      return items
+        .map(
+          (item, i) => `
+            <div class="track-row" data-action="play-album-live" data-index="${i}">
+              ${renderCover({ ...item, id: item.ref })}
+              <div class="track-info">
+                <div class="track-title">${i + 1}. ${escapeHtml(item.title)}</div>
+                <div class="track-artist">${escapeHtml(item.artist)} · ${formatDuration(item.duration)}</div>
+              </div>
+            </div>
+          `
+        )
+        .join("");
     }
 
     function renderCollection(state) {
@@ -3831,19 +3906,29 @@
       }
 
       const letter = escapeHtml(title.trim()[0] || "♪").toUpperCase();
+      const cover = state.collectionCover
+        ? `<img class="coll-hero__cover" src="${escapeHtml(state.collectionCover)}" alt="" />`
+        : `<div class="coll-hero__cover">${letter}</div>`;
+      const live = state.collectionLive || [];
+      const addAll = state.collectionAlbumId
+        ? `<button class="btn btn--ghost" data-action="album-add-all">${icon("plus")} Добавить весь альбом</button>`
+        : "";
 
       return `
         ${head}
         <div class="coll-hero">
-          <div class="coll-hero__cover">${letter}</div>
+          ${cover}
           <div class="coll-hero__title">${escapeHtml(title)}</div>
           <div class="coll-hero__meta">${tracks.length} треков · ${totalDuration(tracks)}</div>
           <div class="coll-hero__actions">
             <button class="btn btn--primary" data-action="collection-play">${icon("play")} Слушать</button>
             <button class="btn btn--ghost" data-action="collection-shuffle">${icon("shuffle")} Перемешать</button>
+            ${addAll}
           </div>
         </div>
-        <div class="card home-track-card">${renderTrackList(tracks, { context: "collection", state })}</div>
+        <div class="card home-track-card">${
+          live.length ? renderLiveRows(live) : renderTrackList(tracks, { context: "collection", state })
+        }</div>
       `;
     }
     return { renderCollection };
@@ -4827,7 +4912,7 @@
 
   __m["main.js"] = (function () {
     const { trackClient } = __m["analytics.js"];
-    const { addToLibrary, createPaymentLink, formatDuration, getLibrary, getLibraryIds, getAlbums, getAlbumTracks, getArtists, getArtistCard, getArtistTracks, getContests, getGenres, getGenreTracks, followArtist, unfollowArtist, getMyArtists, addTrackToPlaylist, searchAll, liveSearch, liveStreamUrl, queueLiveFetch, getInstrumentals, getLyrics, getPlaylists, getPlaylistTracks, getPopularQueries, joinContest, getPremiumStatus, getSubscriptionStatus, logChannelClick, fetchFromWeb, getProfile, getTracks, login, logSearchQuery, createPlaylist, submitLyrics, removeFromLibrary, getLanguages, resolveAudioUrl, saveLanguage, sendTrackToChat, telegramUser } = __m["api.js"];
+    const { addToLibrary, createPaymentLink, formatDuration, getLibrary, getLibraryIds, getAlbums, getAlbumTracks, getArtists, getArtistCard, getArtistTracks, getContests, getGenres, getGenreTracks, followArtist, unfollowArtist, getMyArtists, addTrackToPlaylist, searchAll, liveSearch, searchLiveAlbums, getLiveAlbumTracks, addLiveAlbumToLibrary, liveStreamUrl, queueLiveFetch, getInstrumentals, getLyrics, getPlaylists, getPlaylistTracks, getPopularQueries, joinContest, getPremiumStatus, getSubscriptionStatus, logChannelClick, fetchFromWeb, getProfile, getTracks, login, logSearchQuery, createPlaylist, submitLyrics, removeFromLibrary, getLanguages, resolveAudioUrl, saveLanguage, sendTrackToChat, telegramUser } = __m["api.js"];
     const { closePlayer, closeSheet, getState, goBack, mutate, navigateTo, openPlayer, openSheet, playMix, playQueueIndex, playRecommended, playVibe, playNext, playPrev, playTrack, playTrackMix, addToQueue, playNextInQueue, resetToTab, seekToFraction, setSleepTimer, showToast, subscribe, subscribeProgress, togglePlay, toggleRepeat, toggleShuffle } = __m["state.js"];
     const { renderHeader } = __m["components/header.js"];
     const { renderBottomNav } = __m["components/bottomNav.js"];
@@ -5466,6 +5551,9 @@
         collectionTitle: title,
         collectionType: type,
         collectionTracks: [],
+        collectionLive: [],
+        collectionAlbumId: null,
+        collectionCover: null,
         collectionStatus: "loading",
       });
       try {
@@ -5526,13 +5614,16 @@
           }
           // Треки берём живьём из источников, артистов/альбомы/плейлисты — из базы.
           // Оба запроса параллельно: живой поиск не должен ждать локальные секции.
-          const [sections, live] = await Promise.all([
+          const [sections, live, albums] = await Promise.all([
             searchAll(query.trim()).catch(() => null),
             liveSearch(query.trim()).catch(() => ({ items: [] })),
+            // Альбомы — третьим параллельным запросом: выдача треков их не ждёт дольше
+            searchLiveAlbums(query.trim()).catch(() => []),
           ]);
           if (seq !== searchSeq) return; // пришёл более свежий запрос
           mutateSearch({
             searchSections: sections,
+            liveAlbums: albums || [],
             liveResults: live.items,
             searchResults: live.items,
             searchTotal: live.items.length,
@@ -5552,6 +5643,45 @@
 
     // Кандидат живого поиска в вид, понятный плееру. Уже залитый трек играем по его
     // id обычной подписанной ссылкой; новый — потоком, а в фон ставим закачку, чтобы
+    // Альбом из живого поиска (16.09): экран подборки, треки играют потоком по номеру.
+    // Отдельно от openCollection: у живых треков id вида «live:…», и обычные строки
+    // подборки, которые ищут трек по числовому id, их бы не проиграли.
+    async function openLiveAlbum(album) {
+      navigateTo("collection", {
+        collectionTitle: `${album.artist} — ${album.title}`,
+        collectionType: "album",
+        collectionTracks: [],
+        collectionLive: [],
+        collectionAlbumId: album.id,
+        collectionCover: album.cover_url || null,
+        collectionStatus: "loading",
+      });
+      try {
+        const { items } = await getLiveAlbumTracks(album.id);
+        mutate({ collectionLive: items, collectionTracks: items.map(liveTrack), collectionStatus: "ready" });
+      } catch {
+        mutate({ collectionLive: [], collectionTracks: [], collectionStatus: "ready" });
+        showToast("Не удалось открыть альбом — попробуйте позже");
+      }
+    }
+
+    let albumAddRunning = false;
+
+    async function addWholeAlbum() {
+      const { collectionAlbumId, collectionLive } = getState();
+      if (!collectionAlbumId || albumAddRunning) return;
+      albumAddRunning = true;
+      try {
+        const result = await addLiveAlbumToLibrary(collectionAlbumId);
+        showToast(`Добавляю альбом в библиотеку: ${result.count} тр., около ${result.minutes} мин`);
+      } catch (error) {
+        showToast(error && error.status === 409 ? "Альбом уже добавляется — дождитесь окончания" : "Не удалось добавить альбом");
+      } finally {
+        albumAddRunning = false;
+      }
+      return collectionLive;
+    }
+
     // со следующего раза он играл мгновенно у всех и лежал в библиотеке.
     function liveTrack(item) {
       if (item.track_id) {
@@ -6417,6 +6547,23 @@
           openPlayer();
           break;
         }
+        case "open-live-album": {
+          const album = (getState().liveAlbums || [])[Number(el.dataset.index)];
+          if (album) openLiveAlbum(album);
+          break;
+        }
+        case "play-album-live": {
+          const items = getState().collectionLive || [];
+          const chosen = items[Number(el.dataset.index)];
+          if (!chosen) break;
+          if (!chosen.track_id) queueLiveFetch(chosen.ref).catch(() => {});
+          playTrack(liveTrack(chosen), items.map(liveTrack));
+          openPlayer();
+          break;
+        }
+        case "album-add-all":
+          addWholeAlbum();
+          break;
         case "play-live": {
           const items = getState().liveResults || [];
           const index = Number(el.dataset.index);

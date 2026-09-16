@@ -201,3 +201,32 @@ async def test_run_album_delivers_and_reports_failures(monkeypatch):
     assert released == [555]  # замок снят даже с упавшим треком
     assert recorded == [(1, "download", "worker"), (3, "download", "worker")]
     await engine.dispose()
+
+
+async def test_run_album_quiet_mode_goes_to_library_without_messages(monkeypatch):
+    """Mini App: chat_id=None — ни файлов, ни прогресса в чате, треки в библиотеку."""
+    engine = create_async_engine("sqlite+aiosqlite://")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    monkeypatch.setattr("app.services.albums.release_album_lock", lambda tid: None)
+
+    async def fake_record(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr("app.services.stats.record_event", fake_record)
+    saved = []
+
+    async def fake_import(session, bot, candidate, telegram_id, save_to_library=True):
+        saved.append(save_to_library)
+        return SimpleNamespace(id=1, tg_file_id="f", artist=candidate.artist, title=candidate.title), True
+
+    monkeypatch.setattr("app.services.track_lookup.importer.import_candidate", fake_import)
+    bot = FakeBot()
+    delivered, failed = await album_fetch.run_album(
+        {"id": 1, "title": ""}, [asdict(t) for t in _tracks(2)], 555, None, bot=bot, factory=factory
+    )
+    assert (delivered, failed) == (2, [])
+    assert bot.messages == [] and bot.audio == []
+    assert saved == [True, True]
+    await engine.dispose()

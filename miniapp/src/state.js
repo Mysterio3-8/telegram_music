@@ -39,6 +39,7 @@ const state = {
   searchQuery: "",
   searchStatus: "idle", // idle | loading | done
   liveResults: [], // выдача живого поиска: кандидаты из источников, ещё не треки базы
+  liveAlbums: [], // альбомы живого поиска (16.09): карточки под выдачей треков
   queue: [],
   queueIndex: -1,
   currentTrack: null,
@@ -73,6 +74,9 @@ const state = {
   searchMode: "tracks", // tracks | instrumentals — вкладки в поиске
   collectionTitle: "",
   collectionTracks: [],
+  collectionLive: [], // живые треки альбома из источника — играют потоком по номеру
+  collectionAlbumId: null, // id альбома источника: есть — показываем «Добавить весь альбом»
+  collectionCover: null,
   collectionStatus: "idle",
   collectionType: "playlist", // playlist | album | artist — влияет на шапку экрана
   popularQueries: [], // реальные популярные запросы с сервера (ТЗ §11)
@@ -321,6 +325,13 @@ function revokeObjectUrl() {
 // Свежая подписанная ссылка по id: для треков из «Недавних» (audio_url не хранится)
 // и при ошибке воспроизведения (кэшированная ссылка старше 6 часов → 403).
 async function refreshAndPlay(track) {
+  // Живой трек из источника (id «live:…») в базе не лежит: обновлять ссылку негде.
+  // Раньше здесь уходил /track/live:… и получал 422 — лишний запрос перед тем же пропуском.
+  if (typeof track.id === "string" && track.id.startsWith("live:")) {
+    showToast("Не удалось загрузить трек — пропускаю");
+    playNext();
+    return;
+  }
   try {
     const fresh = await getTrackById(track.id);
     if (state.currentTrack !== track) return; // трек сменился, пока ходили за ссылкой

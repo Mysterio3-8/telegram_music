@@ -139,6 +139,20 @@ export function liveSearch(query) {
   return request(`/search/live?q=${encodeURIComponent(query)}`);
 }
 
+// Альбомы целиком (16.09): карточки под выдачей, треки альбома потоком,
+// «добавить весь альбом» — воркер импортирует треки в библиотеку.
+export function searchLiveAlbums(query) {
+  return request(`/search/live/albums?q=${encodeURIComponent(query)}`);
+}
+
+export function getLiveAlbumTracks(albumId) {
+  return request(`/albums/live/${albumId}`);
+}
+
+export function addLiveAlbumToLibrary(albumId) {
+  return request(`/albums/live/${albumId}/library`, { method: "POST" });
+}
+
 // Фоновая закачка выбранного трека: играет он уже потоком, а это — чтобы в
 // следующий раз играл мгновенно по file_id и остался в библиотеке.
 export function queueLiveFetch(ref) {

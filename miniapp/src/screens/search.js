@@ -156,6 +156,32 @@ function renderLiveRow(item, index, state) {
   `;
 }
 
+// Альбомы целиком из источника (16.09). Карточки — те же, что у альбомов
+// каталога, но открывают живой альбом: треки потоком, «добавить весь альбом».
+function renderLiveAlbums(state) {
+  const albums = state.liveAlbums || [];
+  if (!albums.length) return "";
+  const cards = albums
+    .map(
+      (a, i) => `
+        <button class="artist-album" data-action="open-live-album" data-index="${i}">
+          ${
+            a.cover_url
+              ? `<img class="artist-album__cover" src="${escapeHtml(a.cover_url)}" alt="" loading="lazy" />`
+              : `<span class="artist-album__cover artist-album__cover--letter">${escapeHtml((a.title[0] || "♪").toUpperCase())}</span>`
+          }
+          <span class="artist-album__name">${escapeHtml(a.title)}</span>
+          <span class="artist-album__count">${escapeHtml(a.artist)} · ${a.track_count} тр.</span>
+        </button>
+      `
+    )
+    .join("");
+  return `
+    <div class="section-head"><span class="section-title">Альбомы</span></div>
+    <div class="artist-albums">${cards}</div>
+  `;
+}
+
 function renderLiveTracks(state) {
   const items = state.liveResults || [];
   if (!items.length) return "";
@@ -189,14 +215,15 @@ export function renderSearchResults(state) {
 
   const sections = state.searchSections;
   const liveTracks = renderLiveTracks(state);
+  const liveAlbums = renderLiveAlbums(state);
   const hasSections =
     sections && (sections.artists.length || sections.albums.length || sections.playlists.length);
-  if (!liveTracks && !hasSections) {
+  if (!liveTracks && !liveAlbums && !hasSections) {
     return `<div class="empty-state">Ничего не найдено по «${escapeHtml(query)}»
       <button class="btn btn--primary search-web-btn" data-action="search-web">Поискать ещё</button>
     </div>`;
   }
-  return `${hasSections ? renderSections(sections, state) : ""}${liveTracks}`;
+  return `${hasSections ? renderSections(sections, state) : ""}${liveAlbums}${liveTracks}`;
 }
 
 export function renderSearch(state) {

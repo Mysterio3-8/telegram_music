@@ -204,3 +204,89 @@ async def stream_candidate(ref: str, request: Request) -> Response:
         media_type=upstream.headers.get("Content-Type", "audio/mpeg"),
         headers={**passthrough, "Cache-Control": "private, max-age=600"},
     )
+
+
+# --- Альбомы целиком (16.09) ---------------------------------------------------
+# Решение владельца: треки альбома слушаются по одному, «добавить весь альбом» —
+# с Premium. Mini App и так за пэйволом, поэтому все три маршрута под require_premium.
+
+
+class LiveAlbumOut(BaseModel):
+    id: int
+    title: str
+    artist: str
+    track_count: int
+    cover_url: str | None = None
+    official: bool = False
+
+
+_ALBUM_ID_MAX = 10**13  # id SoundCloud — порядка 10^9; шире int64 не пускаем в запрос
+
+
+async def _album_tracks_or_404(album_id: int) -> list[Candidate]:
+    from app.services.albums import album_tracks
+
+    try:
+        tracks = await run_in_threadpool(album_tracks, album_id)
+    except Exception:  # noqa: BLE001 — источник лёг: честный 404, а не 500
+        logger.warning("Альбом %s не открылся", album_id, exc_info=True)
+        tracks = []
+    if not tracks:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Альбом не найден — повторите поиск")
+    return tracks
+
+
+@router.get("/search/live/albums", response_model=list[LiveAlbumOut], dependencies=[Depends(require_premium)])
+async def live_albums(q: str = Query(..., min_length=1, max_length=200)) -> list[LiveAlbumOut]:
+    from app.services.albums import search_albums
+
+    try:
+        albums = await run_in_threadpool(search_albums, q, 5)
+    except Exception:  # noqa: BLE001 — без альбомов поиск треков всё равно работает
+        logger.warning("Поиск альбомов не удался: %s", q, exc_info=True)
+        return []
+    return [
+        LiveAlbumOut(
+            id=a.id, title=a.title, artist=a.artist, track_count=a.track_count,
+            cover_url=a.cover_url, official=a.official,
+        )
+        for a in albums
+    ]
+
+
+@router.get("/albums/live/{album_id}", response_model=LiveSearchOut, dependencies=[Depends(require_premium)])
+async def live_album_tracks(album_id: int, session: AsyncSession = Depends(get_db)) -> LiveSearchOut:
+    if not 0 < album_id < _ALBUM_ID_MAX:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Альбом не найден")
+    tracks = await _album_tracks_or_404(album_id)
+    return LiveSearchOut(items=await _to_outs(session, tracks))
+
+
+@router.post("/albums/live/{album_id}/library")
+async def add_live_album(album_id: int, user: User = Depends(require_premium)) -> dict:
+    """Весь альбом в библиотеку: воркер импортирует треки по одному, в чат не шлёт.
+
+    Один альбом за раз на человека — тот же замок, что у кнопки в боте.
+    """
+    from app.services.albums import acquire_album_lock, estimate_minutes, release_album_lock
+
+    if not 0 < album_id < _ALBUM_ID_MAX:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Альбом не найден")
+    tracks = await _album_tracks_or_404(album_id)
+    if not acquire_album_lock(user.telegram_id):
+        raise HTTPException(status.HTTP_409_CONFLICT, "Альбом уже добавляется — дождитесь окончания")
+    try:
+        from app.tasks.queue_client import enqueue
+
+        enqueue(
+            "album.fetch_all",
+            album={"id": album_id, "title": ""},
+            tracks=[asdict(track) for track in tracks],
+            telegram_id=user.telegram_id,
+            chat_id=None,
+        )
+    except Exception:  # noqa: BLE001 — брокер недоступен: снимаем замок и говорим честно
+        release_album_lock(user.telegram_id)
+        logger.warning("Альбом: очередь недоступна", exc_info=True)
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Сервис загрузки занят, попробуйте позже") from None
+    return {"queued": True, "count": len(tracks), "minutes": estimate_minutes(len(tracks))}
