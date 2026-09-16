@@ -196,6 +196,10 @@ class Settings(BaseSettings):
     backup_s3_bucket: str = ""
     backup_s3_prefix: str = "db-backups"
     backup_offsite_keep: int = 30
+    # Пароль шифрования копии бэкапа, которая уходит владельцу в Telegram (16.09).
+    # Пусто — копия не отправляется: открытую базу с id людей и платежами не шлём.
+    # ⚠️ Без этого пароля копию не расшифровать — он хранится у владельца отдельно.
+    backup_password: str = ""
     s3_endpoint_url: str = ""  # если задан — используется S3-совместимое хранилище
     s3_bucket: str = ""
     s3_access_key: str = ""
