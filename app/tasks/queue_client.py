@@ -19,6 +19,7 @@ QUEUES: dict[str, str] = {
     "search.fetch_candidate": "youtube_user",
     "search.repair_track": "youtube_user",
     "transfer.playlist": "celery",
+    "album.fetch_all": "celery",
 }
 
 _client: Celery | None = None

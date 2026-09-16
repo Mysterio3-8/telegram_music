@@ -24,6 +24,7 @@ from app.handlers import (
     player,
     playlists,
     premium,
+    album_search,
     quick_search,
     referral,
     search,
@@ -124,6 +125,7 @@ async def main() -> int:
         track_actions.router,
         inline.router,  # inline_query — вне гейта подписки (middleware только message/callback)
         news.router,  # channel_post новостного канала → кросс-пост в ВК
+        album_search.router,  # экран альбома из выдачи быстрого поиска (16.09)
         quick_search.router,  # свободный текст боту → трек (регистрируется поздно, после FSM)
         stubs.router,
     )

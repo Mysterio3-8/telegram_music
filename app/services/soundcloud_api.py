@@ -260,3 +260,30 @@ def search_tracks(query: str, limit: int = 5) -> list[Candidate]:
         return []
     candidates = [_to_candidate(item) for item in collection]
     return [item for item in candidates if item is not None]
+
+
+def api_get(path: str, params: dict | None = None):
+    """GET к API с client_id и одной повторной попыткой на свежем ключе.
+
+    Возвращает разобранный JSON или None, если API не ответил. Нужен альбомам
+    (16.09): у них три разных запроса — поиск, сам альбом и дозагрузка треков, —
+    и каждый должен одинаково переживать протухший client_id.
+    """
+    global _client_id
+    query = dict(params or {})
+    with _lock:
+        for attempt in (1, 2):
+            if _client_id is None or attempt == 2:
+                _client_id = _load_client_id()
+            if _client_id is None:
+                return None
+            query["client_id"] = _client_id
+            body = _request(f"{path}?{urllib.parse.urlencode(query)}")
+            if body is None:
+                continue  # вероятно, протух ключ — вторая попытка на новом
+            try:
+                return json.loads(body)
+            except ValueError:
+                logger.warning("SoundCloud API: ответ %s не разобрался как JSON", path)
+                return None
+    return None

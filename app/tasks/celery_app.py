@@ -22,6 +22,8 @@ celery_app.conf.update(
         # занимал один из двух потоков поискового парсера — два переноса разом
         # останавливали выдачу треков всем. Общую очередь разбирает tg-music-worker.
         "transfer.playlist": {"queue": "celery"},
+        # Альбом целиком — минуты работы: туда же, в общую очередь, а не в поиск
+        "album.fetch_all": {"queue": "celery"},
         "soundcloud.user_import": {"queue": "youtube_user"},
         "soundcloud.*": {"queue": "soundcloud"},
         "youtube.user_import": {"queue": "youtube_user"},
@@ -34,6 +36,7 @@ celery_app.conf.update(
 
 # Регистрируем задачи в воркере (celery -A app.tasks.celery_app worker)
 from app.tasks import (  # noqa: E402,F401
+    album_fetch,
     broadcast,
     enrich,
     link_import,

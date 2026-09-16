@@ -9,6 +9,7 @@
 Регистрируется последним: перехватывает только свободный текст без активного FSM
 (мастера загрузки/поиска/админки со своими состояниями срабатывают раньше).
 """
+import asyncio
 import logging
 import re
 import time
@@ -16,6 +17,7 @@ from dataclasses import asdict
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import CallbackQuery, Message
 
 from app.config import settings
@@ -23,7 +25,9 @@ from app.db.base import session_factory
 from app.handlers.common import ensure_user
 from app.handlers.cards import build_card_keyboard
 from app.handlers.delivery import send_track_audio
+from app.keyboards.albums import album_rows
 from app.keyboards.quick_search import quick_search_keyboard, total_pages
+from app.services.albums import AlbumCandidate, search_albums
 from app.services.library import is_in_library
 from app.services.search import find_track_by_metadata, find_track_by_source_url
 from app.services.search_cache import search_with_cache
@@ -38,6 +42,8 @@ router = Router()
 
 _QUERY_KEY = "qs_query"  # запрос и кандидаты живут в FSM: в callback_data они не помещаются
 _ITEMS_KEY = "qs_items"
+ALBUMS_KEY = "qs_albums"  # найденные альбомы (16.09) — экран альбома берёт их отсюда
+_ALBUMS_SHOWN = 3  # больше трёх строк под выдачей треков уже мешают
 
 # Сколько секунд считать нажатие «ещё в работе». Скачивание с минтом занимает
 # ~8 сек, неудачная попытка с перебором замен — до полуминуты; берём с запасом,
@@ -118,6 +124,20 @@ def _queue_best_quality(user, track, candidate: Candidate, chat_id: int) -> bool
     return True
 
 
+async def _find_albums(query: str) -> list[AlbumCandidate]:
+    """Альбомы по запросу. Сбой источника не ломает выдачу треков — просто без альбомов."""
+    try:
+        return await asyncio.to_thread(search_albums, query, _ALBUMS_SHOWN)
+    except Exception:  # noqa: BLE001
+        logger.warning("Поиск альбомов не удался: %s", query, exc_info=True)
+        return []
+
+
+async def stored_albums(state: FSMContext) -> list[AlbumCandidate]:
+    data = await state.get_data()
+    return [AlbumCandidate(**row) for row in data.get(ALBUMS_KEY) or []]
+
+
 async def _stored_candidates(state: FSMContext) -> tuple[str, list[Candidate]]:
     data = await state.get_data()
     rows = data.get(_ITEMS_KEY) or []
@@ -167,7 +187,8 @@ async def quick_search(message: Message, state: FSMContext) -> None:
         await log_search_query(session, user.id, query)
 
     status = await message.answer(t("quick.searching"))
-    candidates = await search_with_cache(query)
+    # Альбомы ищутся параллельно с треками: ответ не должен стать медленнее
+    candidates, albums = await asyncio.gather(search_with_cache(query), _find_albums(query))
     # Сколько нашлось — ради доли пустых поисков в аналитике (15.09)
     from app.services.analytics import track_event
 
@@ -176,15 +197,20 @@ async def quick_search(message: Message, state: FSMContext) -> None:
             session, "search", source="bot", user_id=user.id,
             props={"results": len(candidates or [])},
         )
-    if not candidates:
+    if not candidates and not albums:
         await status.edit_text(t("quick.nothing"))
         return
 
     await state.update_data(
-        **{_QUERY_KEY: query, _ITEMS_KEY: [asdict(item) for item in candidates]}
+        **{
+            _QUERY_KEY: query,
+            _ITEMS_KEY: [asdict(item) for item in candidates],
+            ALBUMS_KEY: [album.as_dict() for album in albums],
+        }
     )
     await status.edit_text(
-        _results_title(query, candidates), reply_markup=quick_search_keyboard(candidates, page=1)
+        _results_title(query, candidates),
+        reply_markup=quick_search_keyboard(candidates, page=1, extra_rows=album_rows(albums)),
     )
 
 
@@ -192,13 +218,18 @@ async def quick_search(message: Message, state: FSMContext) -> None:
 async def quick_search_page(callback: CallbackQuery, state: FSMContext) -> None:
     page = int(callback.data.split(":")[2])
     query, candidates = await _stored_candidates(state)
-    if not candidates:
+    albums = await stored_albums(state)
+    if not candidates and not albums:
         await callback.answer(t("quick.stale"), show_alert=True)
         return
     page = max(1, min(page, total_pages(candidates)))
-    await callback.message.edit_text(
-        _results_title(query, candidates), reply_markup=quick_search_keyboard(candidates, page)
-    )
+    try:
+        await callback.message.edit_text(
+            _results_title(query, candidates),
+            reply_markup=quick_search_keyboard(candidates, page, extra_rows=album_rows(albums)),
+        )
+    except TelegramBadRequest:
+        pass  # тот же экран — Telegram отказывает в «правке без изменений»
     await callback.answer()
 
 
@@ -209,8 +240,15 @@ async def quick_search_send(callback: CallbackQuery, state: FSMContext) -> None:
     if index >= len(candidates):
         await callback.answer(t("quick.stale"), show_alert=True)
         return
-    candidate = candidates[index]
+    await deliver_candidate(callback, candidates[index])
 
+
+async def deliver_candidate(callback: CallbackQuery, candidate: Candidate) -> None:
+    """Прислать выбранного кандидата: мгновенно, если он уже в базе, иначе через воркер.
+
+    Общая для выдачи поиска и экрана альбома (16.09): трек из альбома — такой же
+    кандидат SoundCloud, и путь до чата у него должен быть тот же самый.
+    """
     # Один и тот же трек, нажатый десять раз подряд, это десять скачиваний в
     # воркере и десять одинаковых ответов человеку (11.08 владелец получил девять
     # подряд «трек под защитой»). Пока предыдущее нажатие в работе — молчим.

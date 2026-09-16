@@ -38,8 +38,14 @@ def total_pages(candidates: list[Candidate]) -> int:
     return max(1, -(-len(candidates) // PAGE_SIZE))
 
 
-def quick_search_keyboard(candidates: list[Candidate], page: int) -> InlineKeyboardMarkup:
-    """Страница выдачи. Стрелки показываются только там, где есть куда идти."""
+def quick_search_keyboard(
+    candidates: list[Candidate], page: int, extra_rows: list | None = None
+) -> InlineKeyboardMarkup:
+    """Страница выдачи. Стрелки показываются только там, где есть куда идти.
+
+    extra_rows — блок под треками (сейчас это «💿 Альбомы», 16.09). Строки
+    передаёт обработчик: импорт клавиатуры альбомов отсюда дал бы цикл.
+    """
     pages = total_pages(candidates)
     offset = (page - 1) * PAGE_SIZE
     rows = [
@@ -60,5 +66,6 @@ def quick_search_keyboard(candidates: list[Candidate], page: int) -> InlineKeybo
         nav.append(InlineKeyboardButton(text="»", callback_data=f"qs:p:{page + 1}"))
     if len(nav) > 1:
         rows.append(nav)
+    rows.extend(extra_rows or [])
 
     return InlineKeyboardMarkup(inline_keyboard=rows)
