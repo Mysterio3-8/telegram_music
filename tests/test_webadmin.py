@@ -25,8 +25,10 @@ async def admin():
                     created_at=NOW - timedelta(days=3), premium_until=NOW + timedelta(days=5))
         quiet = User(telegram_id=778, first_name="Гость", created_at=NOW - timedelta(days=40), bot_blocked=True)
         track = Track(title="Глубина", artist="Аметист", duration=180, tg_file_id="abc",
-                      search_index="аметист глубина")
-        seed.add_all([user, quiet, track])
+                      search_index="аметист глубина ametist glubina")
+        latin = Track(title="Bandana", artist="kizaru", duration=200, tg_file_id="def",
+                      search_index="kizaru bandana")
+        seed.add_all([user, quiet, track, latin])
         await seed.flush()
         seed.add_all([
             TrackEvent(user_id=user.id, track_id=track.id, event="listen", created_at=NOW - timedelta(hours=2)),
@@ -51,7 +53,7 @@ def test_overview_gives_numbers_and_daily_series(admin):
     data = client.get("/api/overview?days=30").json()
     assert data["report"]["users_total"] == 2
     assert data["report"]["listens"] == 1
-    assert data["catalog"]["tracks_total"] == 1
+    assert data["catalog"]["tracks_total"] == 2
     assert data["revenue"]["total"] == 49
     assert data["donations"]["rub"] == 149
     assert len(data["series"]) == 31  # ряд по дням для графика, включая сегодня
@@ -74,6 +76,15 @@ def test_tracks_search_handles_cyrillic_case(admin):
         found = client.get(f"/api/tracks?q={query}").json()
         assert found["total"] == 1, query
         assert found["items"][0]["playable"] is True
+
+
+def test_tracks_search_finds_latin_spelling_by_cyrillic_query(admin):
+    """«кизару» → «kizaru»: запрос транслитерируется, как в поиске бота."""
+    client, _ = admin
+    found = client.get("/api/tracks?q=кизару").json()
+    assert found["total"] == 1 and found["items"][0]["artist"] == "kizaru"
+    # Бессмысленный запрос не должен возвращать весь каталог
+    assert client.get("/api/tracks?q=ъъъъ").json()["total"] == 0
 
 
 def test_money_lists_payments_and_donations(admin):

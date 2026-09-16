@@ -29,6 +29,7 @@ from app.db.models import Donation, Payment, Track, TrackEvent, User
 from app.services.donations import donations_summary
 from app.services.revenue import collect_revenue
 from app.services.search_index import normalize_search_query
+from app.services.track_lookup.ranking import to_latin
 from app.services.stats import collect_stats
 
 UI_DIR = Path(__file__).resolve().parents[2] / "webadmin"
@@ -164,8 +165,17 @@ def create_app() -> FastAPI:
             # search_index понижен и транслитерирован в Питоне — основной путь.
             # ⚠️ SQLite lower() не берёт кириллицу, поэтому запасные условия —
             # по самим полям как есть: у части треков индекса нет (старые записи).
-            like = f"%{normalize_search_query(needle)}%"
-            conditions = [Track.search_index.like(like)]
+            normalized = normalize_search_query(needle)
+            conditions = []
+            # ⚠️ Пустой образец даёт LIKE '%%' — он подходит ко ВСЕМУ каталогу.
+            # Так «ъъъъ» возвращал 7589 треков вместо нуля (замер на проде 16.09).
+            if normalized:
+                conditions.append(Track.search_index.like(f"%{normalized}%"))
+            # «кизару» должно находить «kizaru»: индекс хранит и транслит,
+            # но сам запрос не транслитерируется — как в поиске бота
+            latin = to_latin(normalized)
+            if latin and latin != normalized:
+                conditions.append(Track.search_index.like(f"%{latin}%"))
             # Запасной путь для строк без индекса: сравниваем как есть и с
             # заглавной первой буквы — SQLite сам кириллицу не понижает
             for variant in {needle, needle.lower(), needle.capitalize(), needle.title()}:
