@@ -215,6 +215,48 @@ def search_fetch_candidate(
         raise self.retry(exc=exc, countdown=30)
 
 
+@celery_app.task(name="search.prefetch", queue="youtube_user")
+def search_prefetch(candidates: list[dict], telegram_id: int) -> None:
+    """Качает верх выдачи заранее, пока человек читает список (19.09).
+
+    Без повторов и без сообщений: это ускорение, а не заказ. Не вышло — нажатие
+    пойдёт обычным путём через `search.fetch_candidate`. Подробности —
+    app/services/prefetch.py.
+    """
+    from app.services import prefetch
+    from app.services.track_lookup.importer import import_candidate
+    from app.services.track_lookup.ranking import Candidate
+    from app.services.youtube.user_import import UserImportRejected
+
+    if not prefetch.acquire_slot():
+        return  # уже идёт чужая предзагрузка — второй поток нужен нажатиям
+
+    async def _run(session):
+        bot = Bot(token=settings.bot_token)
+        try:
+            for row in candidates:
+                chosen = Candidate(**row)
+                prefetch.mark_url(chosen.url)
+                try:
+                    await import_candidate(
+                        session, bot, chosen, telegram_id, save_to_library=False
+                    )
+                except UserImportRejected:
+                    pass  # DRM/длительность — нажмут, узнают обычным путём
+                except Exception:  # noqa: BLE001 — один сбой не отменяет остальных
+                    logger.warning("Предзагрузка %s не удалась", chosen.url, exc_info=True)
+                    await session.rollback()
+                finally:
+                    prefetch.unmark_url(chosen.url)
+        finally:
+            await bot.session.close()
+
+    try:
+        asyncio.run(_with_session(_run))
+    finally:
+        prefetch.release_slot()
+
+
 @celery_app.task(name="search.repair_track", bind=True, max_retries=1, queue="youtube_user")
 def repair_track(self, track_id: int, chat_id: int | None = None) -> None:
     """Перевыдаёт file_id треку, чей файл больше не принадлежит текущему боту.

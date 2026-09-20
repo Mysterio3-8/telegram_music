@@ -49,6 +49,9 @@ def instrumental_track_out(item: Instrumental) -> TrackOut:
         artist=item.artist,
         duration=item.duration,
         audio_url=build_instrumental_audio_url(item.id),
+        # Обложку минусу дописывает ночное дополнение (19.09); нет — Mini App
+        # рисует градиентную заглушку, как и раньше
+        cover_url=item.cover_url,
     )
 
 router = APIRouter(tags=["catalog"], dependencies=[Depends(require_premium)])

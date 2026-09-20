@@ -615,6 +615,8 @@
   display: flex;
   flex-direction: column;
   padding: env(safe-area-inset-top) 24px calc(28px + env(safe-area-inset-bottom));
+  /* Не влезло на низком экране — прокрутка, а не сплющенная обложка (19.09) */
+  overflow-y: auto;
   animation: player-in 0.36s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -647,8 +649,11 @@
 .player-art {
   /* Размер обложки ограничен высотой экрана — контролы не выталкиваются вниз */
   margin: 10px auto 20px;
-  width: min(100%, 42dvh);
+  width: min(100%, 40dvh);
   aspect-ratio: 1;
+  /* Колонка плеера ужимала обложку по высоте, когда под ней есть кнопки
+     «Скачать / Микс по треку»: рамка оставалась шире картинки (скрин 19.09) */
+  flex-shrink: 0;
   border-radius: 28px;
   background: var(--gradient-dark);
   border: 1px solid var(--glass-border-amethyst);
@@ -3546,22 +3551,6 @@
   object-fit: cover;
 }
 
-/* Крупная обложка (плеер): всю картинку целиком, без обрезки */
-.cover-art--fit .cover-img {
-  object-fit: contain;
-}
-
-/* Размытая копия закрывает пустоты по бокам неквадратной обложки */
-.cover-blur {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transform: scale(1.3);
-  filter: blur(22px) saturate(1.3);
-  opacity: 0.55;
-}
 
 /* Карточка артиста (SPEC-КАТАЛОГ §2): баннер-hero, аватар, жанры, альбомы */
 .artist-hero {

@@ -22,6 +22,7 @@ from aiogram.types import CallbackQuery, Message
 
 from app.config import settings
 from app.db.base import session_factory
+from app.db.models import Track
 from app.handlers.common import ensure_user
 from app.handlers.cards import build_card_keyboard
 from app.handlers.delivery import send_track_audio
@@ -212,6 +213,71 @@ async def quick_search(message: Message, state: FSMContext) -> None:
         _results_title(query, candidates),
         reply_markup=quick_search_keyboard(candidates, page=1, extra_rows=album_rows(albums)),
     )
+    await _schedule_prefetch(candidates, user.telegram_id)
+
+
+async def _schedule_prefetch(candidates: list[Candidate], telegram_id: int) -> None:
+    """Ставит заранее скачать верх выдачи — к нажатию трек уже в базе (19.09).
+
+    Уже залитых не ставим: их и так отдадим мгновенно. Сбой очереди молча
+    пропускаем — список человек уже получил, ускорение не обязательно.
+    """
+    from app.services.prefetch import PREFETCH_TOP, pick_for_prefetch
+
+    top = [item for item in candidates[:PREFETCH_TOP] if item.url]
+    if not top:
+        return
+    async with session_factory() as session:
+        known = {
+            item.url for item in top
+            if await find_track_by_source_url(session, item.url) is not None
+        }
+    chosen = pick_for_prefetch(candidates, known)
+    if not chosen:
+        return
+    try:
+        from app.tasks.search_fetch import search_prefetch
+
+        # Протухшая предзагрузка бессмысленна: через минуту человек уже нажал
+        # или ушёл, а воркер потратил бы ядро впустую.
+        search_prefetch.apply_async(
+            kwargs={"candidates": [asdict(item) for item in chosen], "telegram_id": telegram_id},
+            expires=60,
+        )
+    except Exception:  # noqa: BLE001
+        logger.warning("Предзагрузка: очередь недоступна", exc_info=True)
+
+
+# Сколько бот ждёт трек, который прямо сейчас качается заранее. Скачивание с
+# минтом ~8 сек; если за это время не успело — ставим обычное скачивание.
+_PREFETCH_WAIT_SECONDS = 25.0
+_PREFETCH_POLL_SECONDS = 0.5
+
+
+async def _wait_prefetched(url: str):
+    """Дожидается трека, который уже качается заранее. None — не дождались.
+
+    Ждём в боте, а не в воркере: это asyncio.sleep, он ничего не стоит, а поток
+    воркера на ожидание занял бы половину его ёмкости.
+    """
+    from app.services.prefetch import is_prefetching
+
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + _PREFETCH_WAIT_SECONDS
+    while loop.time() < deadline:
+        # Новая сессия на каждую проверку: открытая транзакция SQLite в WAL
+        # держит снимок базы, и свежую запись воркера она бы не увидела.
+        async with session_factory() as session:
+            track = await find_track_by_source_url(session, url)
+        if track is not None:
+            return track
+        if not is_prefetching(url):
+            # Метку снимают сразу после записи трека — между нашей проверкой
+            # базы и метки он мог успеть появиться. Последний взгляд, и всё.
+            async with session_factory() as session:
+                return await find_track_by_source_url(session, url)
+        await asyncio.sleep(_PREFETCH_POLL_SECONDS)
+    return None
 
 
 @router.callback_query(F.data.startswith("qs:p:"))
@@ -258,14 +324,31 @@ async def deliver_candidate(callback: CallbackQuery, candidate: Candidate) -> No
 
     artist, title = candidate_metadata(candidate)
     async with session_factory() as session:
-        user = await ensure_user(session, callback.from_user)
         # Сперва по ссылке источника — точный ключ «этот кандидат уже залит».
         # Сверка по «исполнитель — название» остаётся фолбэком для треков,
         # заведённых до появления source_url.
         existing = await find_track_by_source_url(session, candidate.url)
         if existing is None:
             existing = await find_track_by_metadata(session, artist, title)
-        if existing is not None:
+        existing_id = existing.id if existing is not None else None
+
+    answered = False
+    if existing_id is None:
+        from app.services.prefetch import is_prefetching
+
+        if is_prefetching(candidate.url):
+            # Трек уже качается заранее (19.09) — второе скачивание только
+            # отняло бы ядро у первого. На нажатие отвечаем сразу, иначе у кнопки
+            # крутятся «часики», и ждём готовый трек.
+            await callback.answer(t("quick.sending"))
+            answered = True
+            prefetched = await _wait_prefetched(candidate.url)
+            existing_id = prefetched.id if prefetched is not None else None
+
+    if existing_id is not None:
+        async with session_factory() as session:
+            user = await ensure_user(session, callback.from_user)
+            existing = await session.get(Track, existing_id)
             # Уже минтили — отдаём мгновенно по file_id, скачивать нечего.
             # С кнопками карточки: раз в библиотеку сам трек больше не падает,
             # добавить его должно быть чем.
@@ -273,10 +356,12 @@ async def deliver_candidate(callback: CallbackQuery, candidate: Candidate) -> No
             # файлом. Отправить mp3 сейчас и качество следом — значит прислать
             # одну и ту же песню дважды.
             if _queue_best_quality(user, existing, candidate, callback.message.chat.id):
-                await callback.answer(t("quick.preparing_best"))
+                if not answered:
+                    await callback.answer(t("quick.preparing_best"))
                 return
 
-            await callback.answer(t("quick.sending"))
+            if not answered:
+                await callback.answer(t("quick.sending"))
             in_library = await is_in_library(session, user.id, existing.id)
             keyboard = await build_card_keyboard(
                 callback.message, existing, "srch", in_library, user.telegram_id
@@ -301,9 +386,11 @@ async def deliver_candidate(callback: CallbackQuery, candidate: Candidate) -> No
         )
     except Exception:  # noqa: BLE001 — брокер недоступен, честно об этом говорим
         logger.warning("Живой поиск: очередь недоступна", exc_info=True)
-        await callback.answer(t("quick.busy"), show_alert=True)
+        if not answered:
+            await callback.answer(t("quick.busy"), show_alert=True)
         return
-    await callback.answer(t("quick.downloading"))
+    if not answered:
+        await callback.answer(t("quick.downloading"))
 
 
 @router.callback_query(F.data == "qs:noop")

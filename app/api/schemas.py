@@ -72,6 +72,7 @@ class LyricsOut(BaseModel):
     text: str | None = None
     source: str | None = None
     found: bool
+    can_edit: bool = False  # добавлять и править тексты могут только админы (19.09)
 
 
 class PlaylistSummaryOut(BaseModel):

@@ -21,6 +21,16 @@ export function renderPlaylists(state) {
     return `${head}<div class="empty-state">Загружаю…</div>`;
   }
 
+  // Сеть отвалилась — честный отказ с кнопкой. Раньше экран показывал
+  // «Плейлистов пока нет», то есть врал про пустоту вместо ошибки (19.09)
+  if (state.playlistsStatus === "error") {
+    return `
+      ${head}
+      <div class="empty-state">Не удалось загрузить плейлисты.</div>
+      <button class="btn btn--primary btn--block" data-action="open-playlists">Повторить</button>
+    `;
+  }
+
   const createRow = state.playlistCreating
     ? `
       <div class="pl-create-form">

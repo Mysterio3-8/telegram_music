@@ -2,7 +2,7 @@
 
 // Источник: miniapp/src/**. Пересборка: python tools/build_miniapp.py
 
-// отпечаток исходников: 8d68c7c5ec55991f
+// отпечаток исходников: 0e28b19cd363a01b
 
 (function () {
   "use strict";
@@ -58,15 +58,34 @@
       accessToken = data.access_token;
     }
 
+    // Сколько ждём ответ сервера. Без предела зависшее соединение держало экран на
+    // «Загружаю…» бесконечно (скрин владельца 19.09: «Плейлисты» на медленной сети).
+    // 20 сек: сам сервер отвечает за десятки миллисекунд, столько ждём только сеть.
+    const REQUEST_TIMEOUT_MS = 20000;
+
     async function request(path, options = {}) {
-      const response = await fetch(`${API_BASE}${path}`, {
-        ...options,
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          ...(options.body ? { "Content-Type": "application/json" } : {}),
-          ...(options.headers || {}),
-        },
-      });
+      // AbortController есть во всех живых браузерах; если его нет — работаем как раньше
+      const control = typeof AbortController === "function" ? new AbortController() : null;
+      const timer = control ? setTimeout(() => control.abort(), REQUEST_TIMEOUT_MS) : null;
+      let response;
+      try {
+        response = await fetch(`${API_BASE}${path}`, {
+          ...options,
+          signal: control ? control.signal : undefined,
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            ...(options.body ? { "Content-Type": "application/json" } : {}),
+            ...(options.headers || {}),
+          },
+        });
+      } catch (error) {
+        if (error && error.name === "AbortError") {
+          throw new ApiError("Сеть не отвечает — попробуйте ещё раз", 0);
+        }
+        throw error;
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
       if (response.status === 401 && !options._retried) {
         // токен истёк — перелогин и РОВНО один повтор (иначе бесконечный цикл 401)
         await login();
@@ -1418,20 +1437,31 @@
       ].join(", ");
     }
 
-    // withBlur — для крупных обложек (плеер): показываем всю обложку целиком
-    // (object-fit: contain), а пустоты по бокам у неквадратных источников (YouTube
-    // 16:9) закрываем размытой копией той же картинки. В списках это не нужно —
-    // там 46px и лишний размытый слой только грузит рендер.
-    function renderCover(track, className = "track-cover", withBlur = false) {
+    // Размер обложки SoundCloud задаётся суффиксом имени файла (19.09, замер):
+    // «-original» до 800 КБ — его грузили даже в строку списка на 46px; «-t500x500»
+    // в плеере на экране ×3 выглядел мыльно, а «-t1080x1080» есть у всех (240 КБ).
+    const SC_SIZE = /-(original|large|crop|small|badge|tiny|mini|t\d+x\d+)\.(jpe?g|png)(\?.*)?$/i;
+
+    function sizedCover(url, big = false) {
+      if (!url || !/sndcdn\.com\//.test(url) || !SC_SIZE.test(url)) return url;
+      // Аватарки (обложка трека без своей картинки) крупнее 500 не бывают, а
+      // «-t1080x1080» у них — растянутая мелочь того же качества
+      const size = big && !/\/avatars-/.test(url) ? "t1080x1080" : big ? "t500x500" : "t300x300";
+      return url.replace(SC_SIZE, `-${size}.$2`);
+    }
+
+    function hiResCover(url, className) {
+      return sizedCover(url, className === "player-art");
+    }
+
+    // Обложка заполняет квадрат целиком (object-fit: cover) — решение владельца 19.09:
+    // полосы по бокам и размытая подложка выглядели как рамка больше картинки.
+    function renderCover(track, className = "track-cover") {
       if (track.cover_url) {
-        const src = escapeAttr(track.cover_url);
-        // При ошибке загрузки убираем обе картинки — остаётся градиентная заглушка
-        const blur = withBlur
-          ? `<img class="cover-blur" src="${src}" alt="" aria-hidden="true" loading="lazy" onerror="this.remove()" />`
-          : "";
+        const src = escapeAttr(hiResCover(track.cover_url, className));
+        // При ошибке загрузки картинка убирается — остаётся градиентная заглушка
         return `
-          <div class="${className} cover-art${withBlur ? " cover-art--fit" : ""}" style="background:${coverStyle(track)}">
-            ${blur}
+          <div class="${className} cover-art" style="background:${coverStyle(track)}">
             <img class="cover-img" src="${src}" alt="" loading="lazy" onerror="this.remove()" />
           </div>
         `;
@@ -1443,7 +1473,7 @@
         </div>
       `;
     }
-    return { coverStyle, renderCover };
+    return { coverStyle, sizedCover, renderCover };
   })();
 
   __m["components/trackRow.js"] = (function () {
@@ -1641,7 +1671,7 @@
               <span class="player-topbar__spacer"></span>
             </div>
 
-            ${renderCover(currentTrack, "player-art", true)}
+            ${renderCover(currentTrack, "player-art")}
 
             <div class="player-meta">
               <div class="player-meta__text">
@@ -2082,7 +2112,7 @@
   __m["screens/search.js"] = (function () {
     const { icon } = __m["components/icons.js"];
     const { renderTrackList, escapeHtml } = __m["components/trackRow.js"];
-    const { renderCover } = __m["components/cover.js"];
+    const { renderCover, sizedCover } = __m["components/cover.js"];
     const { formatDuration } = __m["api.js"];
     const { getRecentSearches, getRecentTracks } = __m["prefs.js"];
     // Поиск (ТЗ §11 + скрины VK в копи/): сверху «История прослушивания» (недавние
@@ -2184,7 +2214,7 @@
               <button class="artist-album" data-action="open-album" data-name="${escapeHtml(a.name)}">
                 ${
                   a.cover_url
-                    ? `<img class="artist-album__cover" src="${escapeHtml(a.cover_url)}" alt="" loading="lazy" />`
+                    ? `<img class="artist-album__cover" src="${escapeHtml(sizedCover(a.cover_url))}" alt="" loading="lazy" />`
                     : `<span class="artist-album__cover artist-album__cover--letter">${escapeHtml((a.name[0] || "♪").toUpperCase())}</span>`
                 }
                 <span class="artist-album__name">${escapeHtml(a.name)}</span>
@@ -2248,7 +2278,7 @@
             <button class="artist-album" data-action="open-live-album" data-index="${i}">
               ${
                 a.cover_url
-                  ? `<img class="artist-album__cover" src="${escapeHtml(a.cover_url)}" alt="" loading="lazy" />`
+                  ? `<img class="artist-album__cover" src="${escapeHtml(sizedCover(a.cover_url))}" alt="" loading="lazy" />`
                   : `<span class="artist-album__cover artist-album__cover--letter">${escapeHtml((a.title[0] || "♪").toUpperCase())}</span>`
               }
               <span class="artist-album__name">${escapeHtml(a.title)}</span>
@@ -3121,7 +3151,7 @@
   __m["screens/artistcard.js"] = (function () {
     const { icon } = __m["components/icons.js"];
     const { renderTrackList, escapeHtml } = __m["components/trackRow.js"];
-    const { renderCover } = __m["components/cover.js"];
+    const { renderCover, sizedCover } = __m["components/cover.js"];
     // Карточка артиста (SPEC-КАТАЛОГ §2 + референсы Яндекс/VK): баннер, аватар,
     // жанры, подписка, последний релиз, топ треков, синглы, альбомы, похожие артисты.
 
@@ -3247,7 +3277,7 @@
                 <button class="artist-album" data-action="open-album" data-name="${escapeHtml(a.name)}">
                   ${
                     a.cover_url
-                      ? `<img class="artist-album__cover" src="${escapeHtml(a.cover_url)}" alt="" loading="lazy" />`
+                      ? `<img class="artist-album__cover" src="${escapeHtml(sizedCover(a.cover_url))}" alt="" loading="lazy" />`
                       : `<span class="artist-album__cover artist-album__cover--letter">${escapeHtml((a.name[0] || "♪").toUpperCase())}</span>`
                   }
                   <span class="artist-album__name">${escapeHtml(a.name)}</span>
@@ -3634,9 +3664,10 @@
     const { icon } = __m["components/icons.js"];
     const { escapeHtml } = __m["components/trackRow.js"];
     // Текст песни (ТЗ §8): открывается сразу, дизайн по VK — крупный читаемый текст.
-    // Добавление/правка своего текста — только Premium.
+    // Добавлять и править тексты могут только админы (решение владельца 19.09):
+    // текст общий для всех слушателей, правка перезаписывает его целиком.
 
-    const SOURCE_LABEL = { lrclib: "найдено автоматически", user: "добавлено слушателями", admin: "проверено" };
+    const SOURCE_LABEL = { lrclib: "найдено автоматически", user: "добавлено слушателями", admin: "добавлено администратором" };
 
     function editor(state, initial) {
       return `
@@ -3653,21 +3684,10 @@
       `;
     }
 
-    function premiumNote() {
-      return `
-        <div class="premium-card" data-action="open-premium" style="margin-top:14px">
-          <div class="premium-card__icon">${icon("crown")}</div>
-          <div>
-            <div class="premium-card__title">Добавление текста — Premium</div>
-            <div class="premium-card__subtitle">Оформите подписку, чтобы добавлять свои тексты</div>
-          </div>
-        </div>
-      `;
-    }
-
     function renderLyrics(state) {
       const track = state.lyricsTrack;
-      const isPremium = state.premium && state.premium.active;
+      // Право правки сообщает сервер — он же его и проверяет при сохранении
+      const canEdit = Boolean(state.lyrics && state.lyrics.can_edit);
 
       const head = `
         <div class="page-head" data-role="page-head">
@@ -3690,7 +3710,7 @@
 
       const lyrics = state.lyrics;
 
-      if (state.lyricsEditing && isPremium) {
+      if (state.lyricsEditing && canEdit) {
         return `${head}${editor(state, lyrics && lyrics.text ? lyrics.text : "")}`;
       }
 
@@ -3700,8 +3720,8 @@
           <pre class="lyrics-text">${escapeHtml(lyrics.text)}</pre>
           <div class="lyrics-meta">${SOURCE_LABEL[lyrics.source] || ""}</div>
           ${
-            isPremium
-              ? `<button class="btn btn--ghost btn--block" data-action="lyrics-edit" style="margin-top:12px">${icon("pencil")} Предложить правку</button>`
+            canEdit
+              ? `<button class="btn btn--ghost btn--block" data-action="lyrics-edit" style="margin-top:12px">${icon("pencil")} Изменить текст</button>`
               : ""
           }
         `;
@@ -3710,7 +3730,7 @@
       return `
         ${head}
         <p class="page-hint">Текста этой песни пока нет в базе.</p>
-        ${isPremium ? editor(state, "") : premiumNote()}
+        ${canEdit ? editor(state, "") : ""}
       `;
     }
     return { renderLyrics };
@@ -3768,6 +3788,16 @@
 
       if (state.playlistsStatus === "loading") {
         return `${head}<div class="empty-state">Загружаю…</div>`;
+      }
+
+      // Сеть отвалилась — честный отказ с кнопкой. Раньше экран показывал
+      // «Плейлистов пока нет», то есть врал про пустоту вместо ошибки (19.09)
+      if (state.playlistsStatus === "error") {
+        return `
+          ${head}
+          <div class="empty-state">Не удалось загрузить плейлисты.</div>
+          <button class="btn btn--primary btn--block" data-action="open-playlists">Повторить</button>
+        `;
       }
 
       const createRow = state.playlistCreating
@@ -3852,7 +3882,7 @@
   __m["screens/collection.js"] = (function () {
     const { icon } = __m["components/icons.js"];
     const { renderTrackList, escapeHtml } = __m["components/trackRow.js"];
-    const { renderCover } = __m["components/cover.js"];
+    const { renderCover, sizedCover } = __m["components/cover.js"];
     // Страница плейлиста/альбома/исполнителя по референсу VK Music (ТЗ §6):
     // крупная обложка, название, счётчик и длительность, кнопки Слушать/Перемешать.
 
@@ -3907,7 +3937,7 @@
 
       const letter = escapeHtml(title.trim()[0] || "♪").toUpperCase();
       const cover = state.collectionCover
-        ? `<img class="coll-hero__cover" src="${escapeHtml(state.collectionCover)}" alt="" />`
+        ? `<img class="coll-hero__cover" src="${escapeHtml(sizedCover(state.collectionCover, true))}" alt="" />`
         : `<div class="coll-hero__cover">${letter}</div>`;
       const live = state.collectionLive || [];
       const addAll = state.collectionAlbumId

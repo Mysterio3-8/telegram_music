@@ -47,15 +47,34 @@ export async function login() {
   accessToken = data.access_token;
 }
 
+// Сколько ждём ответ сервера. Без предела зависшее соединение держало экран на
+// «Загружаю…» бесконечно (скрин владельца 19.09: «Плейлисты» на медленной сети).
+// 20 сек: сам сервер отвечает за десятки миллисекунд, столько ждём только сеть.
+const REQUEST_TIMEOUT_MS = 20000;
+
 async function request(path, options = {}) {
-  const response = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      ...(options.body ? { "Content-Type": "application/json" } : {}),
-      ...(options.headers || {}),
-    },
-  });
+  // AbortController есть во всех живых браузерах; если его нет — работаем как раньше
+  const control = typeof AbortController === "function" ? new AbortController() : null;
+  const timer = control ? setTimeout(() => control.abort(), REQUEST_TIMEOUT_MS) : null;
+  let response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      ...options,
+      signal: control ? control.signal : undefined,
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        ...(options.body ? { "Content-Type": "application/json" } : {}),
+        ...(options.headers || {}),
+      },
+    });
+  } catch (error) {
+    if (error && error.name === "AbortError") {
+      throw new ApiError("Сеть не отвечает — попробуйте ещё раз", 0);
+    }
+    throw error;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
   if (response.status === 401 && !options._retried) {
     // токен истёк — перелогин и РОВНО один повтор (иначе бесконечный цикл 401)
     await login();

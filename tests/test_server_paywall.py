@@ -44,6 +44,10 @@ OPEN_ROUTES = {
     ("POST", "/language"),
     ("GET", "/subscription/status"),
     ("POST", "/subscription/click/{channel_id}"),
+    # тексты песен: смотреть может любой (решение владельца 19.09), а писать —
+    # только админ, и это строже пэйвола: у POST своя проверка прав
+    ("GET", "/tracks/{track_id}/lyrics"),
+    ("POST", "/tracks/{track_id}/lyrics"),
     ("GET", "/tracks/{track_id}/audio"),
     ("GET", "/instrumentals/{instrumental_id}/audio"),
     ("GET", "/stream/{ref}"),

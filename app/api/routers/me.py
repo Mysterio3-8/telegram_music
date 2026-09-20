@@ -84,7 +84,7 @@ from app.services.search_log import log_search_query, popular_queries
 from app.services.stats import record_event
 from app.services.telegram_send import send_audio_by_file_id
 from app.services.uploads import detect_format
-from app.services.users import count_library_tracks, set_user_language, user_language
+from app.services.users import count_library_tracks, is_admin, set_user_language, user_language
 from app.storage import get_storage
 
 router = APIRouter(tags=["me"])
@@ -642,14 +642,18 @@ async def record_listen(
 @router.get("/tracks/{track_id}/lyrics", response_model=LyricsOut)
 async def track_lyrics(
     track_id: int,
-    user: User = Depends(require_premium),
+    user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> LyricsOut:
+    # Читать тексты может любой (решение владельца 19.09) — раньше только Premium
     track = await get_track(session, track_id)
     if track is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Трек не найден")
     result = await get_or_fetch_lyrics(session, track)
-    return LyricsOut(text=result.text, source=result.source, found=result.found)
+    return LyricsOut(
+        text=result.text, source=result.source, found=result.found,
+        can_edit=is_admin(user.telegram_id),
+    )
 
 
 @router.post(
@@ -658,21 +662,21 @@ async def track_lyrics(
 async def submit_lyrics(
     track_id: int,
     payload: LyricsIn,
-    user: User = Depends(require_premium),
+    user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> LyricsOut:
     # Текст общий для всех слушателей трека, а правка перезаписывает его целиком.
-    # Интерфейс пускал к редактору только Premium, сервер — любого: бесплатный
-    # аккаунт одним запросом затирал текст у всех (замер: 201).
-    if not is_premium_active(user):
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Добавление текста — с Premium")
+    # Поэтому писать может только админ (решение владельца 19.09); раньше —
+    # любой Premium, и один человек мог испортить текст всем.
+    if not is_admin(user.telegram_id):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Тексты добавляют администраторы")
     if await get_track(session, track_id) is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Трек не найден")
     text = payload.text.strip()
     if not text:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Пустой текст")
-    row = await save_lyrics(session, track_id, text, source="user")
-    return LyricsOut(text=row.text, source=row.source, found=True)
+    row = await save_lyrics(session, track_id, text, source="admin")
+    return LyricsOut(text=row.text, source=row.source, found=True, can_edit=True)
 
 
 @router.get("/profile", response_model=ProfileOut)

@@ -236,6 +236,10 @@ class Instrumental(Base):
     tg_file_id: Mapped[str | None] = mapped_column(String(256))  # для мгновенной пересылки
     fingerprint: Mapped[str | None] = mapped_column(String(128), index=True)
     source: Mapped[str] = mapped_column(String(32), default="import", server_default="import")
+    # Обложка и отметка «дополняли» (19.09): минусы из ТГ-канала приезжают без
+    # картинки и иногда без исполнителя, ночная задача ищет их в SoundCloud.
+    cover_url: Mapped[str | None] = mapped_column(String(512))
+    enrich_checked_at: Mapped[datetime | None] = mapped_column(index=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
 

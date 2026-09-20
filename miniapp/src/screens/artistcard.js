@@ -1,6 +1,6 @@
 import { icon } from "../components/icons.js";
 import { renderTrackList, escapeHtml } from "../components/trackRow.js";
-import { renderCover } from "../components/cover.js";
+import { renderCover, sizedCover } from "../components/cover.js";
 
 // Карточка артиста (SPEC-КАТАЛОГ §2 + референсы Яндекс/VK): баннер, аватар,
 // жанры, подписка, последний релиз, топ треков, синглы, альбомы, похожие артисты.
@@ -127,7 +127,7 @@ export function renderArtistCard(state) {
             <button class="artist-album" data-action="open-album" data-name="${escapeHtml(a.name)}">
               ${
                 a.cover_url
-                  ? `<img class="artist-album__cover" src="${escapeHtml(a.cover_url)}" alt="" loading="lazy" />`
+                  ? `<img class="artist-album__cover" src="${escapeHtml(sizedCover(a.cover_url))}" alt="" loading="lazy" />`
                   : `<span class="artist-album__cover artist-album__cover--letter">${escapeHtml((a.name[0] || "♪").toUpperCase())}</span>`
               }
               <span class="artist-album__name">${escapeHtml(a.name)}</span>

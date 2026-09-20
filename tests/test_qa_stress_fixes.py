@@ -79,7 +79,8 @@ async def _count(factory, stmt) -> int:
 def test_free_user_cannot_overwrite_shared_lyrics(env):
     client, _ = env
     response = client.post("/tracks/1/lyrics", headers=_auth(555), json={"text": "VANDAL"})
-    assert response.status_code == 402  # с 14.09 весь API Mini App закрыт пэйволом
+    # 19.09: читать тексты может любой, а писать — только админ
+    assert response.status_code == 403
 
 
 def test_lyrics_length_is_capped(env):
@@ -89,11 +90,22 @@ def test_lyrics_length_is_capped(env):
 
 
 @pytest.mark.asyncio
-async def test_premium_user_still_saves_lyrics(env):
+async def test_only_admin_saves_lyrics(env, monkeypatch):
+    # 19.09 владелец: тексты добавляют и правят только админы, Premium — нет
+    from app.config import settings
+
     client, factory = env
+    monkeypatch.setattr(settings, "admin_ids", "777")
     response = client.post("/tracks/1/lyrics", headers=_auth(777), json={"text": "Куплет"})
-    assert response.status_code == 201
+    assert response.status_code == 201 and response.json()["source"] == "admin"
     assert await _count(factory, select(func.count()).select_from(Lyrics)) == 1
+
+    monkeypatch.setattr(settings, "admin_ids", "")
+    response = client.post("/tracks/1/lyrics", headers=_auth(777), json={"text": "Порча"})
+    assert response.status_code == 403
+    viewed = client.get("/tracks/1/lyrics", headers=_auth(777))
+    assert viewed.status_code == 200
+    assert viewed.json()["text"] == "Куплет" and viewed.json()["can_edit"] is False
 
 
 def test_playlist_title_length_is_capped(env):

@@ -2,9 +2,10 @@ import { icon } from "../components/icons.js";
 import { escapeHtml } from "../components/trackRow.js";
 
 // Текст песни (ТЗ §8): открывается сразу, дизайн по VK — крупный читаемый текст.
-// Добавление/правка своего текста — только Premium.
+// Добавлять и править тексты могут только админы (решение владельца 19.09):
+// текст общий для всех слушателей, правка перезаписывает его целиком.
 
-const SOURCE_LABEL = { lrclib: "найдено автоматически", user: "добавлено слушателями", admin: "проверено" };
+const SOURCE_LABEL = { lrclib: "найдено автоматически", user: "добавлено слушателями", admin: "добавлено администратором" };
 
 function editor(state, initial) {
   return `
@@ -21,21 +22,10 @@ function editor(state, initial) {
   `;
 }
 
-function premiumNote() {
-  return `
-    <div class="premium-card" data-action="open-premium" style="margin-top:14px">
-      <div class="premium-card__icon">${icon("crown")}</div>
-      <div>
-        <div class="premium-card__title">Добавление текста — Premium</div>
-        <div class="premium-card__subtitle">Оформите подписку, чтобы добавлять свои тексты</div>
-      </div>
-    </div>
-  `;
-}
-
 export function renderLyrics(state) {
   const track = state.lyricsTrack;
-  const isPremium = state.premium && state.premium.active;
+  // Право правки сообщает сервер — он же его и проверяет при сохранении
+  const canEdit = Boolean(state.lyrics && state.lyrics.can_edit);
 
   const head = `
     <div class="page-head" data-role="page-head">
@@ -58,7 +48,7 @@ export function renderLyrics(state) {
 
   const lyrics = state.lyrics;
 
-  if (state.lyricsEditing && isPremium) {
+  if (state.lyricsEditing && canEdit) {
     return `${head}${editor(state, lyrics && lyrics.text ? lyrics.text : "")}`;
   }
 
@@ -68,8 +58,8 @@ export function renderLyrics(state) {
       <pre class="lyrics-text">${escapeHtml(lyrics.text)}</pre>
       <div class="lyrics-meta">${SOURCE_LABEL[lyrics.source] || ""}</div>
       ${
-        isPremium
-          ? `<button class="btn btn--ghost btn--block" data-action="lyrics-edit" style="margin-top:12px">${icon("pencil")} Предложить правку</button>`
+        canEdit
+          ? `<button class="btn btn--ghost btn--block" data-action="lyrics-edit" style="margin-top:12px">${icon("pencil")} Изменить текст</button>`
           : ""
       }
     `;
@@ -78,6 +68,6 @@ export function renderLyrics(state) {
   return `
     ${head}
     <p class="page-hint">Текста этой песни пока нет в базе.</p>
-    ${isPremium ? editor(state, "") : premiumNote()}
+    ${canEdit ? editor(state, "") : ""}
   `;
 }

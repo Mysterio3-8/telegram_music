@@ -1,6 +1,6 @@
 import { icon } from "../components/icons.js";
 import { renderTrackList, escapeHtml } from "../components/trackRow.js";
-import { renderCover } from "../components/cover.js";
+import { renderCover, sizedCover } from "../components/cover.js";
 import { formatDuration } from "../api.js";
 import { getRecentSearches, getRecentTracks } from "../prefs.js";
 
@@ -103,7 +103,7 @@ function renderSections(sections, state) {
           <button class="artist-album" data-action="open-album" data-name="${escapeHtml(a.name)}">
             ${
               a.cover_url
-                ? `<img class="artist-album__cover" src="${escapeHtml(a.cover_url)}" alt="" loading="lazy" />`
+                ? `<img class="artist-album__cover" src="${escapeHtml(sizedCover(a.cover_url))}" alt="" loading="lazy" />`
                 : `<span class="artist-album__cover artist-album__cover--letter">${escapeHtml((a.name[0] || "♪").toUpperCase())}</span>`
             }
             <span class="artist-album__name">${escapeHtml(a.name)}</span>
@@ -167,7 +167,7 @@ function renderLiveAlbums(state) {
         <button class="artist-album" data-action="open-live-album" data-index="${i}">
           ${
             a.cover_url
-              ? `<img class="artist-album__cover" src="${escapeHtml(a.cover_url)}" alt="" loading="lazy" />`
+              ? `<img class="artist-album__cover" src="${escapeHtml(sizedCover(a.cover_url))}" alt="" loading="lazy" />`
               : `<span class="artist-album__cover artist-album__cover--letter">${escapeHtml((a.title[0] || "♪").toUpperCase())}</span>`
           }
           <span class="artist-album__name">${escapeHtml(a.title)}</span>

@@ -1,6 +1,6 @@
 import { icon } from "../components/icons.js";
 import { renderTrackList, escapeHtml } from "../components/trackRow.js";
-import { renderCover } from "../components/cover.js";
+import { renderCover, sizedCover } from "../components/cover.js";
 
 // Страница плейлиста/альбома/исполнителя по референсу VK Music (ТЗ §6):
 // крупная обложка, название, счётчик и длительность, кнопки Слушать/Перемешать.
@@ -56,7 +56,7 @@ export function renderCollection(state) {
 
   const letter = escapeHtml(title.trim()[0] || "♪").toUpperCase();
   const cover = state.collectionCover
-    ? `<img class="coll-hero__cover" src="${escapeHtml(state.collectionCover)}" alt="" />`
+    ? `<img class="coll-hero__cover" src="${escapeHtml(sizedCover(state.collectionCover, true))}" alt="" />`
     : `<div class="coll-hero__cover">${letter}</div>`;
   const live = state.collectionLive || [];
   const addAll = state.collectionAlbumId
