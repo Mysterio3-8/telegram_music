@@ -100,19 +100,70 @@ def mark_done(path: str | None, query: str) -> None:
         handle.write(f"{query}\n")
 
 
+def _compact(text: str) -> str:
+    """Имя без пробелов, знаков и алфавита: «Би-2» → bi2, «Artik & Asti» → artikasti."""
+    import re
+
+    from app.services.track_lookup.ranking import normalize_query, to_latin
+
+    return re.sub(r"[^a-z0-9]+", "", to_latin(normalize_query(text or "")))
+
+
+def artist_matches(name: str, candidate) -> bool:
+    """Это правда трек запрошенного артиста, а не сосед по выдаче.
+
+    ⚠️ Готовые `artist_hit`/`artist_affinity` здесь не годятся: они считают
+    совпадение по СЛОВАМ, и у коротких имён это ложно срабатывает. Живой промах
+    21.09: «Би-2» против «2z ft. Young H, Black Bi» — слово «bi» нашлось, и
+    сходство вышло 1.0, хотя артист чужой.
+
+    Сравниваем имена целиком, сжатыми до букв и цифр: «bi2» в «2zftyounghblackbi»
+    не входит. Подстрока в обе стороны — чтобы «Кино Виктор Цой» из списка
+    совпал с «Кино» у источника, а «Artik & Asti» с «Artik Asti».
+    """
+    name_key = _compact(name)
+    artist_key = _compact(getattr(candidate, "artist", "") or "")
+    if len(name_key) < 3 or len(artist_key) < 3:
+        return False
+    return name_key in artist_key or artist_key in name_key
+
+
 async def artist_tracks(name: str, per_artist: int) -> list[str]:
-    """Настоящие треки артиста у источника, самые слушаемые сверху."""
+    """Настоящие треки артиста у источника, самые слушаемые сверху.
+
+    ⚠️ Выдачу обязательно фильтруем. Прогрев зовёт источник ИМЕНЕМ артиста, и в
+    ответ прилетает всё, что похоже по буквам: по «Би-2» приезжал «2z ft. Young
+    H, Black Bi», по любому имени — перезаливы и «@Official Original Track».
+    Такой трек лёг бы в каталог под именем артиста, и его получали бы люди.
+    """
+    from app.services.title_quality import is_probably_junk
     from app.services.track_lookup import search_candidates
+    from app.services.track_lookup.ranking import normalize_query
 
     try:
         candidates = await search_candidates(name)
     except Exception:  # noqa: BLE001 — источник не ответил, вернёмся к артисту в другой раз
         logger.warning("«%s» — источник не ответил", name, exc_info=True)
         return []
-    queries = []
-    for candidate in candidates[:per_artist]:
+
+    queries: list[str] = []
+    seen: set[str] = set()
+    skipped = 0
+    for candidate in candidates:
+        if len(queries) >= per_artist:
+            break
+        if not artist_matches(name, candidate) or is_probably_junk(candidate.title or ""):
+            skipped += 1
+            continue
+        # Один и тот же трек приезжает перезаливами по нескольку раз — греем один
+        key = normalize_query(candidate.title or "")
+        if not key or key in seen:
+            skipped += 1
+            continue
+        seen.add(key)
         artist = (candidate.artist or name).strip()
         queries.append(f"{artist} {candidate.title}".strip())
+    logger.info("«%s» — к прогреву %s, отсеяно %s", name, len(queries), skipped)
     return queries
 
 

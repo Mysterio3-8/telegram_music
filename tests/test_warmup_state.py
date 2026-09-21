@@ -81,3 +81,29 @@ def test_warmup_timer_runs_slow_and_remembers_progress():
     # Ночной рывок по списку артистов убран — он живёт в своём таймере
     assert "--artists data/popular-artists.txt" not in nightly
     assert "--popular 30 --days 7 --delay 45" in nightly
+
+
+def _cand(artist, title, source="soundcloud"):
+    from app.services.track_lookup.ranking import Candidate
+
+    return Candidate(source=source, url=f"https://sc/{title}", title=title, duration=200, artist=artist)
+
+
+def test_alien_artist_is_not_warmed():
+    # Живой промах 21.09: по «Би-2» источник отдал «2z ft. Young H, Black Bi»
+    from app.cli.warmup import artist_matches
+
+    assert artist_matches("Би-2", _cand("Би-2", "Варвара"))
+    assert not artist_matches("Би-2", _cand("2z ft. Young H, Black Bi", "2z ft. Young H"))
+    assert artist_matches("MACAN", _cand("MACAN", "Юг"))
+    assert not artist_matches("MACAN", _cand("Вадим Мулерман", "Ты назови её Мариной"))
+
+
+def test_artist_name_variants_still_match():
+    # Список и источник пишут имя по-разному — совпадение должно переживать это
+    from app.cli.warmup import artist_matches
+
+    assert artist_matches("Artik Asti", _cand("Artik & Asti", "Гармония"))
+    assert artist_matches("Кино Виктор Цой", _cand("Кино", "Группа крови"))
+    assert artist_matches("Руки Вверх", _cand("Руки Вверх!", "Крошка моя"))
+    assert not artist_matches("Дора", _cand("До", "Что-то"))  # слишком коротко
