@@ -1,0 +1,993 @@
+# Список владельца (21.09): самые популярные исполнители и треки.
+# Прогрев: python -m app.cli.warmup --file data/popular-tracks.txt --limit 150
+# Строка = запрос к поиску. Уже заведённые треки пропускаются.
+ANNA ASTI Царица
+ANNA ASTI По барам
+ANNA ASTI Верю в тебя
+ANNA ASTI Дурак
+ANNA ASTI Худи
+JONY Комета
+JONY Аллея
+JONY Титры
+JONY Воздушный сарафан
+JONY Без тебя я не я
+Zivert Life
+Zivert Зеленые волны
+Zivert Beverly Hills
+Zivert Credo
+Zivert Муза
+Сергей Лазарев В самое сердце
+Сергей Лазарев Так красиво
+Сергей Лазарев Сдавайся
+Сергей Лазарев You Are the Only One
+Сергей Лазарев Алые паруса
+Дима Билан Believe
+Дима Билан На берегу неба
+Дима Билан Молния
+Дима Билан Держи
+Дима Билан Острой бритвой
+Клава Кока Покинула чат
+Клава Кока Краш
+Клава Кока Замуж
+Клава Кока Пьяную домой
+Клава Кока Хочешь
+NILETTO Любимка
+NILETTO Краш
+NILETTO Fly 2
+NILETTO Ты такая красивая
+NILETTO Если тебе будет грустно
+Полина Гагарина Кукушка
+Полина Гагарина Спектакль окончен
+Полина Гагарина A Million Voices
+Полина Гагарина Драмы больше нет
+Полина Гагарина Водопады
+Люся Чеботина Солнце Монако
+Люся Чеботина Плакал Голливуд
+Люся Чеботина Аэроэкспресс
+Люся Чеботина Королева
+Люся Чеботина За бывшего
+Хабиб Ягода малинка
+Хабиб Ой какая ты
+Хабиб Чебурашка
+Хабиб Ближе
+Хабиб Грустинка
+MONA Ты так мне необходим
+MONA Зари
+MONA Она тебя целует
+MONA Дневник памяти
+MONA Черная любовь
+Ваня Дмитриенко Венера-Юпитер
+Ваня Дмитриенко 31-й весна
+Ваня Дмитриенко Шелк
+Ваня Дмитриенко Лего
+Ваня Дмитриенко Вечеринке конец
+Artik & Asti Грустный дэнс
+Artik & Asti Девочка танцуй
+Artik & Asti Истеричка
+Artik & Asti Гармония
+Artik & Asti Худи
+Мари Краймбрери Мне так повезло
+Мари Краймбрери Пряталась в ванной
+Мари Краймбрери Океан
+Мари Краймбрери Иначе всё это зря
+Мари Краймбрери Случилась осень
+SHAMAN Я русский
+SHAMAN Встанем
+SHAMAN Моя Россия
+SHAMAN Исповедь
+SHAMAN Ты моя
+Лолита Пошлю его на
+Лолита Ориентация север
+Лолита Раневская
+Лолита На Титанике
+Лолита Марлен
+Мот Капкан
+Мот Соло
+Мот Август — это ты
+Мот Повзрослела
+Мот Шадэ
+Егор Крид Самая самая
+Егор Крид Сердцеедка
+Егор Крид Потрачу
+Егор Крид Pussy Boy
+Егор Крид Девочка не плачь
+Mia Boyka Пикачу
+Mia Boyka Гагарин
+Mia Boyka Ананас Адидас
+Mia Boyka Бегу по тропинке
+Mia Boyka Вдох-выдох
+Юлианна Караулова Ты не такой
+Юлианна Караулова Внеорбитные
+Юлианна Караулова Градусы
+Юлианна Караулова Дикая пума
+Юлианна Караулова Хьюстон
+Ольга Бузова Мало половин
+Ольга Бузова Водица
+Ольга Бузова Танцуй под Бузову
+Ольга Бузова Принимай меня
+Ольга Бузова Верни
+Глюкоза Невеста
+Глюкоза Снег идет
+Глюкоза Жу-жу
+Глюкоза Танцуй Россия
+Глюкоза Швайне
+Артём Качер Грустный дэнс
+Артём Качер Одинокая луна
+Артём Качер ДНК
+Артём Качер Под дождем
+Артём Качер Терапия
+Елена Темникова Импульсы
+Елена Темникова Вдох
+Елена Темникова Не модные
+Елена Темникова Жара
+Елена Темникова Ревность
+ВИА Гра Биология
+ВИА Гра Бриллианты
+ВИА Гра Попытка №5
+ВИА Гра Перемирие
+ВИА Гра У меня появился другой
+МакSим Знаешь ли ты
+МакSим Трудный возраст
+МакSим Отпускаю
+МакSим Нежность
+МакSим Ветром стать
+Нюша Выбирать чудо
+Нюша Выше
+Нюша Больно
+Нюша Цунами
+Нюша Воспоминание
+Ирина Дубцова О нём
+Ирина Дубцова Кому Зачем
+Ирина Дубцова Люби меня долго
+Ирина Дубцова Главное семья
+Ирина Дубцова Ветром
+Филипп Киркоров Цвет настроения синий
+Филипп Киркоров Ибица
+Филипп Киркоров Снег
+Филипп Киркоров Единственная моя
+Филипп Киркоров Жестокая любовь
+Николай Басков Шарманка
+Николай Басков Натуральный блондин
+Николай Басков Ну кто тебе сказал
+Николай Басков Ты сердце моё разбила
+Николай Басков Дико тусим
+Валерия Часики
+Валерия Самолет
+Валерия Была любовь
+Валерия Метелица
+Валерия Синичка
+Ани Лорак Зеркала
+Ани Лорак Забирай рай
+Ани Лорак Солнце
+Ани Лорак Удержи мое сердце
+Ани Лорак Лабиринт
+Вера Брежнева Любовь спасет мир
+Вера Брежнева Доброе утро
+Вера Брежнева Реальная жизнь
+Вера Брежнева Мамочка
+Вера Брежнева Близкие люди
+Олег Газманов Офицеры
+Олег Газманов Эскадрон
+Олег Газманов Мои ясные дни
+Олег Газманов Есаул
+Олег Газманов Вперед Россия
+Баста Сансара
+Баста Выпускной Медлячок
+Баста Моя игра
+Баста Застрахуй братуху
+Баста Чистый кайф
+Miyagi & Эндшпиль I Got Love
+Miyagi & Эндшпиль Minor
+Miyagi & Эндшпиль Tamada
+Miyagi & Эндшпиль Yamakasi
+Miyagi & Эндшпиль Патрон
+Macan Asphalt 8
+Macan Останься образом
+Macan Спой
+Macan Юг
+Macan Заменяй
+Моргенштерн Cadillac
+Моргенштерн El Problema
+Моргенштерн Cristal & МОЁТ
+Моргенштерн Show
+Моргенштерн Грустно
+Скриптонит Ламбада
+Скриптонит Положение
+Скриптонит Мультибрендовый
+Скриптонит Космос
+Скриптонит Привычка
+INSTASAMKA За деньги да
+INSTASAMKA Juicy
+INSTASAMKA Как Mommy
+INSTASAMKA Отключаю телефон
+INSTASAMKA Shake
+Элджей Розовое вино
+Элджей Минимал
+Элджей Кадиллак
+Элджей Sayonara детка
+Элджей 360
+Feduk Розовое вино
+Feduk Хлопья летят наверх
+Feduk Моряк
+Feduk Бэнгер
+Feduk 27
+Тимати В клубе
+Тимати Лада Седан
+Тимати Где ты где я
+Тимати Ключи от рая
+Тимати Welcome to St. Tropez
+Джиган Надо подкачаться
+Джиган ДНК
+Джиган Худи
+Джиган На чиле
+Джиган Любить больше нечем
+T-Fest Ламбада
+T-Fest Улети
+T-Fest Иностранец
+T-Fest Скандал
+T-Fest Молодость
+Pharaoh Black Siemens
+Pharaoh 5 минут назад
+Pharaoh Дико например
+Pharaoh На луне
+Pharaoh Smart
+L'One Все танцуют локтями
+L'One Якутяночка
+L'One Тигр
+L'One Океан
+L'One Эй бро
+HammAli & Navai Прятки
+HammAli & Navai Пустите меня на танцпол
+HammAli & Navai Девочка-война
+HammAli & Navai А если это любовь
+HammAli & Navai Птичка
+Xcho Вороны
+Xcho Ты и я
+Xcho Где же вы
+Xcho Эскизы
+Xcho Шадэ
+Guf Ice Baby
+Guf Город дорог
+Guf Письмо домой
+Guf Моя игра
+Guf Ураган
+Oxxxymiron Город под подошвой
+Oxxxymiron Где нас нет
+Oxxxymiron Переплетено
+Oxxxymiron Организация
+Oxxxymiron Всего лишь писатель
+Toxi$ Знак
+Toxi$ Turn Up
+Toxi$ Хайпик
+Toxi$ Hurts
+Toxi$ Vandal
+OG Buda Бандит
+OG Buda Стейк
+OG Buda Грязный
+OG Buda Винтаж
+OG Buda Cristal & МОЁТ
+Big Baby Tape Gimme the Loot
+Big Baby Tape Hoodrich
+Big Baby Tape Errday
+Big Baby Tape Baby Walker
+Big Baby Tape Brigada
+Mayot Море
+Mayot Снег
+Mayot Звезда упала
+Mayot Торты
+Mayot Ау
+Friendly Thug 52 Ngg Calmer
+Friendly Thug 52 Ngg Miss You
+Friendly Thug 52 Ngg Legit
+Friendly Thug 52 Ngg No Melody
+Friendly Thug 52 Ngg Graf Monte-Cristo
+Icegergert Банк
+Icegergert Босс
+Icegergert Север
+Icegergert Головорезы
+Icegergert Трэп
+Jakone Платина
+Jakone Че за лев этот тигр
+Jakone Там там
+Jakone Мы итальянцы
+Jakone По весне
+Xolidayboy Моя хулиганка
+Xolidayboy Мармеладный дом
+Xolidayboy Океаны
+Xolidayboy Куколка
+Xolidayboy Пожары
+Би-2 Полковнику никто не пишет
+Би-2 Варвара
+Би-2 Молитва
+Би-2 Серебро
+Би-2 Философский камень
+Сплин Выхода нет
+Сплин Мое сердце
+Сплин Романс
+Сплин Орбит без сахара
+Сплин Линия жизни
+Земфира Хочешь
+Земфира Искала
+Земфира ПММЛ
+Земфира Ариведерчи
+Земфира Жить в твоей голове
+Король и Шут Лесник
+Король и Шут Кукла колдуна
+Король и Шут Прыгну со скалы
+Король и Шут Дурак и молния
+Король и Шут Проклятый старый дом
+Ленинград Экспонат
+Ленинград В Питере пить
+Ленинград Вояж
+Ленинград Кабриолет
+Ленинград Рыба
+Мумий Тролль Владивосток 2000
+Мумий Тролль Невеста
+Мумий Тролль Утекай
+Мумий Тролль Дельфины
+Мумий Тролль Фантастика
+Звери Районы-кварталы
+Звери Для тебя
+Звери До скорой встречи
+Звери Ромашки
+Звери Все что тебя касается
+Ночные Снайперы Катастрофически
+Ночные Снайперы 31-я весна
+Ночные Снайперы Рубеж
+Ночные Снайперы Инстаграм
+Ночные Снайперы Секунду назад
+ДДТ Что такое осень
+ДДТ Это всё
+ДДТ Родина
+ДДТ Просвистела
+ДДТ Метель
+Агата Кристи Как на войне
+Агата Кристи Опиум для никого
+Агата Кристи Сказочная тайга
+Агата Кристи Ковёр-вертолёт
+Агата Кристи Два корабля
+Порнофильмы Я так соскучился
+Порнофильмы Это пройдет
+Порнофильмы В диапазоне между
+Порнофильмы Молодость
+Порнофильмы Чужое горе
+Кипелов Я свободен
+Кипелов Вавилон
+Кипелов Дыхание последней любви
+Кипелов Реки времён
+Кипелов Не сейчас
+Lumen Сид и Нэнси
+Lumen Гореть
+Lumen Государство
+Lumen Три пути
+Lumen Пока ты спал
+Ария Потерянный рай
+Ария Улица Роз
+Ария Беспечный ангел
+Ария Осколок льда
+Ария Штиль
+Дайте танк (!) Мы
+Дайте танк (!) Спам
+Дайте танк (!) Утро
+Дайте танк (!) Купюра
+Дайте танк (!) Шанс
+polnalyubvi Кометы
+polnalyubvi Девочка и море
+polnalyubvi Чуть ближе
+polnalyubvi Сирена
+polnalyubvi Твои глаза
+Комната культуры Самолеты
+Комната культуры Поезда
+Комната культуры Окна
+Комната культуры Где-то там
+Комната культуры Ветер
+Бонд с кнопкой Кухни
+Бонд с кнопкой Святость
+Бонд с кнопкой Слепые
+Бонд с кнопкой Партизаны
+Бонд с кнопкой Танцы
+Дора Дорадура
+Дора Втюрилась
+Дора Санрио
+Дора Я боюсь людей
+Дора Знак
+Anacondaz Поезда
+Anacondaz Ангел
+Anacondaz Мама я люблю рэпера
+Anacondaz Твоему новому парню
+Anacondaz Дубак
+Shortparis Страшно
+Shortparis Стыд
+Shortparis Коконы
+Shortparis Говорит Москва
+Shortparis Новокузнецк
+The Hatters I'm Not Easy Buddy
+The Hatters Russian Style
+The Hatters Танцы
+The Hatters Я делаю шаг
+The Hatters Топим за
+Григорий Лепс Рюмка водки на столе
+Григорий Лепс Самый лучший день
+Григорий Лепс Я счастливый
+Григорий Лепс Она не твоя
+Григорий Лепс Я тебя не люблю
+Михаил Круг Владимирский централ
+Михаил Круг Кольщик
+Михаил Круг Золотые купола
+Михаил Круг Приходите в мой дом
+Михаил Круг Девочка-пай
+Руки Вверх Крошка моя
+Руки Вверх 18 мне уже
+Руки Вверх Он тебя целует
+Руки Вверх Чужие губы
+Руки Вверх Алешка
+Стас Михайлов Все для тебя
+Стас Михайлов Без тебя
+Стас Михайлов Ну вот и все
+Стас Михайлов Там
+Стас Михайлов Обнимай
+Валерий Меладзе Красиво
+Валерий Меладзе Салют Вера
+Валерий Меладзе Текила-любовь
+Валерий Меладзе Сэра
+Валерий Меладзе Океан и три реки
+Любэ Комбат
+Любэ Конь
+Любэ Там за туманами
+Любэ Ты неси меня река
+Любэ Давай за
+Леонид Агутин На сиреневой луне
+Леонид Агутин Хоп хей лала лей
+Леонид Агутин Аэропорты
+Леонид Агутин Остров
+Леонид Агутин Включите свет
+Владимир Пресняков Зурбаган
+Владимир Пресняков Странник
+Владимир Пресняков Аэропорты
+Владимир Пресняков Слушая тишину
+Владимир Пресняков У тебя есть я
+Игорь Николаев Выпьем за любовь
+Игорь Николаев Пять причин
+Игорь Николаев Малиновое вино
+Игорь Николаев Дельфин и русалка
+Игорь Николаев Такси такси
+Михаил Шуфутинский 3 сентября
+Михаил Шуфутинский Марджанджа
+Михаил Шуфутинский Еврейский портной
+Михаил Шуфутинский Наколочка
+Михаил Шуфутинский Пальма де Майорка
+Александр Розенбаум Вальс-бостон
+Александр Розенбаум Ау
+Александр Розенбаум Заходите к нам на огонек
+Александр Розенбаум Утиная охота
+Александр Розенбаум Гоп-стоп
+Олег Митяев Как здорово
+Олег Митяев Лето это маленькая жизнь
+Олег Митяев С добрым утром любимая
+Олег Митяев Крепитесь люди скоро лето
+Олег Митяев Француженка
+Татьяна Куртукова Матушка
+Татьяна Куртукова Ромашка белая
+Татьяна Куртукова Я любила сокола
+Татьяна Куртукова Глаза
+Татьяна Куртукова Россия
+Ирина Аллегрова Угнанная
+Ирина Аллегрова Младший лейтенант
+Ирина Аллегрова Императрица
+Ирина Аллегрова Привет Андрей
+Ирина Аллегрова Суженый мой
+Елена Ваенга Курю
+Елена Ваенга Аэропорт
+Елена Ваенга Шопен
+Елена Ваенга Тайга
+Елена Ваенга Невеста
+Юра Шатунов Белые розы
+Юра Шатунов Седая ночь
+Юра Шатунов Розовый вечер
+Юра Шатунов Детство
+Юра Шатунов Забудь
+Денис Майданов Вечная любовь
+Денис Майданов Пролетая над нами
+Денис Майданов Флаг моего государства
+Денис Майданов Время-наркотик
+Денис Майданов Пуля
+Taylor Swift Blank Space
+Taylor Swift Shake It Off
+Taylor Swift Cruel Summer
+Taylor Swift Anti-Hero
+Taylor Swift Fortnight
+The Weeknd Blinding Lights
+The Weeknd Starboy
+The Weeknd The Hills
+The Weeknd Save Your Tears
+The Weeknd Dancing In the Flames
+Billie Eilish Bad Guy
+Billie Eilish Everything I Wanted
+Billie Eilish Happier Than Ever
+Billie Eilish What Was I Made For
+Billie Eilish Birds of a Feather
+Bruno Mars Uptown Funk
+Bruno Mars Just the Way You Are
+Bruno Mars 24K Magic
+Bruno Mars Leave the Door Open
+Bruno Mars Die With A Smile
+Lady Gaga Bad Romance
+Lady Gaga Poker Face
+Lady Gaga Shallow
+Lady Gaga Rain on Me
+Lady Gaga Die With A Smile
+Ariana Grande 7 Rings
+Ariana Grande Thank U Next
+Ariana Grande Side to Side
+Ariana Grande Positions
+Ariana Grande We Can't Be Friends
+Dua Lipa Levitating
+Dua Lipa Don't Start Now
+Dua Lipa New Rules
+Dua Lipa Dance the Night
+Dua Lipa Houdini
+Ed Sheeran Shape of You
+Ed Sheeran Perfect
+Ed Sheeran Thinking Out Loud
+Ed Sheeran Bad Habits
+Ed Sheeran Eyes Closed
+Harry Styles As It Was
+Harry Styles Watermelon Sugar
+Harry Styles Sign of the Times
+Harry Styles Adore You
+Harry Styles Late Night Talking
+Justin Bieber Baby
+Justin Bieber Sorry
+Justin Bieber Love Yourself
+Justin Bieber Stay
+Justin Bieber Peaches
+Sabrina Carpenter Espresso
+Sabrina Carpenter Please Please Please
+Sabrina Carpenter Nonsense
+Sabrina Carpenter Feather
+Sabrina Carpenter Taste
+Chappell Roan Good Luck Babe
+Chappell Roan Pink Pony Club
+Chappell Roan Red Wine Supernova
+Chappell Roan Casual
+Chappell Roan Hot To Go
+Olivia Rodrigo Drivers License
+Olivia Rodrigo Good 4 U
+Olivia Rodrigo Vampire
+Olivia Rodrigo Deja Vu
+Olivia Rodrigo Bad Idea Right
+Miley Cyrus Wrecking Ball
+Miley Cyrus Party in the USA
+Miley Cyrus Flowers
+Miley Cyrus Midnight Sky
+Miley Cyrus Angels Like You
+Rihanna Umbrella
+Rihanna Diamonds
+Rihanna We Found Love
+Rihanna Work
+Rihanna Lift Me Up
+Beyonce Single Ladies
+Beyonce Halo
+Beyonce Crazy in Love
+Beyonce Cuff It
+Beyonce Texas Hold Em
+Sam Smith Stay With Me
+Sam Smith Too Good At Goodbyes
+Sam Smith Unholy
+Sam Smith I'm Not The Only One
+Sam Smith Diamonds
+Camila Cabello Havana
+Camila Cabello Senorita
+Camila Cabello Never Be the Same
+Camila Cabello Bam Bam
+Camila Cabello I Luv It
+Shawn Mendes Stitches
+Shawn Mendes Treat You Better
+Shawn Mendes There's Nothing Holdin' Me Back
+Shawn Mendes Senorita
+Shawn Mendes Why
+Selena Gomez Love You Like a Love Song
+Selena Gomez Lose You to Love Me
+Selena Gomez It Ain't Me
+Selena Gomez Calm Down
+Selena Gomez Single Soon
+Katy Perry Firework
+Katy Perry Roar
+Katy Perry Dark Horse
+Katy Perry California Gurls
+Katy Perry Lifetimes
+Britney Spears Baby One More Time
+Britney Spears Toxic
+Britney Spears Oops I Did It Again
+Britney Spears Gimme More
+Britney Spears Hold Me Closer
+Michael Jackson Billie Jean
+Michael Jackson Thriller
+Michael Jackson Beat It
+Michael Jackson Smooth Criminal
+Michael Jackson Black or White
+Madonna Like a Virgin
+Madonna Vogue
+Madonna Hung Up
+Madonna 4 Minutes
+Madonna Popular
+Drake God's Plan
+Drake Hotline Bling
+Drake One Dance
+Drake In My Feelings
+Drake First Person Shooter
+Kendrick Lamar Humble
+Kendrick Lamar Alright
+Kendrick Lamar DNA
+Kendrick Lamar Money Trees
+Kendrick Lamar Not Like Us
+Eminem Lose Yourself
+Eminem Without Me
+Eminem The Real Slim Shady
+Eminem Love the Way You Lie
+Eminem Houdini
+Travis Scott Sicko Mode
+Travis Scott Goosebumps
+Travis Scott Highest in the Room
+Travis Scott Fein
+Travis Scott I Know
+Post Malone Rockstar
+Post Malone Sunflower
+Post Malone Circles
+Post Malone Better Now
+Post Malone I Had Some Help
+Kanye West Stronger
+Kanye West Gold Digger
+Kanye West Runaway
+Kanye West Heartless
+Kanye West Carnival
+Nicki Minaj Super Bass
+Nicki Minaj Starships
+Nicki Minaj Anaconda
+Nicki Minaj Super Freaky Girl
+Nicki Minaj Everybody
+Cardi B Bodak Yellow
+Cardi B I Like It
+Cardi B WAP
+Cardi B Up
+Cardi B Enough Miami
+Megan Thee Stallion Savage
+Megan Thee Stallion WAP
+Megan Thee Stallion Body
+Megan Thee Stallion Hiss
+Megan Thee Stallion Mamushi
+Future Mask Off
+Future Life Is Good
+Future Low Life
+Future Wait for U
+Future Like That
+Lil Baby Drip Too Hard
+Lil Baby The Bigger Picture
+Lil Baby In a Minute
+Lil Baby Heyy
+Lil Baby Do We Have A Problem
+21 Savage Bank Account
+21 Savage A Lot
+21 Savage Knife Talk
+21 Savage Redrum
+21 Savage Glock in My Lap
+Juice WRLD Lucid Dreams
+Juice WRLD All Girls Are the Same
+Juice WRLD Robbery
+Juice WRLD Wishing Well
+Juice WRLD Come and Go
+XXXTentacion Sad
+XXXTentacion Changes
+XXXTentacion Moonlight
+XXXTentacion Look At Me
+XXXTentacion Jocelyn Flores
+SZA Kill Bill
+SZA The Weekend
+SZA Good Days
+SZA Shirt
+SZA Snooze
+Doja Cat Say So
+Doja Cat Kiss Me More
+Doja Cat Woman
+Doja Cat Paint the Town Red
+Doja Cat Agora Hills
+Chris Brown With You
+Chris Brown Forever
+Chris Brown No Guidance
+Chris Brown Under the Influence
+Chris Brown Sensational
+Frank Ocean Thinkin Bout You
+Frank Ocean Novacane
+Frank Ocean Chanel
+Frank Ocean Pink White
+Frank Ocean Ivy
+Jack Harlow Whats Poppin
+Jack Harlow First Class
+Jack Harlow Lovin On Me
+Jack Harlow Industry Baby
+Jack Harlow 3D
+Lil Nas X Old Town Road
+Lil Nas X Montero Call Me By Your Name
+Lil Nas X Industry Baby
+Lil Nas X That's What I Want
+Lil Nas X J Christ
+Imagine Dragons Radioactive
+Imagine Dragons Demons
+Imagine Dragons Believer
+Imagine Dragons Thunder
+Imagine Dragons Eyes Closed
+Coldplay Viva la Vida
+Coldplay Yellow
+Coldplay Fix You
+Coldplay The Scientist
+Coldplay feelslikeimfallinginlove
+Linkin Park In the End
+Linkin Park Numb
+Linkin Park Crawling
+Linkin Park What I've Done
+Linkin Park The Emptiness Machine
+Queen Bohemian Rhapsody
+Queen We Will Rock You
+Queen Another One Bites the Dust
+Queen Don't Stop Me Now
+Queen I Want to Break Free
+Nirvana Smells Like Teen Spirit
+Nirvana Come as You Are
+Nirvana Lithium
+Nirvana Heart-Shaped Box
+Nirvana The Man Who Sold the World
+Metallica Enter Sandman
+Metallica Nothing Else Matters
+Metallica Master of Puppets
+Metallica The Unforgiven
+Metallica Lux Aeterna
+AC/DC Back in Black
+AC/DC Highway to Hell
+AC/DC Thunderstruck
+AC/DC You Shook Me All Night Long
+AC/DC Shot in the Dark
+Red Hot Chili Peppers Californication
+Red Hot Chili Peppers Under the Bridge
+Red Hot Chili Peppers Otherside
+Red Hot Chili Peppers Can't Stop
+Red Hot Chili Peppers Black Summer
+The Rolling Stones Satisfaction
+The Rolling Stones Paint It Black
+The Rolling Stones Gimme Shelter
+The Rolling Stones Angie
+The Rolling Stones Angry
+Arctic Monkeys Do I Wanna Know
+Arctic Monkeys R U Mine
+Arctic Monkeys 505
+Arctic Monkeys Fluorescent Adolescent
+Arctic Monkeys Why'd You Only Call Me When You're High
+Twenty One Pilots Stressed Out
+Twenty One Pilots Ride
+Twenty One Pilots Heathens
+Twenty One Pilots Chlorine
+Twenty One Pilots Overcompensate
+Maneskin Zitti e buoni
+Maneskin Beggin
+Maneskin I Wanna Be Your Slave
+Maneskin The Loneliest
+Maneskin Honey Are U Coming
+Bring Me the Horizon Throne
+Bring Me the Horizon Can You Feel My Heart
+Bring Me the Horizon Mantra
+Bring Me the Horizon Lost
+Bring Me the Horizon Kool-Aid
+Foo Fighters Everlong
+Foo Fighters The Pretender
+Foo Fighters Best of You
+Foo Fighters Learn to Fly
+Foo Fighters Rescued
+Green Day Boulevard of Broken Dreams
+Green Day American Idiot
+Green Day 21 Guns
+Green Day Wake Me Up When September Ends
+Green Day The American Dream Is Killing Me
+The Killers Mr Brightside
+The Killers Somebody Told Me
+The Killers When You Were Young
+The Killers Human
+The Killers Bright Lights
+Radiohead Creep
+Radiohead Karma Police
+Radiohead No Surprises
+Radiohead High and Dry
+Radiohead Fake Plastic Trees
+Guns N Roses Sweet Child O Mine
+Guns N Roses Welcome to the Jungle
+Guns N Roses November Rain
+Guns N Roses Paradise City
+Guns N Roses Don't Cry
+Bon Jovi Livin on a Prayer
+Bon Jovi It's My Life
+Bon Jovi You Give Love a Bad Name
+Bon Jovi Always
+Bon Jovi Legendary
+Pink Floyd Another Brick in the Wall
+Pink Floyd Wish You Were Here
+Pink Floyd Comfortably Numb
+Pink Floyd Money
+Pink Floyd Time
+David Guetta Titanium
+David Guetta Hey Mama
+David Guetta I'm Good Blue
+David Guetta When Love Takes Over
+David Guetta I Don't Wanna Wait
+Calvin Harris Summer
+Calvin Harris This Is What You Came For
+Calvin Harris Blame
+Calvin Harris One Kiss
+Calvin Harris Miracle
+Marshmello Happier
+Marshmello Silence
+Marshmello Friends
+Marshmello Alone
+Marshmello Miles On It
+The Chainsmokers Closer
+The Chainsmokers Don't Let Me Down
+The Chainsmokers Something Just Like This
+The Chainsmokers Roses
+The Chainsmokers Takeaway
+Tiesto The Business
+Tiesto The Motto
+Tiesto Adagio for Strings
+Tiesto Red Lights
+Tiesto Hot In It
+Martin Garrix Animals
+Martin Garrix In the Name of Love
+Martin Garrix Scared to Be Lonely
+Martin Garrix High on Life
+Martin Garrix Smile
+Alan Walker Faded
+Alan Walker Alone
+Alan Walker Sing Me to Sleep
+Alan Walker The Spectre
+Alan Walker Unsure
+Skrillex Bangarang
+Skrillex Scary Monsters and Nice Sprites
+Skrillex Where Are U Now
+Skrillex Rumble
+Skrillex Fine Day Anthem
+Daft Punk Get Lucky
+Daft Punk One More Time
+Daft Punk Harder Better Faster Stronger
+Daft Punk Around the World
+Daft Punk Instant Crush
+Avicii Wake Me Up
+Avicii Levels
+Avicii The Nights
+Avicii Hey Brother
+Avicii Waiting for Love
+Kygo Firestone
+Kygo Stargazing
+Kygo It Ain't Me
+Kygo Higher Love
+Kygo For Life
+Peggy Gou It Goes Like Nanana
+Peggy Gou Starry Night
+Peggy Gou I Go
+Peggy Gou Lobster Telephone
+Peggy Gou Find It In Your Heart
+Lana Del Rey Video Games
+Lana Del Rey Summertime Sadness
+Lana Del Rey Born to Die
+Lana Del Rey Young and Beautiful
+Lana Del Rey Say Yes to Heaven
+Hozier Take Me to Church
+Hozier Work Song
+Hozier Movement
+Hozier Too Sweet
+Hozier Eat Your Young
+Teddy Swims Lose Control
+Teddy Swims The Door
+Teddy Swims Apple Juice
+Teddy Swims Bad Dreams
+Teddy Swims Some Things I'll Never Know
+Benson Boone Beautiful Things
+Benson Boone Ghost Town
+Benson Boone In the Stars
+Benson Boone Slow It Down
+Benson Boone Pretty Slowly
+Morgan Wallen Last Night
+Morgan Wallen Whiskey Glasses
+Morgan Wallen You Proof
+Morgan Wallen Thinkin Bout Me
+Morgan Wallen I Had Some Help
+Luke Combs Beautiful Crazy
+Luke Combs Fast Car
+Luke Combs When It Rains It Pours
+Luke Combs Beer Never Broke My Heart
+Luke Combs Ain't No Love in Oklahoma
+Shaboozey A Bar Song Tipsy
+Shaboozey Vegas
+Shaboozey Let It Go
+Shaboozey Anabelle
+Shaboozey Highway
+Adele Rolling in the Deep
+Adele Someone Like You
+Adele Hello
+Adele Easy on Me
+Adele Set Fire to the Rain
+Sam Fender Seventeen Going Under
+Sam Fender Hypersonic Missiles
+Sam Fender Will We Talk
+Sam Fender Spit of You
+Sam Fender People Watching
+Khalid Location
+Khalid Young Dumb and Broke
+Khalid Talk
+Khalid Better
+Khalid Adore You
+John Legend All of Me
+John Legend Ordinary People
+John Legend Green Light
+John Legend Love Me Now
+John Legend Honey
+Alicia Keys If I Ain't Got You
+Alicia Keys No One
+Alicia Keys Fallin
+Alicia Keys Empire State of Mind
+Alicia Keys Lifeline
+Elton John Rocket Man
+Elton John Your Song
+Elton John Tiny Dancer
+Elton John I'm Still Standing
+Elton John Cold Heart
+The Beatles Yesterday
+The Beatles Let It Be
+The Beatles Hey Jude
+The Beatles Come Together
+The Beatles Now and Then
+Celine Dion My Heart Will Go On
+Celine Dion Because You Loved Me
+Celine Dion It's All Coming Back to Me Now
+Celine Dion The Power of Love
+Celine Dion I'm Alive
+Whitney Houston I Will Always Love You
+Whitney Houston I Wanna Dance with Somebody
+Whitney Houston Greatest Love of All
+Whitney Houston Run to You
+Whitney Houston My Love Is Your Love
+Mariah Carey We Belong Together
+Mariah Carey Hero
+Mariah Carey Without You
+Mariah Carey All I Want for Christmas Is You
+Mariah Carey Obsessed
+ABBA Dancing Queen
+ABBA Mamma Mia
+ABBA The Winner Takes It All
+ABBA Gimme Gimme Gimme
+ABBA Don't Shut Me Down
+Stevie Wonder I Just Called to Say I Love You
+Stevie Wonder Superstition
+Stevie Wonder Isn't She Lovely
+Stevie Wonder Sir Duke
+Stevie Wonder Part-Time Lover
+Sting Shape of My Heart
+Sting Englishman in New York
+Sting Fields of Gold
+Sting Desert Rose
+Sting Every Breath You Take
+Phil Collins In the Air Tonight
+Phil Collins Against All Odds
+Phil Collins Another Day in Paradise
+Phil Collins You'll Be in My Heart
+Phil Collins Easy Lover
+Cher Believe
+Cher Strong Enough
+Cher If I Could Turn Back Time
+Cher The Shoop Shoop Song
+Cher DJ Play a Christmas Song
+George Michael Careless Whisper
+George Michael Faith
+George Michael Freedom 90
+George Michael Jesus to a Child
+George Michael Last Christmas
+Robbie Williams Angels
+Robbie Williams Feel
+Robbie Williams Supreme
+Robbie Williams Let Me Entertain You
+Robbie Williams Rock DJ

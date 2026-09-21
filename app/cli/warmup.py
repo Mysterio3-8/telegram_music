@@ -18,6 +18,7 @@
 """
 import argparse
 import asyncio
+import os
 import logging
 import time
 from datetime import datetime, timedelta, timezone
@@ -63,10 +64,40 @@ async def popular_queries(limit: int, days: int = 0) -> list[str]:
         return [row[0] for row in rows]
 
 
-def read_queries(path: str, limit: int) -> list[str]:
+def read_queries(path: str, limit: int = 0, done: set[str] | None = None) -> list[str]:
+    """Запросы из файла. Пустые строки и комментарии `#` пропускаются.
+
+    `done` — уже прогретые (см. --state): без них ночной прогон каждый раз брал
+    бы первые N строк списка, находил «уже в базе» и никогда не доходил до
+    хвоста — ровно та же грабля, что была у ночного ремонта каталога.
+    """
+    done = done or set()
     with open(path, encoding="utf-8") as handle:
-        lines = [line.strip() for line in handle if line.strip()]
+        lines = [
+            line.strip()
+            for line in handle
+            if line.strip() and not line.lstrip().startswith("#")
+        ]
+    lines = [line for line in lines if line.lower() not in done]
     return lines[:limit] if limit else lines
+
+
+def read_state(path: str | None) -> set[str]:
+    if not path or not os.path.exists(path):
+        return set()
+    with open(path, encoding="utf-8") as handle:
+        return {line.strip().lower() for line in handle if line.strip()}
+
+
+def mark_done(path: str | None, query: str) -> None:
+    """Отмечает запрос обработанным. Дозапись строкой — прогон можно прерывать."""
+    if not path:
+        return
+    directory = os.path.dirname(path)
+    if directory:
+        os.makedirs(directory, exist_ok=True)
+    with open(path, "a", encoding="utf-8") as handle:
+        handle.write(f"{query}\n")
 
 
 async def artist_queries(names: list[str], per_artist: int) -> list[str]:
@@ -135,7 +166,7 @@ async def warm_one(bot: Bot, query: str, dry: bool) -> str:
     return f"заминчен #{track.id}" if created else "уже в базе"
 
 
-async def run(queries: list[str], dry: bool, delay: float) -> None:
+async def run(queries: list[str], dry: bool, delay: float, state: str | None = None) -> None:
     bot = Bot(token=settings.bot_token)
     counters: dict[str, int] = {}
     started = time.perf_counter()
@@ -148,6 +179,10 @@ async def run(queries: list[str], dry: bool, delay: float) -> None:
             except Exception as exc:  # noqa: BLE001 — один запрос не должен рушить прогон
                 logger.warning("«%s» — ошибка: %s", query, exc)
                 outcome = "ошибка"
+            if not dry and outcome != "ошибка":
+                # «не найдено» и «не скачалось» тоже отмечаем: иначе безнадёжные
+                # строки списка занимали бы place в каждом ночном прогоне
+                mark_done(state, query)
             key = outcome.split(":")[0].split("#")[0].strip()
             counters[key] = counters.get(key, 0) + 1
             logger.info("[%s/%s] «%s» — %s", number, len(queries), query, outcome)
@@ -183,6 +218,11 @@ def main() -> None:
     )
     parser.add_argument("--limit", type=int, default=0, help="ограничить число запросов из файла")
     parser.add_argument(
+        "--state",
+        metavar="ПУТЬ",
+        help="файл с уже прогретыми запросами: следующий прогон продолжит с того места",
+    )
+    parser.add_argument(
         "--days",
         type=int,
         default=0,
@@ -199,11 +239,11 @@ def main() -> None:
         names = read_queries(args.artists, args.limit)
         queries = asyncio.run(artist_queries(names, args.per_artist))
     else:
-        queries = read_queries(args.file, args.limit)
+        queries = read_queries(args.file, args.limit, read_state(args.state))
     if not queries:
         raise SystemExit("Список запросов пуст")
     logger.info("Запросов к прогреву: %s%s", len(queries), " (пробный прогон)" if args.dry else "")
-    asyncio.run(run(queries, args.dry, args.delay))
+    asyncio.run(run(queries, args.dry, args.delay, args.state))
 
 
 if __name__ == "__main__":
