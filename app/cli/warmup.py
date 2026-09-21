@@ -109,23 +109,38 @@ def _compact(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "", to_latin(normalize_query(text or "")))
 
 
+# Насколько имена должны быть похожи, когда одно не является частью другого.
+# 0.85 разводит «GAYAZOV$ BROTHER$» и «GAYAZOVS BROTHERS» (0.93 — один артист)
+# от «Би-2» и «2z ft. Young H, Black Bi» (0.2 — разные).
+SIMILAR_ENOUGH = 0.85
+# Одно имя внутри другого засчитываем, только если они сопоставимой длины:
+# иначе «МакSим» совпал бы с «Maksim Dark (OFFICIAL)» — это техно-продюсер.
+MIN_LENGTH_RATIO = 0.6
+
+
 def artist_matches(name: str, candidate) -> bool:
     """Это правда трек запрошенного артиста, а не сосед по выдаче.
 
     ⚠️ Готовые `artist_hit`/`artist_affinity` здесь не годятся: они считают
-    совпадение по СЛОВАМ, и у коротких имён это ложно срабатывает. Живой промах
-    21.09: «Би-2» против «2z ft. Young H, Black Bi» — слово «bi» нашлось, и
-    сходство вышло 1.0, хотя артист чужой.
+    совпадение по СЛОВАМ, и у коротких имён это ложно срабатывает. Живые промахи
+    21.09: «Би-2» ↔ «2z ft. Young H, Black Bi» (нашлось слово «bi»), «МакSим» ↔
+    «Maksim Dark (OFFICIAL)» (имя оказалось началом чужого).
 
-    Сравниваем имена целиком, сжатыми до букв и цифр: «bi2» в «2zftyounghblackbi»
-    не входит. Подстрока в обе стороны — чтобы «Кино Виктор Цой» из списка
-    совпал с «Кино» у источника, а «Artik & Asti» с «Artik Asti».
+    Сравниваем имена целиком, сжатыми до букв и цифр, тремя правилами: равны;
+    одно внутри другого при сопоставимой длине; просто похожи на 85%.
     """
+    from difflib import SequenceMatcher
+
     name_key = _compact(name)
     artist_key = _compact(getattr(candidate, "artist", "") or "")
     if len(name_key) < 3 or len(artist_key) < 3:
         return False
-    return name_key in artist_key or artist_key in name_key
+    if name_key == artist_key:
+        return True
+    short, long = sorted((name_key, artist_key), key=len)
+    if short in long and len(short) / len(long) >= MIN_LENGTH_RATIO:
+        return True
+    return SequenceMatcher(None, name_key, artist_key).ratio() >= SIMILAR_ENOUGH
 
 
 async def artist_tracks(name: str, per_artist: int) -> list[str]:

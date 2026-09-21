@@ -90,13 +90,17 @@ def _cand(artist, title, source="soundcloud"):
 
 
 def test_alien_artist_is_not_warmed():
-    # Живой промах 21.09: по «Би-2» источник отдал «2z ft. Young H, Black Bi»
+    # Живые промахи 21.09: по «Би-2» приехал «2z ft. Young H, Black Bi» (совпало
+    # слово «bi»), по «МакSим» — техно-продюсер «Maksim Dark» (имя оказалось
+    # началом чужого). Оба уехали в каталог под именем артиста.
     from app.cli.warmup import artist_matches
 
     assert artist_matches("Би-2", _cand("Би-2", "Варвара"))
     assert not artist_matches("Би-2", _cand("2z ft. Young H, Black Bi", "2z ft. Young H"))
     assert artist_matches("MACAN", _cand("MACAN", "Юг"))
     assert not artist_matches("MACAN", _cand("Вадим Мулерман", "Ты назови её Мариной"))
+    assert not artist_matches("МакSим", _cand("Maksim Dark (OFFICIAL)", "Power"))
+    assert artist_matches("МакSим", _cand("Максим", "На радиоволнах"))
 
 
 def test_artist_name_variants_still_match():
@@ -104,6 +108,11 @@ def test_artist_name_variants_still_match():
     from app.cli.warmup import artist_matches
 
     assert artist_matches("Artik Asti", _cand("Artik & Asti", "Гармония"))
-    assert artist_matches("Кино Виктор Цой", _cand("Кино", "Группа крови"))
+    assert artist_matches("Кино", _cand("КИНО", "Группа крови"))
     assert artist_matches("Руки Вверх", _cand("Руки Вверх!", "Крошка моя"))
     assert not artist_matches("Дора", _cand("До", "Что-то"))  # слишком коротко
+    # Имя пишется по-разному у источника — узнаём по сходству
+    assert artist_matches("GAYAZOVS BROTHERS", _cand("GAYAZOV$ BROTHER$", "КРЕДО"))
+    assert artist_matches("Ленинград", _cand("Leningrad", "Вояж"))
+    # Совместный трек artists — это по-прежнему трек нужного артиста
+    assert artist_matches("Мари Краймбрери", _cand("Клава Кока, Мари Краймбрери", "Шкура"))
