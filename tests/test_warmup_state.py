@@ -54,3 +54,30 @@ def test_owner_list_is_shipped_and_sane():
     assert len(queries) > 900
     assert all("|" not in q for q in queries)  # развёрнуто в «исполнитель название»
     assert len(set(q.lower() for q in queries)) == len(queries)  # без дублей
+
+
+def _unit(name: str) -> str:
+    import pathlib
+
+    # encoding обязателен: на Windows read_text() берёт кодировку локали
+    return pathlib.Path("deploy") / name, (pathlib.Path("deploy") / name).read_text(encoding="utf-8")
+
+
+def test_warmup_timer_runs_slow_and_remembers_progress():
+    # Темп владельца (21.09): один трек в 30–60 секунд, а не ночной рывок
+    _, service = _unit("tg-music-warmup.service")
+    assert "--delay 45" in service
+    assert "--state /var/lib/tg-music/warmup-artists.done" in service
+    assert "--artists data/popular-artists.txt" in service
+    assert "MemoryMax" in service  # бокс 961 МБ, прогрев не должен его съесть
+
+    _, timer = _unit("tg-music-warmup.timer")
+    assert "OnCalendar=hourly" in timer
+
+    _, install = _unit("install-units.sh")
+    assert "tg-music-warmup.timer" in install  # иначе таймер не включится на сервере
+
+    _, nightly = _unit("tg-music-catalog-maintain.service")
+    # Ночной рывок по списку артистов убран — он живёт в своём таймере
+    assert "--artists data/popular-artists.txt" not in nightly
+    assert "--popular 30 --days 7 --delay 45" in nightly

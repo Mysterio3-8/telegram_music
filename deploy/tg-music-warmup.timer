@@ -1,0 +1,13 @@
+[Unit]
+Description=Telegram Music Bot — почасовой медленный прогрев каталога
+
+[Timer]
+OnCalendar=hourly
+# Разброс до 5 минут: чтобы прогрев не стартовал ровно в тот же момент, что и
+# другие таймеры (здоровье, автодеплой, ночное обслуживание).
+RandomizedDelaySec=300
+# Пропущенный час (сервер был выключен) не догоняем пачкой — темп важнее полноты
+Persistent=false
+
+[Install]
+WantedBy=timers.target

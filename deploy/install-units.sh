@@ -98,6 +98,11 @@ systemctl enable --now tg-music-pull-deploy.timer
 # Еженедельный отчёт аналитики владельцу в Telegram (15.09)
 systemctl enable --now tg-music-analytics-report.timer
 
+# Медленный прогрев каталога по списку артистов владельца (21.09): раз в час,
+# один трек в 30–60 секунд. Состояние (кого уже прогрели) — в /var/lib/tg-music.
+mkdir -p /var/lib/tg-music
+systemctl enable --now tg-music-warmup.timer
+
 # Веб-админка владельца (16.09): слушает только 127.0.0.1, в nginx НЕ заведена.
 # Открывается на машине владельца: python -m app.webadmin (SSH-туннель).
 systemctl enable --now tg-music-webadmin.service
