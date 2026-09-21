@@ -235,6 +235,11 @@ def search_prefetch(candidates: list[dict], telegram_id: int) -> None:
         bot = Bot(token=settings.bot_token)
         try:
             for row in candidates:
+                if prefetch.user_waiting():
+                    # Кто-то нажал на трек и ждёт прямо сейчас — поток нужен ему
+                    logger.info("Предзагрузка уступает очередь нажатиям")
+                    return
+                prefetch.refresh_slot()
                 chosen = Candidate(**row)
                 prefetch.mark_url(chosen.url)
                 try:

@@ -38,6 +38,13 @@ def download_candidate(candidate: Candidate) -> DownloadedAudio | None:
     """Загружает найденный трек из его источника — всегда в mp3 (приоритет владельца:
     пользователю уходит только mp3, с оригинальной обложкой источника)."""
     if candidate.source == SOURCE_SOUNDCLOUD:
+        # Сперва прямой путь через API v2: 0,5 сек против 7,0 сек у yt-dlp
+        # (замер прода 21.09). Не вышло — ниже прежний путь, он умеет HLS и DRM.
+        from app.services.soundcloud_fast import fast_download
+
+        fast = fast_download(candidate.url)
+        if fast is not None:
+            return fast
         result = download_soundcloud_audio(candidate.url, as_mp3=True)
         return result[0] if result else None
     video_id = extract_video_id(candidate.url)

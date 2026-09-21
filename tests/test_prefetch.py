@@ -35,6 +35,35 @@ def test_without_redis_no_slot(monkeypatch):
     assert prefetch.is_prefetching("x") is False
 
 
+class _FakeRedis:
+    def __init__(self, queue_len=0):
+        self.queue_len = queue_len
+        self.expired = []
+
+    def llen(self, _key):
+        return self.queue_len
+
+    def expire(self, key, ttl):
+        self.expired.append((key, ttl))
+
+
+def test_yields_while_user_waits(monkeypatch):
+    # 21.09: предзагрузка заняла оба потока воркера, и нажатие ждало 3 минуты
+    monkeypatch.setattr(prefetch, "_redis", lambda: _FakeRedis(queue_len=2))
+    assert prefetch.user_waiting() is True
+    monkeypatch.setattr(prefetch, "_redis", lambda: _FakeRedis(queue_len=0))
+    assert prefetch.user_waiting() is False
+
+
+def test_slot_is_refreshed_between_tracks(monkeypatch):
+    # Замок должен переживать всю работу: истёк на ходу — запускалась вторая
+    fake = _FakeRedis()
+    monkeypatch.setattr(prefetch, "_redis", lambda: fake)
+    prefetch.refresh_slot()
+    assert fake.expired == [("prefetch:slot", prefetch.SLOT_TTL_SECONDS)]
+    assert prefetch.SLOT_TTL_SECONDS >= 300
+
+
 @pytest.fixture
 async def factory(monkeypatch):
     # StaticPool: иначе параллельная сессия получает новую пустую базу в памяти

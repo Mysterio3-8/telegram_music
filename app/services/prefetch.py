@@ -29,10 +29,17 @@ logger = logging.getLogger(__name__)
 PREFETCH_TOP = 3
 _SLOT_KEY = "prefetch:slot"
 _URL_PREFIX = "prefetch:url:"
-# С запасом больше трёх скачиваний подряд (~8 сек каждое); умерший воркер не
-# должен держать слот дольше этого.
-SLOT_TTL_SECONDS = 90
-URL_TTL_SECONDS = 45
+# ⚠️ Замок должен переживать ВСЮ предзагрузку. Первая версия ставила 90 сек при
+# реальной работе до 260 сек (замер прода 21.09): замок истекал на ходу, вторая
+# предзагрузка занимала второй поток воркера, и нажатие человека ждало в очереди
+# три минуты. Теперь с запасом плюс продление между треками.
+SLOT_TTL_SECONDS = 600
+URL_TTL_SECONDS = 120
+
+# Очередь, в которой лежат нажатия людей. Пока в ней что-то есть, предзагрузка
+# не имеет права занимать поток: её работа ускоряет будущее нажатие, а чужое
+# нажатие уже ждёт человек.
+USER_QUEUE = "youtube_user"
 
 
 def _redis():
@@ -71,6 +78,28 @@ def acquire_slot() -> bool:
         return bool(client.set(_SLOT_KEY, "1", nx=True, ex=SLOT_TTL_SECONDS))
     except Exception:  # noqa: BLE001
         logger.warning("Предзагрузка: не удалось занять слот", exc_info=True)
+        return False
+
+
+def refresh_slot() -> None:
+    """Продлевает замок между треками — длинная предзагрузка не теряет его на ходу."""
+    client = _redis()
+    if client is None:
+        return
+    try:
+        client.expire(_SLOT_KEY, SLOT_TTL_SECONDS)
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def user_waiting() -> bool:
+    """True — в очереди есть работа от человека, предзагрузке пора уступить."""
+    client = _redis()
+    if client is None:
+        return False
+    try:
+        return bool(client.llen(USER_QUEUE))
+    except Exception:  # noqa: BLE001
         return False
 
 
