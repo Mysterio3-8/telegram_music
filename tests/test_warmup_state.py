@@ -39,6 +39,15 @@ def test_missing_state_is_empty(tmp_path):
     assert read_state(str(tmp_path / "нет.txt")) == set()
 
 
+def test_artist_list_is_shipped_and_sane():
+    # Ночной прогрев греет по именам артистов: их топ-треки спрашиваем у источника,
+    # а не берём на веру из списка (21.09: там были выдуманные названия)
+    names = read_queries("data/popular-artists.txt")
+    assert len(names) > 300
+    assert len(set(n.lower() for n in names)) == len(names)  # без дублей
+    assert "MACAN" in names and "Taylor Swift" in names
+
+
 def test_owner_list_is_shipped_and_sane():
     # Файл лежит в репозитории: ночной прогрев берёт его прямо с сервера
     queries = read_queries("data/popular-tracks.txt")

@@ -1,0 +1,385 @@
+# Имена популярных артистов (списки владельца 21.09).
+# Ночной прогрев берёт у каждого его ЖЕ топ-треки из источника:
+#   python -m app.cli.warmup --artists data/popular-artists.txt --per-artist 10 \
+#       --limit 20 --state /var/lib/tg-music/warmup-artists.done
+#
+# ⚠️ Почему имена, а не названия треков: в присланном списке у десятков разных
+# артистов повторялись одни и те же выдуманные названия («Город», «Капли»,
+# «Окна», «Шаг», «Навсегда»). Поиск при слабом совпадении отдаёт верх выдачи,
+# то есть по такому названию в базу лёг бы чужой трек. Настоящий топ артиста
+# знает сам источник — его и спрашиваем.
+MACAN
+ANNA ASTI
+Баста
+INSTASAMKA
+JONY
+Miyagi Эндшпиль
+Zivert
+HammAli Navai
+Егор Крид
+MORGENSHTERN
+Люся Чеботина
+FACE
+Big Baby Tape
+Клава Кока
+NILETTO
+Скриптонит
+Ленинград
+Руки Вверх
+Би-2
+МакSим
+GAYAZOVS BROTHERS
+Мари Краймбрери
+PHARAOH
+Markul
+Artik Asti
+Мот
+Ramil
+XOLIDAYBOY
+OG Buda
+Kizaru
+Boulevard Depo
+Friendly Thug 52 NGG
+MONEYKEN
+Slava Marlow
+10AGE
+LOVV66
+Aarne
+BUSHIDO ZHO
+Scally Milano
+Toxi$
+Валя Карнавал
+Любэ
+Монеточка
+ЛСП
+Хабиб
+Galibri Mavik
+Ваня Дмитриенко
+Земфира
+Леша Свик
+Звонкий
+Dabro
+T-Fest
+FEDUK
+Элджей
+Jah Khalib
+Rauf Faik
+Полина Гагарина
+Сергей Лазарев
+Дима Билан
+LOQIEMEAN
+Мумий Тролль
+Григорий Лепс
+Филипп Киркоров
+Валерий Меладзе
+Сплин
+Король и Шут
+Глюкоза
+Cream Soda
+Filatov Karas
+Катя Лель
+Кино Виктор Цой
+Кравц
+Гио Пика
+Dead Blonde
+GSPD
+Алсу
+Лолита
+Алена Швец
+Моральный Кодекс
+тринадцать карат
+Дора
+Мэйби Бэйби
+Мурат Насыров
+Дельфин
+ДДТ
+Наутилус Помпилиус
+Агата Кристи
+Ария
+Кипелов
+Слот
+Lumen
+Порнофильмы
+LOUNA
+Noize MC
+Oxxxymiron
+Krec
+Ассаи
+Смоки Мо
+Guf
+CENTR
+Loc-Dog
+T-Killah
+Тимати
+L'One
+Kristina Si
+Natan
+Макс Корж
+Каста
+Рем Дигга
+Пика
+Каспийский Груз
+Кровосток
+Заточка
+Swanky Tunes
+Slider Magnit
+DJ Smash
+Burito
+Ёлка
+Винтаж
+Серебро
+Градусы
+Quest Pistols
+Звери
+Пицца
+Банд Эрос
+IOWA
+Гражданская Оборона
+Сектор Газа
+Нервы
+Алена Апина
+Иванушки International
+Отпетые Мошенники
+Дискотека Авария
+Гости из будущего
+Hi-Fi
+Валерия
+Стас Михайлов
+Елена Ваенга
+Батишта
+Скруджи
+Andro
+Elman
+Пикник
+Чиж и Со
+Чайф
+Uma2rman
+Смысловые Галлюцинации
+Крематорий
+Браво
+Ночные Снайперы
+Линда
+Город 312
+Корни
+Фабрика
+Премьер-министр
+Братья Грим
+ВИА Гра
+Блестящие
+Жанна Фриске
+Reflex
+Краски
+Демо
+Акула
+Вирус
+Пропаганда
+Света
+Макс Барских
+Monatik
+Артур Пирожков
+Вера Брежнева
+Дан Балан
+Потап и Настя
+Бьянка
+Нюша
+Серега
+Тимур Родригез
+Ани Лорак
+Митя Фомин
+Слава
+Зара
+Согдиана
+Стас Пьеха
+Юлианна Караулова
+MBAND
+А-Студио
+Артем Качер
+Денис Клявер
+Чай Вдвоем
+Юра Шатунов
+Андрей Губин
+Михаил Круг
+Любовь Успенская
+Ирина Аллегрова
+Михаил Шуфутинский
+Александр Розенбаум
+Натали
+Жасмин
+Таня Буланова
+Александр Серов
+Валерий Леонтьев
+На-На
+Ляпис Трубецкой
+Мурат Тхагалегов
+Султан Лагучев
+Ислам Итляшев
+Загир Магомедов
+Mary Gu
+ANIKV
+SALUKI
+Тося Чайкина
+Amirchik
+MIA BOYKA
+Егор Шип
+RASA
+Jakone
+A.V.G
+Xcho
+5УТРА
+Олег Майами
+LIDA
+SQWOZ BAB
+Green Apelsin
+pyrokinesis
+104
+Heronwater
+ALBLAK 52
+КАЗУСКОМА
+Дайте танк
+Сироткин
+Shortparis
+Буерак
+Перемотка
+Электрофорез
+Комсомольск
+Glintshake
+Kai Angel
+9mice
+DVRST
+uglystephan
+КАССЕТА
+ooes
+найтивыход
+ssshhhiiittt!
+Пасош
+Свидание
+Кис-Кис
+Мукка
+Полматери
+Грязь
+Дети RAVE
+Ласковый май
+Нурминский
+Три Дня Дождя
+Джиган
+Мия Бойка
+SHAMAN
+Ольга Бузова
+Елена Темникова
+Ирина Дубцова
+Николай Басков
+Олег Газманов
+Леонид Агутин
+Владимир Пресняков
+Игорь Николаев
+Олег Митяев
+Татьяна Куртукова
+Денис Майданов
+Anacondaz
+The Hatters
+polnalyubvi
+Комната культуры
+Бонд с кнопкой
+Mayot
+Icegergert
+Mona
+Taylor Swift
+The Weeknd
+Billie Eilish
+Bruno Mars
+Lady Gaga
+Ariana Grande
+Dua Lipa
+Ed Sheeran
+Harry Styles
+Justin Bieber
+Sabrina Carpenter
+Chappell Roan
+Olivia Rodrigo
+Miley Cyrus
+Rihanna
+Beyonce
+Sam Smith
+Camila Cabello
+Shawn Mendes
+Selena Gomez
+Katy Perry
+Britney Spears
+Michael Jackson
+Madonna
+Drake
+Kendrick Lamar
+Eminem
+Travis Scott
+Post Malone
+Kanye West
+Nicki Minaj
+Cardi B
+Megan Thee Stallion
+Future
+Lil Baby
+21 Savage
+Juice WRLD
+XXXTentacion
+SZA
+Doja Cat
+Chris Brown
+Frank Ocean
+Jack Harlow
+Lil Nas X
+Imagine Dragons
+Coldplay
+Linkin Park
+Queen
+Nirvana
+Metallica
+AC/DC
+Red Hot Chili Peppers
+The Rolling Stones
+Arctic Monkeys
+Twenty One Pilots
+Maneskin
+Bring Me the Horizon
+Foo Fighters
+Green Day
+The Killers
+Radiohead
+Guns N Roses
+Bon Jovi
+Pink Floyd
+David Guetta
+Calvin Harris
+Marshmello
+The Chainsmokers
+Tiesto
+Martin Garrix
+Alan Walker
+Skrillex
+Daft Punk
+Avicii
+Kygo
+Peggy Gou
+Lana Del Rey
+Hozier
+Teddy Swims
+Benson Boone
+Morgan Wallen
+Luke Combs
+Shaboozey
+Adele
+Sam Fender
+Khalid
+John Legend
+Alicia Keys
+Elton John
+The Beatles
+Celine Dion
+Whitney Houston
+Mariah Carey
+ABBA
+Stevie Wonder
+Sting
+Phil Collins
+Cher
+George Michael
+Robbie Williams

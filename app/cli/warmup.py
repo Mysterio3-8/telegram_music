@@ -9,7 +9,7 @@
 (замер: 7240 треков = 65 МБ). Отсюда потолок — см. --help.
 
     python -m app.cli.warmup --popular 300        # что люди реально ищут
-    python -m app.cli.warmup --artists artists.txt --per-artist 20   # дискографии
+    python -m app.cli.warmup --artists artists.txt --per-artist 10 --state /var/lib/tg-music/done
     python -m app.cli.warmup --file queries.txt   # свой список, запрос на строку
     python -m app.cli.warmup --popular 50 --dry   # только показать, что будет
 
@@ -18,8 +18,8 @@
 """
 import argparse
 import asyncio
-import os
 import logging
+import os
 import time
 from datetime import datetime, timedelta, timezone
 
@@ -100,23 +100,52 @@ def mark_done(path: str | None, query: str) -> None:
         handle.write(f"{query}\n")
 
 
-async def artist_queries(names: list[str], per_artist: int) -> list[str]:
-    """Разворачивает имена артистов в конкретные треки.
-
-    Один запрос прогревает один трек, а человек ищет артиста и хочет любую его
-    вещь. Спрашиваем у источника его выдачу и греем каждый трек отдельно —
-    так за один прогон закрывается дискография, а не одна песня.
-    """
+async def artist_tracks(name: str, per_artist: int) -> list[str]:
+    """Настоящие треки артиста у источника, самые слушаемые сверху."""
     from app.services.track_lookup import search_candidates
 
-    queries: list[str] = []
-    for name in names:
+    try:
         candidates = await search_candidates(name)
-        for candidate in candidates[:per_artist]:
-            artist = (candidate.artist or name).strip()
-            queries.append(f"{artist} {candidate.title}".strip())
-        logger.info("«%s» — треков к прогреву: %s", name, min(len(candidates), per_artist))
+    except Exception:  # noqa: BLE001 — источник не ответил, вернёмся к артисту в другой раз
+        logger.warning("«%s» — источник не ответил", name, exc_info=True)
+        return []
+    queries = []
+    for candidate in candidates[:per_artist]:
+        artist = (candidate.artist or name).strip()
+        queries.append(f"{artist} {candidate.title}".strip())
     return queries
+
+
+async def run_artists(
+    names: list[str], per_artist: int, dry: bool, delay: float, state: str | None
+) -> None:
+    """Прогрев по именам артистов: у каждого берём его же топ-треки."""
+    bot = Bot(token=settings.bot_token)
+    total = {"заминчен": 0, "уже в базе": 0, "прочее": 0}
+    try:
+        for number, name in enumerate(names, 1):
+            queries = await artist_tracks(name, per_artist)
+            if not queries:
+                logger.info("[%s/%s] «%s» — треков не нашлось", number, len(names), name)
+                continue
+            for query in queries:
+                try:
+                    outcome = await warm_one(bot, query, dry)
+                except SystemExit:
+                    raise
+                except Exception as exc:  # noqa: BLE001 — один трек не рушит прогон
+                    logger.warning("«%s» — ошибка: %s", query, exc)
+                    outcome = "ошибка"
+                key = outcome.split(":")[0].split("#")[0].strip()
+                total[key if key in total else "прочее"] += 1
+                logger.info("[%s/%s] «%s» — %s", number, len(names), query, outcome)
+                if not dry:
+                    await asyncio.sleep(delay)
+            if not dry:
+                mark_done(state, name)
+    finally:
+        await bot.session.close()
+    logger.info("Готово: %s", ", ".join(f"{k} — {v}" for k, v in total.items()))
 
 
 async def warm_one(bot: Bot, query: str, dry: bool) -> str:
@@ -233,11 +262,21 @@ def main() -> None:
     parser.add_argument("--dry", action="store_true", help="только показать, ничего не качать")
     args = parser.parse_args()
 
+    if args.artists:
+        # Артист за артистом, а не «сначала собрать все запросы»: так отметка
+        # «этого прогрели» ставится сразу, и прерванный прогон не начинается
+        # заново. Плюс список имён надёжнее списка названий — настоящие топ-треки
+        # спрашиваем у источника, а не берём на веру (21.09: в присланном списке
+        # у десятков артистов повторялись выдуманные «Город», «Капли», «Окна»).
+        names = read_queries(args.artists, args.limit, read_state(args.state))
+        if not names:
+            raise SystemExit("Список артистов пуст — возможно, все уже прогреты")
+        logger.info("Артистов к прогреву: %s", len(names))
+        asyncio.run(run_artists(names, args.per_artist, args.dry, args.delay, args.state))
+        return
+
     if args.popular:
         queries = asyncio.run(popular_queries(args.popular, args.days))
-    elif args.artists:
-        names = read_queries(args.artists, args.limit)
-        queries = asyncio.run(artist_queries(names, args.per_artist))
     else:
         queries = read_queries(args.file, args.limit, read_state(args.state))
     if not queries:
