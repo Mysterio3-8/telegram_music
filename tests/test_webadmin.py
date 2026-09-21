@@ -11,7 +11,10 @@ from app.db.base import Base
 from app.db.models import Donation, Payment, Track, TrackEvent, User
 from app.webadmin.server import check_token, create_app, get_session
 
-NOW = datetime(2026, 9, 16, 12, 0, 0)
+# ⚠️ Время относительное, а не фиксированная дата. С жёстким `datetime(2026, 9, 16)`
+# тест был миной с таймером: Premium выдавался «до 21 сентября», и ровно 21.09
+# он истёк — проверка «premium_active is True» упала на ровном месте.
+NOW = datetime.utcnow().replace(hour=12, minute=0, second=0, microsecond=0)
 
 
 @pytest_asyncio.fixture
