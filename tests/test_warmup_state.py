@@ -67,6 +67,8 @@ def test_warmup_timer_runs_slow_and_remembers_progress():
     # Темп владельца (21.09): один трек в 30–60 секунд, а не ночной рывок
     _, service = _unit("tg-music-warmup.service")
     assert "--delay 45" in service
+    # Владелец просил растянуть на две недели: один артист в час, не четыре
+    assert "--limit 1" in service
     assert "--state /var/lib/tg-music/warmup-artists.done" in service
     assert "--artists data/popular-artists.txt" in service
     assert "MemoryMax" in service  # бокс 961 МБ, прогрев не должен его съесть
