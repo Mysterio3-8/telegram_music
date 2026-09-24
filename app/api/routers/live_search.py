@@ -132,7 +132,9 @@ async def personal_mix(
 
 @router.get("/mix/infinity", response_model=LiveSearchOut)
 async def infinity_mix(
-    user: User = Depends(require_premium), session: AsyncSession = Depends(get_db)
+    live: int = Query(1, ge=0, le=1),
+    user: User = Depends(require_premium),
+    session: AsyncSession = Depends(get_db),
 ) -> LiveSearchOut:
     """Бесконечная лента: каталог вперемешку с живыми треками из источника.
 
@@ -143,7 +145,10 @@ async def infinity_mix(
     from app.api.security import build_audio_url
     from app.services.infinity_mix import build_infinity_mix
 
-    tracks, candidates = await build_infinity_mix(session, user.id)
+    # ⚠️ live=0 — первая порция: только каталог, без похода в источник. Музыка
+    # обязана заиграть мгновенно; живые треки приезжают следующей порцией, пока
+    # человек слушает первую. Иначе старт ленты упирался в скорость SoundCloud.
+    tracks, candidates = await build_infinity_mix(session, user.id, with_live=bool(live))
     items = [
         LiveTrackOut(
             ref="",

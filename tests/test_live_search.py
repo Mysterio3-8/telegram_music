@@ -212,7 +212,7 @@ def test_telegram_thumbnail_is_small_variant():
 
     assert thumbnail_soundcloud_artwork(
         "https://i1.sndcdn.com/artworks-abc-original.jpg"
-    ).endswith("-t200x200.jpg")
+    ).endswith("-t300x300.jpg")
 
 
 def test_no_telegram_thumbnail_for_foreign_hosts():

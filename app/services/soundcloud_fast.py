@@ -74,6 +74,8 @@ def fast_download(url: str) -> DownloadedAudio | None:
         logger.info("Быстрое скачивание не вышло для %s, иду через yt-dlp", url, exc_info=True)
         return None
 
+    from app.services.soundcloud import upscale_soundcloud_artwork
+
     duration = int((track.get("full_duration") or track.get("duration") or 0) / 1000)
     publisher = track.get("publisher_metadata") or {}
     return DownloadedAudio(
@@ -84,6 +86,10 @@ def fast_download(url: str) -> DownloadedAudio | None:
         uploader=repair(
             (publisher.get("artist") or (track.get("user") or {}).get("username") or "").strip()
         ),
-        thumbnail_url=track.get("artwork_url") or "",
+        # 🔴 artwork_url у SoundCloud приходит суффиксом «-large» — это 100×100 и
+        # 4 КБ. Именно он вшивался в файл и уходил в Mini App с 21.09, когда
+        # быстрый путь заменил yt-dlp: «картинки он в ужасном качестве присылает»
+        # (владелец 21.09). Апскейлим к t500x500 — тот же CDN, другой суффикс.
+        thumbnail_url=upscale_soundcloud_artwork(track.get("artwork_url") or ""),
         album=repair((publisher.get("album_title") or "").strip()),
     )

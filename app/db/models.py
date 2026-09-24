@@ -295,6 +295,10 @@ class TrackEvent(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     track_id: Mapped[int] = mapped_column(ForeignKey("tracks.id"), index=True)
     event: Mapped[str] = mapped_column(String(16))  # listen | download
+    # Сколько секунд трек реально звучал. None — событие старое (до 22.09) или
+    # клиент не успел досказать: тогда статистика падает назад на длительность
+    # трека, как считалось раньше.
+    seconds: Mapped[int | None] = mapped_column(nullable=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
 

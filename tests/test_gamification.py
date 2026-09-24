@@ -269,3 +269,38 @@ def test_achievements_are_about_hundred():
     assert len(codes) == len(achievements)  # без дублей кодов
     assert "premium_forever" in codes
     assert "listen_100000" in codes
+
+
+async def test_hours_count_real_seconds_not_track_length(session):
+    """🔴 Часы считались по длительности треков с событием listen, а событие
+    ставится через 5 секунд игры: сорок пролистанных треков превращались в два
+    часа музыки. Теперь считаем то, что реально прозвучало."""
+    from app.db.models import Track, TrackEvent, User
+    from app.services.gamification import collect_user_stats
+
+    user = User(telegram_id=4242, first_name="T")
+    track = Track(title="Long", artist="A", duration=600)
+    session.add_all([user, track])
+    await session.flush()
+    session.add(TrackEvent(user_id=user.id, track_id=track.id, event="listen", seconds=30))
+    await session.commit()
+
+    stats = await collect_user_stats(session, user, invited=0)
+    assert stats.listens == 1
+    assert stats.listen_hours == round(30 / 3600, 1)
+
+
+async def test_old_events_still_count_by_track_length(session):
+    """У событий до 22.09 честной цифры нет — там остаётся длительность трека."""
+    from app.db.models import Track, TrackEvent, User
+    from app.services.gamification import collect_user_stats
+
+    user = User(telegram_id=4343, first_name="T")
+    track = Track(title="Old", artist="A", duration=3600)
+    session.add_all([user, track])
+    await session.flush()
+    session.add(TrackEvent(user_id=user.id, track_id=track.id, event="listen", seconds=None))
+    await session.commit()
+
+    stats = await collect_user_stats(session, user, invited=0)
+    assert stats.listen_hours == 1.0

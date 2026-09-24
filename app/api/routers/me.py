@@ -630,13 +630,25 @@ async def premium_status(user: User = Depends(get_current_user)) -> PremiumStatu
 @router.post("/tracks/{track_id}/listen", status_code=status.HTTP_204_NO_CONTENT)
 async def record_listen(
     track_id: int,
+    seconds: int | None = Query(default=None, ge=0, le=24 * 3600),
     user: User = Depends(require_premium),
     session: AsyncSession = Depends(get_db),
 ) -> None:
-    """Mini App отмечает старт воспроизведения — сырьё для достижений/статистики."""
+    """Mini App отмечает прослушивание — сырьё для достижений и статистики.
+
+    Без `seconds` — старт воспроизведения (событие). С `seconds` — сколько трек
+    реально звучал: трек кончился или его переключили. Второй вызов не создаёт
+    новое событие, а дописывает секунды к последнему, иначе одно прослушивание
+    считалось бы дважды.
+    """
     if await get_track(session, track_id) is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Трек не найден")
-    await record_event(session, user.id, track_id, "listen", source="miniapp")
+    if seconds is None:
+        await record_event(session, user.id, track_id, "listen", source="miniapp")
+        return
+    from app.services.stats import update_listen_seconds
+
+    await update_listen_seconds(session, user.id, track_id, seconds)
 
 
 @router.get("/tracks/{track_id}/lyrics", response_model=LyricsOut)

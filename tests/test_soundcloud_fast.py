@@ -38,7 +38,10 @@ def test_progressive_track_downloads_without_ytdlp(monkeypatch):
     assert audio is not None
     assert audio.file_format == "mp3" and audio.duration == 225
     assert audio.video_title == "Fake ID" and audio.uploader == "kizaru"
-    assert audio.album == "BORN TO TRAP" and audio.thumbnail_url.endswith("a-large.jpg")
+    # 🔴 artwork_url у SoundCloud — это «-large», 100×100 и 4 КБ. Быстрый путь
+    # вшивал в файл именно её («картинки в ужасном качестве», 21.09), поэтому
+    # апскейлим к t500x500 — тот же CDN, другой суффикс.
+    assert audio.album == "BORN TO TRAP" and audio.thumbnail_url.endswith("a-t500x500.jpg")
     assert "/media/prog" in calls
 
 

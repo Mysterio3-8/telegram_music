@@ -22,10 +22,11 @@
 пока живая часть ещё резолвит поток. Старт ленты — это первое, что видит
 человек, и он не должен ждать сеть.
 """
+import asyncio
 import logging
 import random
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Track
@@ -40,6 +41,9 @@ logger = logging.getLogger(__name__)
 MIX_SIZE = 24
 LIVE_SHARE = 0.45  # какая доля ленты берётся из источника, а не из каталога
 SEEDS_PER_CALL = 2  # сколько сидов опрашиваем за один сбор — больше = дольше ответ
+# Сколько ждём источник. Лента должна заиграть от каталога почти мгновенно;
+# живая часть либо успевает, либо приезжает со следующей порцией.
+LIVE_TIMEOUT_SECONDS = 6.0
 
 
 async def _catalog_part(session: AsyncSession, user_id: int, limit: int) -> list[Track]:
@@ -54,7 +58,9 @@ async def _catalog_part(session: AsyncSession, user_id: int, limit: int) -> list
         select(Track)
         .where(
             Track.moderation_status == "approved",
-            Track.tg_file_id.is_not(None),
+            # Есть чем играть: file_id (мгновенно) или архивная копия.
+            # Трек без того и другого — это ожидание вместо музыки.
+            or_(Track.tg_file_id.is_not(None), Track.storage_path.is_not(None)),
         )
         .order_by(func.random())
         .limit(limit * 3)  # запас на отсев мусорных названий и истории
@@ -76,7 +82,14 @@ async def _catalog_part(session: AsyncSession, user_id: int, limit: int) -> list
 
 
 async def _live_part(session: AsyncSession, user_id: int, limit: int) -> list[Candidate]:
-    """Кандидаты из источника: любимые артисты человека плюс случайные полки."""
+    """Кандидаты из источника: любимые артисты человека плюс случайные полки.
+
+    ⚠️ Сиды опрашиваются ПАРАЛЛЕЛЬНО и под общим таймаутом. Последовательно это
+    было до четырёх походов в сеть подряд — замер на дев-стенде: запрос ленты не
+    укладывался в 20 секунд и клиент его обрывал, то есть музыка не начиналась
+    вовсе. Лента обязана заиграть от каталога, а живая часть — это украшение:
+    не успела — догрузится следующей порцией.
+    """
     from app.services.search_cache import search_with_cache
 
     seeds: list[str] = []
@@ -86,24 +99,35 @@ async def _live_part(session: AsyncSession, user_id: int, limit: int) -> list[Ca
     random.shuffle(pool)
     seeds.extend(pool[: max(1, SEEDS_PER_CALL)])
 
-    groups: list[list[Candidate]] = []
-    for seed in seeds:
+    async def safe(seed: str) -> list[Candidate]:
         try:
-            groups.append(await search_with_cache(seed))
+            return await search_with_cache(seed)
         except Exception:  # noqa: BLE001 — источник лёг: лента обойдётся каталогом
             logger.warning("Infinity Mix: сид «%s» не ответил", seed, exc_info=True)
-    mixed = interleave(groups)
+            return []
+
+    try:
+        groups = await asyncio.wait_for(
+            asyncio.gather(*(safe(seed) for seed in seeds)), timeout=LIVE_TIMEOUT_SECONDS
+        )
+    except asyncio.TimeoutError:
+        logger.info("Infinity Mix: источник не успел за %s сек — отдаём каталог", LIVE_TIMEOUT_SECONDS)
+        return []
+    mixed = interleave(list(groups))
     random.shuffle(mixed)
     return mixed[:limit]
 
 
 async def build_infinity_mix(
-    session: AsyncSession, user_id: int, size: int = MIX_SIZE
+    session: AsyncSession, user_id: int, size: int = MIX_SIZE, with_live: bool = True
 ) -> tuple[list[Track], list[Candidate]]:
-    """Возвращает (треки каталога, живые кандидаты) — уже без пересечений."""
-    live_target = int(size * LIVE_SHARE)
+    """Возвращает (треки каталога, живые кандидаты) — уже без пересечений.
+
+    `with_live=False` — первая порция ленты: только база, ноль сетевых походов.
+    """
+    live_target = int(size * LIVE_SHARE) if with_live else 0
     catalog = await _catalog_part(session, user_id, size - live_target)
-    live = await _live_part(session, user_id, live_target)
+    live = await _live_part(session, user_id, live_target) if live_target else []
 
     seen = {dedup_key(_as_candidate(track)) for track in catalog}
     live = [c for c in live if dedup_key(c) not in seen]

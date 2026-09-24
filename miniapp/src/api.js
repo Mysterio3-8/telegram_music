@@ -186,8 +186,10 @@ export function liveStreamUrl(ref) {
 // Infinity Mix — бесконечная лента: каталог вперемешку с живыми треками из
 // источника. Отдельно от getMix: у того есть сохранённые настройки, и один
 // выбор «инструментальная» превращал микс в вечную ленту минусов.
-export function getInfinityMix() {
-  return request("/mix/infinity");
+// first=true — стартовая порция: только каталог, мгновенно. Живые треки из
+// источника приезжают следующей порцией, пока играет первая.
+export function getInfinityMix({ first = false } = {}) {
+  return request(`/mix/infinity${first ? "?live=0" : ""}`);
 }
 
 export function getProfile() {
@@ -303,6 +305,16 @@ export function sendTrackToChat(trackId) {
 // Отметить старт воспроизведения (сырьё для достижений). Fire-and-forget.
 export function recordListen(trackId) {
   return request(`/tracks/${trackId}/listen`, { method: "POST" }).catch(() => {});
+}
+
+// Сколько трек реально звучал — шлём, когда он кончился или его переключили.
+// Без этого «часов прослушано» считалось по длительности трека, и сорок
+// пролистанных по пять секунд превращались в два часа музыки.
+export function recordListenSeconds(trackId, seconds) {
+  if (!Number.isFinite(seconds) || seconds < 1) return Promise.resolve();
+  return request(`/tracks/${trackId}/listen?seconds=${Math.round(seconds)}`, {
+    method: "POST",
+  }).catch(() => {});
 }
 
 export function getLanguages() {

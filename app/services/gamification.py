@@ -273,8 +273,12 @@ async def collect_user_stats(
         .select_from(TrackEvent)
         .where(TrackEvent.user_id == user.id, TrackEvent.event == "listen")
     ) or 0
+    # 🔴 Часы считаем по РЕАЛЬНО прослушанным секундам, а не по длительности
+    # трека. Событие listen ставится через 5 секунд игры, и раньше человек,
+    # пролиставший сорок треков по пять секунд, видел в профиле два часа музыки.
+    # У событий старше 22.09 честной цифры нет — там по-прежнему длительность.
     seconds = await session.scalar(
-        select(func.coalesce(func.sum(Track.duration), 0))
+        select(func.coalesce(func.sum(func.coalesce(TrackEvent.seconds, Track.duration)), 0))
         .select_from(TrackEvent)
         .join(Track, Track.id == TrackEvent.track_id)
         .where(TrackEvent.user_id == user.id, TrackEvent.event == "listen")

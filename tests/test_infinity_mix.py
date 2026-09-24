@@ -61,7 +61,7 @@ async def test_shown_tracks_are_remembered(session):
 async def test_tracks_without_file_id_are_not_offered(session):
     """Трек без file_id — это ожидание вместо музыки: в ленту он не попадает."""
     user = await _user(session)
-    session.add(Track(title="No file", artist="A", duration=200, tg_file_id=None))
+    session.add(Track(title="No file", artist="A", duration=200, tg_file_id=None, storage_path=None))
     await session.commit()
     picked = await infinity_mix._catalog_part(session, user.id, limit=10)
     assert picked == []

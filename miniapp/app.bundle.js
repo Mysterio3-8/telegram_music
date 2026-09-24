@@ -2,7 +2,7 @@
 
 // Источник: miniapp/src/**. Пересборка: python tools/build_miniapp.py
 
-// отпечаток исходников: 3e190751dc8fd588
+// отпечаток исходников: 064789cf6e711d5c
 
 (function () {
   "use strict";
@@ -197,8 +197,10 @@
     // Infinity Mix — бесконечная лента: каталог вперемешку с живыми треками из
     // источника. Отдельно от getMix: у того есть сохранённые настройки, и один
     // выбор «инструментальная» превращал микс в вечную ленту минусов.
-    function getInfinityMix() {
-      return request("/mix/infinity");
+    // first=true — стартовая порция: только каталог, мгновенно. Живые треки из
+    // источника приезжают следующей порцией, пока играет первая.
+    function getInfinityMix({ first = false } = {}) {
+      return request(`/mix/infinity${first ? "?live=0" : ""}`);
     }
 
     function getProfile() {
@@ -316,6 +318,16 @@
       return request(`/tracks/${trackId}/listen`, { method: "POST" }).catch(() => {});
     }
 
+    // Сколько трек реально звучал — шлём, когда он кончился или его переключили.
+    // Без этого «часов прослушано» считалось по длительности трека, и сорок
+    // пролистанных по пять секунд превращались в два часа музыки.
+    function recordListenSeconds(trackId, seconds) {
+      if (!Number.isFinite(seconds) || seconds < 1) return Promise.resolve();
+      return request(`/tracks/${trackId}/listen?seconds=${Math.round(seconds)}`, {
+        method: "POST",
+      }).catch(() => {});
+    }
+
     function getLanguages() {
       return request("/languages");
     }
@@ -399,7 +411,7 @@
       }
       return result;
     }
-    return { API_BASE, ApiError, telegramUser, login, resolveAudioUrl, getTracks, getTrackById, getInstrumentals, getLibrary, getLibraryIds, addToLibrary, removeFromLibrary, getPremiumStatus, getSubscriptionStatus, logChannelClick, fetchFromWeb, liveSearch, searchLiveAlbums, getLiveAlbumTracks, addLiveAlbumToLibrary, queueLiveFetch, liveStreamUrl, getInfinityMix, getProfile, getContests, joinContest, getMix, getPlaylists, createPlaylist, getPlaylistTracks, addTrackToPlaylist, getAlbums, getAlbumTracks, getArtists, getArtistTracks, getGenres, getGenreTracks, getArtistCard, followArtist, unfollowArtist, getMyArtists, searchAll, getPopularQueries, logSearchQuery, sendAnalyticsEvents, sendTrackToChat, recordListen, getLanguages, saveLanguage, getLyrics, submitLyrics, uploadTrack, startPremiumTrial, getReferralTop, getProfileTop, startTransfer, createPaymentLink, formatDuration, shuffle };
+    return { API_BASE, ApiError, telegramUser, login, resolveAudioUrl, getTracks, getTrackById, getInstrumentals, getLibrary, getLibraryIds, addToLibrary, removeFromLibrary, getPremiumStatus, getSubscriptionStatus, logChannelClick, fetchFromWeb, liveSearch, searchLiveAlbums, getLiveAlbumTracks, addLiveAlbumToLibrary, queueLiveFetch, liveStreamUrl, getInfinityMix, getProfile, getContests, joinContest, getMix, getPlaylists, createPlaylist, getPlaylistTracks, addTrackToPlaylist, getAlbums, getAlbumTracks, getArtists, getArtistTracks, getGenres, getGenreTracks, getArtistCard, followArtist, unfollowArtist, getMyArtists, searchAll, getPopularQueries, logSearchQuery, sendAnalyticsEvents, sendTrackToChat, recordListen, recordListenSeconds, getLanguages, saveLanguage, getLyrics, submitLyrics, uploadTrack, startPremiumTrial, getReferralTop, getProfileTop, startTransfer, createPaymentLink, formatDuration, shuffle };
   })();
 
   __m["analytics.js"] = (function () {
@@ -725,7 +737,7 @@
   })();
 
   __m["state.js"] = (function () {
-    const { resolveAudioUrl, shuffle, recordListen, getMix, getInfinityMix, getTrackById, getTracks, liveStreamUrl, queueLiveFetch } = __m["api.js"];
+    const { resolveAudioUrl, shuffle, recordListen, recordListenSeconds, getMix, getInfinityMix, getTrackById, getTracks, liveStreamUrl, queueLiveFetch } = __m["api.js"];
     const { pushRecentTrack, getRecSettings } = __m["prefs.js"];
     const { isOffline, offlineBlobUrl } = __m["offline.js"];
     const { trackClient } = __m["analytics.js"];
@@ -887,8 +899,14 @@
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible" && state.isPlaying && audio.paused) {
         audio.play().catch(() => {});
+        return;
       }
+      // Уходим из приложения — досчитываем последний трек, иначе он не попал бы в
+      // статистику вовсе: смены трека, на которой мы обычно отчитываемся, не будет.
+      if (document.visibilityState === "hidden") reportListened();
     });
+
+    window.addEventListener("pagehide", () => reportListened());
 
     let consecutiveErrors = 0;
 
@@ -1126,9 +1144,18 @@
       }, LISTEN_AFTER_MS);
     }
 
+    // Сколько предыдущий трек реально звучал — отправляем при каждой смене трека.
+    function reportListened() {
+      const previous = state.currentTrack;
+      if (!previous || typeof previous.id !== "number" || previous.id <= 0) return;
+      const played = Math.min(audio.currentTime || 0, audio.duration || previous.duration || 0);
+      if (played >= 5) recordListenSeconds(previous.id, played);
+    }
+
     function startTrack(index) {
       const track = state.queue[index];
       if (!track) return;
+      reportListened();
       state.queueIndex = index;
       state.currentTrack = track;
       state.isPlaying = true;
@@ -1194,7 +1221,7 @@
       infinityLoading = true;
       showToast("Собираю Infinity Mix…");
       try {
-        const data = await getInfinityMix();
+        const data = await getInfinityMix({ first: true });
         const list = (data.items || []).map(mixItemToTrack);
         if (!list.length) {
           showToast("Не удалось собрать микс");
@@ -1210,6 +1237,7 @@
       } finally {
         infinityLoading = false;
       }
+      refillInfinityMix(); // догружаем живую часть, пока играет первый трек
     }
 
     // Докладываем ленту молча — человек не должен видеть ни спиннера, ни паузы.
@@ -1293,9 +1321,16 @@
         // Лента бесконечная: доливаем заранее, чтобы стык был неслышным
         if (state.queue.length - next <= INFINITY_REFILL_AT) refillInfinityMix();
         if (next >= state.queue.length) {
-          showToast("Догружаю ещё треки…");
           refillInfinityMix().then(() => {
-            if (state.infinityMix && next < state.queue.length) startTrack(next);
+            if (!state.infinityMix) return;
+            if (next < state.queue.length) {
+              startTrack(next);
+              return;
+            }
+            // Источник ничего нового не дал (сеть, повторы) — лучше перемешать то,
+            // что есть, чем оборвать музыку тишиной.
+            state.queue = shuffle(state.queue);
+            startTrack(0);
           });
           return;
         }

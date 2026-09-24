@@ -40,7 +40,7 @@ def upscale_soundcloud_artwork(url: str) -> str:
 
 
 def thumbnail_soundcloud_artwork(url: str) -> str:
-    """Тот же арт в 200×200 — под миниатюру Telegram.
+    """Тот же арт в 300×300 — под миниатюру Telegram.
 
     Bot API требует у thumbnail JPEG не больше 200 КБ и стороны до 320 px.
     Вшитая в файл обложка этим требованиям не отвечает (у SoundCloud «original»
@@ -48,7 +48,10 @@ def thumbnail_soundcloud_artwork(url: str) -> str:
     без обложки, хотя внутри файла она есть."""
     if not url or "sndcdn.com" not in url:
         return ""
-    thumb = _SC_ARTWORK_SIZE_RE.sub(r"-t200x200\1", url)
+    # 300, а не 200: Bot API разрешает сторону до 320 px, а замер CDN показал
+    # 25 КБ против 12 КБ — вдвое больше пикселей при том же мгновенном превью.
+    # Владелец 21.09: «картинки он в ужасном качестве присылает».
+    thumb = _SC_ARTWORK_SIZE_RE.sub(r"-t300x300\1", url)
     return thumb if thumb != url else ""
 
 

@@ -45,6 +45,39 @@ async def record_event(
     await session.commit()
 
 
+async def update_listen_seconds(
+    session: AsyncSession, user_id: int, track_id: int, seconds: int
+) -> None:
+    """Дописывает реально прослушанные секунды к последнему событию listen.
+
+    Клиент присылает это, когда трек кончился или его переключили. Обновляем, а
+    не добавляем: одно прослушивание — одно событие, иначе счётчик прослушиваний
+    удваивался бы на каждом треке.
+
+    ⚠️ Берём только событие не старше часа: если человек вернулся к треку через
+    неделю, дописывать секунды в прошлое нельзя.
+    """
+    if seconds <= 0:
+        return
+    event = await session.scalar(
+        select(TrackEvent)
+        .where(
+            TrackEvent.user_id == user_id,
+            TrackEvent.track_id == track_id,
+            TrackEvent.event == "listen",
+            TrackEvent.created_at >= _utcnow() - timedelta(hours=1),
+        )
+        .order_by(TrackEvent.created_at.desc())
+        .limit(1)
+    )
+    if event is None:
+        return
+    # Максимум, а не перезапись: повторное сообщение о том же треке не должно
+    # укорачивать уже засчитанное (человек мог доиграть и перемотать назад).
+    event.seconds = max(event.seconds or 0, seconds)
+    await session.commit()
+
+
 @dataclass(frozen=True)
 class ProjectStats:
     users_total: int

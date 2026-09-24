@@ -2,6 +2,7 @@ import {
   resolveAudioUrl,
   shuffle,
   recordListen,
+  recordListenSeconds,
   getMix,
   getInfinityMix,
   getTrackById,
@@ -171,8 +172,14 @@ audio.addEventListener("pause", () => {
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible" && state.isPlaying && audio.paused) {
     audio.play().catch(() => {});
+    return;
   }
+  // Уходим из приложения — досчитываем последний трек, иначе он не попал бы в
+  // статистику вовсе: смены трека, на которой мы обычно отчитываемся, не будет.
+  if (document.visibilityState === "hidden") reportListened();
 });
+
+window.addEventListener("pagehide", () => reportListened());
 
 let consecutiveErrors = 0;
 
@@ -410,9 +417,18 @@ function scheduleListen(track) {
   }, LISTEN_AFTER_MS);
 }
 
+// Сколько предыдущий трек реально звучал — отправляем при каждой смене трека.
+function reportListened() {
+  const previous = state.currentTrack;
+  if (!previous || typeof previous.id !== "number" || previous.id <= 0) return;
+  const played = Math.min(audio.currentTime || 0, audio.duration || previous.duration || 0);
+  if (played >= 5) recordListenSeconds(previous.id, played);
+}
+
 function startTrack(index) {
   const track = state.queue[index];
   if (!track) return;
+  reportListened();
   state.queueIndex = index;
   state.currentTrack = track;
   state.isPlaying = true;
@@ -478,7 +494,7 @@ export async function playInfinityMix() {
   infinityLoading = true;
   showToast("Собираю Infinity Mix…");
   try {
-    const data = await getInfinityMix();
+    const data = await getInfinityMix({ first: true });
     const list = (data.items || []).map(mixItemToTrack);
     if (!list.length) {
       showToast("Не удалось собрать микс");
@@ -494,6 +510,7 @@ export async function playInfinityMix() {
   } finally {
     infinityLoading = false;
   }
+  refillInfinityMix(); // догружаем живую часть, пока играет первый трек
 }
 
 // Докладываем ленту молча — человек не должен видеть ни спиннера, ни паузы.
@@ -577,9 +594,16 @@ export function playNext() {
     // Лента бесконечная: доливаем заранее, чтобы стык был неслышным
     if (state.queue.length - next <= INFINITY_REFILL_AT) refillInfinityMix();
     if (next >= state.queue.length) {
-      showToast("Догружаю ещё треки…");
       refillInfinityMix().then(() => {
-        if (state.infinityMix && next < state.queue.length) startTrack(next);
+        if (!state.infinityMix) return;
+        if (next < state.queue.length) {
+          startTrack(next);
+          return;
+        }
+        // Источник ничего нового не дал (сеть, повторы) — лучше перемешать то,
+        // что есть, чем оборвать музыку тишиной.
+        state.queue = shuffle(state.queue);
+        startTrack(0);
       });
       return;
     }
