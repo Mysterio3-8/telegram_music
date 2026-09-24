@@ -44,7 +44,7 @@ def test_stars_off_without_rate(monkeypatch):
     assert not donations.is_stars_configured()
 
 
-@pytest.mark.parametrize("rub", [10, 49, 149, 249, 499, 1000, 6999])
+@pytest.mark.parametrize("rub", [10, 49, 149, 249, 499, 1000, 6000])
 def test_round_trip_never_loses_a_ruble(stars_on, rub):
     """🔴 70 * 0.7 = 48.99999999999999: голый int() записал бы в цель 48 ₽ за
     донат, выбранный на кнопке «49 ₽». Найдено при написании этого теста."""
@@ -52,16 +52,19 @@ def test_round_trip_never_loses_a_ruble(stars_on, rub):
 
 
 def test_stars_rounded_up(stars_on):
-    assert stars_for_rub(49) == 70
-    assert stars_for_rub(50) == 72  # 71.43 → 72, а не 71
+    # С 22.09 к звёздам добавляется наценка владельца (+15%): «за рубли дешевле».
+    # 49 ₽ → 57 ₽ с наценкой → 57 / 0.7 = 81.43 → 82 звезды, а не 81.
+    assert stars_for_rub(49) == 82
+    assert stars_for_rub(50) == 83
 
 
 def test_amount_over_invoice_limit_is_not_offered_in_stars(stars_on):
     """🔴 Bot API не принимает счёт больше 10 000 ⭐. Обрезать до потолка нельзя:
     человек заплатил бы ~7 000 ₽, а в цель легли бы все 12 345. Такую сумму
     звёздами просто не предлагаем."""
-    assert donations.can_pay_in_stars(7000)  # ровно 10 000 ⭐
-    assert stars_for_rub(7000) == MAX_STARS_PER_INVOICE
+    # Потолок считается уже по сумме с наценкой: 6086 ₽ → 6999 ₽ → 9999 ⭐
+    assert donations.can_pay_in_stars(6086)
+    assert stars_for_rub(6086) <= MAX_STARS_PER_INVOICE
     assert not donations.can_pay_in_stars(7001)
     with pytest.raises(ValueError):
         stars_for_rub(12345)

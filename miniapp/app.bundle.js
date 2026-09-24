@@ -2,7 +2,7 @@
 
 // Источник: miniapp/src/**. Пересборка: python tools/build_miniapp.py
 
-// отпечаток исходников: 0e28b19cd363a01b
+// отпечаток исходников: 3e190751dc8fd588
 
 (function () {
   "use strict";
@@ -192,6 +192,13 @@
     // Поток кандидата: <audio> идёт сюда, сервер проксирует источник с поддержкой Range
     function liveStreamUrl(ref) {
       return `/stream/${encodeURIComponent(ref)}`;
+    }
+
+    // Infinity Mix — бесконечная лента: каталог вперемешку с живыми треками из
+    // источника. Отдельно от getMix: у того есть сохранённые настройки, и один
+    // выбор «инструментальная» превращал микс в вечную ленту минусов.
+    function getInfinityMix() {
+      return request("/mix/infinity");
     }
 
     function getProfile() {
@@ -392,7 +399,7 @@
       }
       return result;
     }
-    return { API_BASE, ApiError, telegramUser, login, resolveAudioUrl, getTracks, getTrackById, getInstrumentals, getLibrary, getLibraryIds, addToLibrary, removeFromLibrary, getPremiumStatus, getSubscriptionStatus, logChannelClick, fetchFromWeb, liveSearch, searchLiveAlbums, getLiveAlbumTracks, addLiveAlbumToLibrary, queueLiveFetch, liveStreamUrl, getProfile, getContests, joinContest, getMix, getPlaylists, createPlaylist, getPlaylistTracks, addTrackToPlaylist, getAlbums, getAlbumTracks, getArtists, getArtistTracks, getGenres, getGenreTracks, getArtistCard, followArtist, unfollowArtist, getMyArtists, searchAll, getPopularQueries, logSearchQuery, sendAnalyticsEvents, sendTrackToChat, recordListen, getLanguages, saveLanguage, getLyrics, submitLyrics, uploadTrack, startPremiumTrial, getReferralTop, getProfileTop, startTransfer, createPaymentLink, formatDuration, shuffle };
+    return { API_BASE, ApiError, telegramUser, login, resolveAudioUrl, getTracks, getTrackById, getInstrumentals, getLibrary, getLibraryIds, addToLibrary, removeFromLibrary, getPremiumStatus, getSubscriptionStatus, logChannelClick, fetchFromWeb, liveSearch, searchLiveAlbums, getLiveAlbumTracks, addLiveAlbumToLibrary, queueLiveFetch, liveStreamUrl, getInfinityMix, getProfile, getContests, joinContest, getMix, getPlaylists, createPlaylist, getPlaylistTracks, addTrackToPlaylist, getAlbums, getAlbumTracks, getArtists, getArtistTracks, getGenres, getGenreTracks, getArtistCard, followArtist, unfollowArtist, getMyArtists, searchAll, getPopularQueries, logSearchQuery, sendAnalyticsEvents, sendTrackToChat, recordListen, getLanguages, saveLanguage, getLyrics, submitLyrics, uploadTrack, startPremiumTrial, getReferralTop, getProfileTop, startTransfer, createPaymentLink, formatDuration, shuffle };
   })();
 
   __m["analytics.js"] = (function () {
@@ -718,7 +725,7 @@
   })();
 
   __m["state.js"] = (function () {
-    const { resolveAudioUrl, shuffle, recordListen, getMix, getTrackById, getTracks } = __m["api.js"];
+    const { resolveAudioUrl, shuffle, recordListen, getMix, getInfinityMix, getTrackById, getTracks, liveStreamUrl, queueLiveFetch } = __m["api.js"];
     const { pushRecentTrack, getRecSettings } = __m["prefs.js"];
     const { isOffline, offlineBlobUrl } = __m["offline.js"];
     const { trackClient } = __m["analytics.js"];
@@ -757,6 +764,7 @@
       currentTrack: null,
       isPlaying: false,
       shuffleMode: true,
+      infinityMix: false, // очередь собрана Infinity Mix — её доливают, а не зацикливают
       repeatMode: false, // повтор текущего трека (audio.loop)
       playerOpen: false,
       queueOpen: false, // панель «Очередь» в плеере (скрины VK доп копи/)
@@ -897,8 +905,11 @@
       // очередь на переминт, и через минуту он играет. Об этом и говорим — иначе
       // «попробуйте позже» звучит как «сломалось навсегда».
       if (consecutiveErrors >= 4) {
+        // Раньше здесь было «Восстанавливаем эти треки — попробуйте через минуту».
+        // Владелец 22.09: «такого вообще не должно быть, и надписи этой не должно
+        // быть вообще». Сервер теперь дотягивает трек прямо в запросе, а четыре
+        // промаха подряд — это сеть, а не каталог: молча останавливаемся.
         state.isPlaying = false;
-        showToast("Восстанавливаем эти треки — попробуйте через минуту");
         notify();
         return;
       }
@@ -909,8 +920,7 @@
         refreshAndPlay(track);
         return;
       }
-      showToast("Не удалось загрузить трек — пропускаю");
-      playNext();
+      playNext(); // молча: человек не должен читать про наши промахи
     });
 
     audio.addEventListener("playing", () => {
@@ -947,9 +957,23 @@
       });
     }
 
+    // Значения полей экрана на момент ухода с него. 🔴 Без этого «Назад» показывал
+    // вечную загрузку: в стеке лежал patch, с которым экран ОТКРЫВАЛИ
+    // (`{playlistsStatus:"loading", collectionTracks: []}`), и возврат честно
+    // восстанавливал именно его — спиннер поверх стёртых данных, и обновить их было
+    // некому. Жалоба владельца 22.09: «бесконечная загрузка страницы когда жмёшь
+    // назад». Теперь запоминаем то, чем экран стал, а не то, с чего начинался.
+    function snapshotOf(patch) {
+      const snapshot = {};
+      for (const key of Object.keys(patch || {})) snapshot[key] = state[key];
+      return snapshot;
+    }
+
     function navigateTo(screen, patch = {}) {
       trackClient("screen_view", { props: { screen } });
-      navStack[navStack.length - 1].scroll = readScrollTop();
+      const current = navStack[navStack.length - 1];
+      current.scroll = readScrollTop();
+      current.snapshot = snapshotOf(current.patch);
       navStack.push({ screen, patch, scroll: 0 });
       Object.assign(state, patch);
       state.screen = screen;
@@ -964,7 +988,7 @@
       }
       navStack.pop();
       const top = navStack[navStack.length - 1];
-      Object.assign(state, top.patch);
+      Object.assign(state, top.snapshot || top.patch);
       state.screen = top.screen;
       notify();
       applyScrollTop(top.scroll);
@@ -1040,15 +1064,13 @@
       // Живой трек из источника (id «live:…») в базе не лежит: обновлять ссылку негде.
       // Раньше здесь уходил /track/live:… и получал 422 — лишний запрос перед тем же пропуском.
       if (typeof track.id === "string" && track.id.startsWith("live:")) {
-        showToast("Не удалось загрузить трек — пропускаю");
-        playNext();
+        playNext(); // поток источника не отдался — молча идём дальше
         return;
       }
       try {
         const fresh = await getTrackById(track.id);
         if (state.currentTrack !== track) return; // трек сменился, пока ходили за ссылкой
         if (!fresh.audio_url) {
-          showToast("У трека нет аудио");
           playNext();
           return;
         }
@@ -1056,7 +1078,6 @@
         playFrom(resolveAudioUrl(track), track);
       } catch {
         if (state.currentTrack !== track) return;
-        showToast("Не удалось загрузить трек — пропускаю");
         playNext();
       }
     }
@@ -1122,6 +1143,7 @@
 
     // Единая точка запуска очереди для всех разделов (Player Engine, ТЗ §7-8).
     function playTrack(track, contextList) {
+      state.infinityMix = false;
       const source = contextList && contextList.length ? contextList : [track];
       if (state.shuffleMode) {
         state.queue = [track, ...shuffle(source.filter((t) => t.id !== track.id))];
@@ -1134,6 +1156,81 @@
 
     function playAll() {
       playMix(state.catalog, "В базе пока нет треков");
+    }
+
+    // ---------- Infinity Mix: бесконечная лента без повторов ----------
+    // Владелец 22.09: «надо чтобы рандомные треки, абсолютно рандомные, даже
+    // которых нет в базе, без повторов». Поэтому лента не кончается: когда до
+    // конца очереди остаётся INFINITY_REFILL_AT треков, фоном докладываем
+    // следующую порцию. Сервер сам помнит показанное неделю и не повторяется.
+
+    const INFINITY_REFILL_AT = 5;
+    let infinityLoading = false;
+
+    function mixItemToTrack(item) {
+      if (item.track_id) {
+        return {
+          id: item.track_id,
+          title: item.title,
+          artist: item.artist,
+          duration: item.duration,
+          cover_url: item.cover_url,
+          audio_url: item.audio_url || null,
+        };
+      }
+      return {
+        id: `live:${item.ref}`,
+        title: item.title,
+        artist: item.artist,
+        duration: item.duration,
+        cover_url: item.cover_url,
+        audio_url: liveStreamUrl(item.ref),
+        live_ref: item.ref,
+      };
+    }
+
+    async function playInfinityMix() {
+      if (infinityLoading) return;
+      infinityLoading = true;
+      showToast("Собираю Infinity Mix…");
+      try {
+        const data = await getInfinityMix();
+        const list = (data.items || []).map(mixItemToTrack);
+        if (!list.length) {
+          showToast("Не удалось собрать микс");
+          return;
+        }
+        state.infinityMix = true;
+        state.queue = list; // порядок уже собран сервером: каталог первым, он играет сразу
+        startTrack(0);
+        state.playerOpen = true;
+        notify();
+      } catch {
+        showToast("Не удалось собрать микс");
+      } finally {
+        infinityLoading = false;
+      }
+    }
+
+    // Докладываем ленту молча — человек не должен видеть ни спиннера, ни паузы.
+    async function refillInfinityMix() {
+      if (infinityLoading || !state.infinityMix) return;
+      infinityLoading = true;
+      try {
+        const data = await getInfinityMix();
+        const known = new Set(state.queue.map((t) => String(t.id)));
+        const fresh = (data.items || [])
+          .map(mixItemToTrack)
+          .filter((t) => !known.has(String(t.id)));
+        if (fresh.length) {
+          state.queue = state.queue.concat(fresh);
+          notify();
+        }
+      } catch {
+        // Сеть отвалилась — лента доиграет то, что уже в очереди
+      } finally {
+        infinityLoading = false;
+      }
     }
 
     // Персональный микс под сохранённые настройки рекомендаций (настроение/тип/язык).
@@ -1164,6 +1261,7 @@
         showToast(emptyMessage);
         return;
       }
+      state.infinityMix = false;
       state.queue = shuffle(list);
       startTrack(0);
       state.playerOpen = true;
@@ -1191,7 +1289,17 @@
         }
       }
       let next = state.queueIndex + 1;
-      if (next >= state.queue.length) {
+      if (state.infinityMix) {
+        // Лента бесконечная: доливаем заранее, чтобы стык был неслышным
+        if (state.queue.length - next <= INFINITY_REFILL_AT) refillInfinityMix();
+        if (next >= state.queue.length) {
+          showToast("Догружаю ещё треки…");
+          refillInfinityMix().then(() => {
+            if (state.infinityMix && next < state.queue.length) startTrack(next);
+          });
+          return;
+        }
+      } else if (next >= state.queue.length) {
         // очередь закончилась — новая случайная из того же пула (ТЗ §5)
         state.queue = shuffle(state.queue);
         next = 0;
@@ -1319,7 +1427,7 @@
       state.sheetTrack = null;
       notify();
     }
-    return { audio, subscribe, subscribeProgress, getState, mutate, navigateTo, goBack, resetToTab, showToast, playTrack, playAll, playRecommended, playVibe, playMix, togglePlay, playNext, playPrev, seekToFraction, toggleShuffle, toggleRepeat, playQueueIndex, addToQueue, playNextInQueue, playTrackMix, setSleepTimer, openPlayer, closePlayer, openSheet, closeSheet };
+    return { audio, subscribe, subscribeProgress, getState, mutate, navigateTo, goBack, resetToTab, showToast, playTrack, playAll, playInfinityMix, playRecommended, playVibe, playMix, togglePlay, playNext, playPrev, seekToFraction, toggleShuffle, toggleRepeat, playQueueIndex, addToQueue, playNextInQueue, playTrackMix, setSleepTimer, openPlayer, closePlayer, openSheet, closeSheet };
   })();
 
   __m["components/icons.js"] = (function () {
@@ -1887,6 +1995,163 @@
       `;
     }
     return { renderPlaylistPicker };
+  })();
+
+  __m["gestures.js"] = (function () {
+    // Жесты приложения. Владелец 22.09 прислал развёрнутое ТЗ («как во всех
+    // приложениях»): свайп от левого края — назад, по обложке влево/вправо — смена
+    // трека, вниз — свернуть плеер, вверх по мини-плееру — развернуть, по строке
+    // трека вбок — быстрые действия.
+    //
+    // ⚠️ Главное правило здесь — ЗАМОК ОСИ. Владелец отдельным пунктом просил:
+    // «они должны строго свайпаться горизонтально или вертикально, но не на все
+    // оси». Поэтому направление определяется один раз, на первых AXIS_LOCK_PX
+    // пикселях, и до конца жеста не меняется: палец, ушедший вбок, уже не свернёт
+    // плеер, а начатая прокрутка не превратится в смену трека.
+    //
+    // ⚠️ Второе правило — не воевать с прокруткой. Пока ось не выбрана, ничего не
+    // отменяем; выбрали горизонталь — гасим прокрутку (preventDefault), выбрали
+    // вертикаль внутри списка — не мешаем ему листаться.
+
+    const AXIS_LOCK_PX = 12; // после какого смещения решаем, вбок это или вверх-вниз
+    const EDGE_ZONE_PX = 32; // ширина «зоны края» для жеста «назад»
+    const SWIPE_MIN_PX = 64; // короче — это промах, а не жест
+    const ROW_MAX_SHIFT = 88; // насколько далеко уезжает строка трека под пальцем
+    const FLING_MS = 400; // быстрый короткий свайп засчитываем с меньшим порогом
+    const FLING_MIN_PX = 32;
+
+    function installGestures(root, handlers) {
+      let start = null;
+
+      const reset = () => {
+        if (start && start.row) releaseRow(start.row, false);
+        start = null;
+      };
+
+      root.addEventListener(
+        "touchstart",
+        (event) => {
+          if (event.touches.length !== 1) return reset();
+          const touch = event.touches[0];
+          start = {
+            x: touch.clientX,
+            y: touch.clientY,
+            time: Date.now(),
+            axis: null, // null | "x" | "y"
+            scrollTop: document.scrollingElement ? document.scrollingElement.scrollTop : 0,
+            fromEdge: touch.clientX <= EDGE_ZONE_PX,
+            art: closest(event.target, ".player-art"),
+            mini: closest(event.target, ".mini-player"),
+            row: rowUnder(event.target),
+            inScroller: Boolean(closest(event.target, ".h-scroll")),
+            onSlider: Boolean(closest(event.target, "[data-role='seek']") || closest(event.target, ".player-seek")),
+          };
+        },
+        { passive: true }
+      );
+
+      root.addEventListener(
+        "touchmove",
+        (event) => {
+          if (!start || event.touches.length !== 1) return;
+          const touch = event.touches[0];
+          const dx = touch.clientX - start.x;
+          const dy = touch.clientY - start.y;
+
+          if (start.axis === null) {
+            if (Math.abs(dx) < AXIS_LOCK_PX && Math.abs(dy) < AXIS_LOCK_PX) return;
+            start.axis = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
+            // Полоса перемотки живёт своей жизнью: её тянут пальцем, и жест
+            // «свернуть плеер» отсюда срабатывать не должен (совет из ТЗ владельца).
+            if (start.onSlider) start = null;
+            return;
+          }
+
+          if (start.axis === "x") {
+            if (start.inScroller) return; // горизонтальную ленту листает она сама
+            if (start.row) {
+              shiftRow(start.row, dx);
+              if (event.cancelable) event.preventDefault();
+              return;
+            }
+            if (start.fromEdge || start.art || start.mini) {
+              if (event.cancelable) event.preventDefault();
+            }
+          }
+        },
+        { passive: false }
+      );
+
+      root.addEventListener("touchend", (event) => {
+        if (!start) return;
+        const touch = event.changedTouches[0];
+        const dx = touch.clientX - start.x;
+        const dy = touch.clientY - start.y;
+        const fast = Date.now() - start.time < FLING_MS;
+        const enough = (value) => Math.abs(value) >= (fast ? FLING_MIN_PX : SWIPE_MIN_PX);
+        const context = { ...start };
+        if (start.row) releaseRow(start.row, enough(dx) && start.axis === "x");
+        start = null;
+
+        if (context.axis === "x") {
+          if (context.row) {
+            if (!enough(dx)) return;
+            handlers.onRowSwipe(context.row, dx > 0 ? "right" : "left");
+            return;
+          }
+          if (!enough(dx)) return;
+          if (context.art || context.mini) {
+            handlers.onTrackSwipe(dx > 0 ? "prev" : "next");
+            return;
+          }
+          if (dx > 0 && context.fromEdge) handlers.onBack();
+          return;
+        }
+
+        if (context.axis === "y") {
+          if (!enough(dy)) return;
+          if (dy < 0) {
+            handlers.onSwipeUp(context);
+            return;
+          }
+          handlers.onSwipeDown(context);
+        }
+      });
+
+      root.addEventListener("touchcancel", reset);
+    }
+
+    function closest(node, selector) {
+      return node && node.closest ? node.closest(selector) : null;
+    }
+
+    function rowUnder(node) {
+      const row = closest(node, ".track-row");
+      if (!row) return null;
+      // Минусы (отрицательный id) и живые кандидаты («live:…») в библиотеку и
+      // очередь не кладутся — свайпать их нечем.
+      const id = Number(row.dataset.id);
+      return Number.isFinite(id) && id > 0 ? row : null;
+    }
+
+    function shiftRow(row, dx) {
+      const clamped = Math.max(-ROW_MAX_SHIFT, Math.min(ROW_MAX_SHIFT, dx));
+      row.style.transition = "none";
+      row.style.transform = `translateX(${clamped}px)`;
+      row.classList.toggle("is-swiping-right", clamped > 8);
+      row.classList.toggle("is-swiping-left", clamped < -8);
+    }
+
+    function releaseRow(row, fired) {
+      row.style.transition = "transform .18s ease";
+      row.style.transform = "";
+      row.classList.remove("is-swiping-right", "is-swiping-left");
+      if (fired) {
+        row.classList.add("is-swipe-done");
+        setTimeout(() => row.classList.remove("is-swipe-done"), 260);
+      }
+    }
+    return { installGestures };
   })();
 
   __m["screens/home.js"] = (function () {
@@ -4601,46 +4866,17 @@
   __m["screens/transfer.js"] = (function () {
     const { icon } = __m["components/icons.js"];
     const { escapeHtml } = __m["components/trackRow.js"];
-    // «Перенос из других сервисов» по скрину VK (копи/ photo_16): выбор сервиса,
-    // поле для ссылки/списка, объяснение как это работает.
+    // «Перенос музыки». Владелец 22.09: «работает только по ссылке, через ВК также,
+    // не построчно и так далее только ссылка, и убери надписи как это работает и тд
+    // оставь только, пришлите ссылку». Поэтому здесь ровно три вещи: откуда,
+    // поле для ссылки и кнопка. Разбор списка строками сервер по-прежнему понимает —
+    // он просто больше не предлагается на экране.
 
     const SERVICES = [
-      {
-        id: "spotify",
-        label: "Spotify",
-        hint: "Ссылка на плейлист",
-        tone: "spotify",
-        prompt: "Скопируйте ссылку на свой плейлист в Spotify",
-        help: "Откройте плейлист в Spotify → «…» → «Поделиться» → «Копировать ссылку».",
-        warn: "Плейлист должен быть публичным — проверьте настройки приватности.",
-      },
-      {
-        id: "yandex",
-        label: "Яндекс",
-        hint: "Ссылка на плейлист",
-        tone: "yandex",
-        prompt: "Скопируйте ссылку на свой плейлист в Яндекс Музыке",
-        help: "Откройте плейлист в Яндекс Музыке → «Поделиться» → «Скопировать ссылку».",
-        warn: "Плейлист должен быть публичным — проверьте настройки приватности.",
-      },
-      {
-        id: "vk",
-        label: "ВКонтакте",
-        hint: "Список текстом",
-        tone: "vk",
-        prompt: "Вставьте список треков — по строке на трек",
-        help: "ВКонтакте не отдаёт плейлисты без входа. Скопируйте названия треков и вставьте строками «Артист — Название».",
-        warn: "",
-      },
-      {
-        id: "soundcloud",
-        label: "SoundCloud",
-        hint: "Профиль, трек или сет",
-        tone: "sc",
-        prompt: "Скопируйте ссылку на трек, профиль или сет SoundCloud",
-        help: "SoundCloud скачивается напрямую — принимаем ссылку на трек, профиль, лайки или сет.",
-        warn: "",
-      },
+      { id: "spotify", label: "Spotify", tone: "spotify" },
+      { id: "yandex", label: "Яндекс", tone: "yandex" },
+      { id: "vk", label: "ВКонтакте", tone: "vk" },
+      { id: "soundcloud", label: "SoundCloud", tone: "sc" },
     ];
 
     function renderTransfer(state) {
@@ -4650,16 +4886,9 @@
             data-action="transfer-service" data-value="${service.id}">
             <span class="transfer-card__logo">${service.label[0]}</span>
             <span class="transfer-card__label">${service.label}</span>
-            <span class="transfer-card__hint">${service.hint}</span>
           </button>
         `
       ).join("");
-
-      const active = SERVICES.find((s) => s.id === state.transferService) || SERVICES[0];
-      const isVk = active.id === "vk";
-      const placeholder = isVk
-        ? "Kizaru — Fendi&#10;Big Baby Tape — Gimme the Loot"
-        : "https://…";
 
       return `
         <div class="page-head" data-role="page-head">
@@ -4675,24 +4904,15 @@
         <div class="rec-section-label">Откуда перенести?</div>
         <div class="transfer-grid">${cards}</div>
 
-        <div class="transfer-prompt">${active.prompt}</div>
-        <textarea class="transfer-input" data-role="transfer-input" rows="${isVk ? 4 : 2}"
-          placeholder="${placeholder}">${escapeHtml(state.transferSource || "")}</textarea>
-        <div class="hint-text">${active.help}</div>
-        ${active.warn ? `<div class="transfer-warn">${active.warn}</div>` : ""}
+        <div class="transfer-prompt">Пришлите ссылку на плейлист</div>
+        <textarea class="transfer-input" data-role="transfer-input" rows="2"
+          placeholder="https://…">${escapeHtml(state.transferSource || "")}</textarea>
 
         <button class="btn btn--primary btn--block" style="margin-top:14px" data-action="transfer-start">
           ${state.transferStatus === "loading" ? "Переношу…" : "Перенести"}
         </button>
 
         ${state.transferResult ? `<div class="card card--flat transfer-result">${state.transferResult}</div>` : ""}
-
-        <div class="rec-section-label">Как это работает</div>
-        <div class="card card--rows transfer-steps">
-          <div class="settings-row"><div class="settings-row__label">1. Находим ваши треки в нашей базе — они появляются сразу</div></div>
-          <div class="settings-row"><div class="settings-row__label">2. Чего нет — загружаем из открытых источников</div></div>
-          <div class="settings-row"><div class="settings-row__label">3. Пришлём отчёт в чат, когда закончим</div></div>
-        </div>
       `;
     }
     return { renderTransfer };
@@ -4943,7 +5163,7 @@
   __m["main.js"] = (function () {
     const { trackClient } = __m["analytics.js"];
     const { addToLibrary, createPaymentLink, formatDuration, getLibrary, getLibraryIds, getAlbums, getAlbumTracks, getArtists, getArtistCard, getArtistTracks, getContests, getGenres, getGenreTracks, followArtist, unfollowArtist, getMyArtists, addTrackToPlaylist, searchAll, liveSearch, searchLiveAlbums, getLiveAlbumTracks, addLiveAlbumToLibrary, liveStreamUrl, queueLiveFetch, getInstrumentals, getLyrics, getPlaylists, getPlaylistTracks, getPopularQueries, joinContest, getPremiumStatus, getSubscriptionStatus, logChannelClick, fetchFromWeb, getProfile, getTracks, login, logSearchQuery, createPlaylist, submitLyrics, removeFromLibrary, getLanguages, resolveAudioUrl, saveLanguage, sendTrackToChat, telegramUser } = __m["api.js"];
-    const { closePlayer, closeSheet, getState, goBack, mutate, navigateTo, openPlayer, openSheet, playMix, playQueueIndex, playRecommended, playVibe, playNext, playPrev, playTrack, playTrackMix, addToQueue, playNextInQueue, resetToTab, seekToFraction, setSleepTimer, showToast, subscribe, subscribeProgress, togglePlay, toggleRepeat, toggleShuffle } = __m["state.js"];
+    const { closePlayer, closeSheet, getState, goBack, mutate, navigateTo, openPlayer, openSheet, playMix, playQueueIndex, playRecommended, playInfinityMix, playVibe, playNext, playPrev, playTrack, playTrackMix, addToQueue, playNextInQueue, resetToTab, seekToFraction, setSleepTimer, showToast, subscribe, subscribeProgress, togglePlay, toggleRepeat, toggleShuffle } = __m["state.js"];
     const { renderHeader } = __m["components/header.js"];
     const { renderBottomNav } = __m["components/bottomNav.js"];
     const { renderMiniPlayer } = __m["components/miniPlayer.js"];
@@ -4951,6 +5171,7 @@
     const { renderTrackSheet } = __m["components/trackSheet.js"];
     const { renderPlaylistPicker } = __m["components/playlistPicker.js"];
     const { icon } = __m["components/icons.js"];
+    const { installGestures } = __m["gestures.js"];
     const { escapeHtml } = __m["components/trackRow.js"];
     const { renderHome } = __m["screens/home.js"];
     const { renderSearch, renderSearchResults } = __m["screens/search.js"];
@@ -6308,7 +6529,10 @@
           navigateTo("mytracks", { myTracksTab: "downloaded", myTracksQuery: "", myTracksEdit: false });
           break;
         case "play-recommended":
-          playRecommended();
+          // Кнопка на главной — именно бесконечная случайная лента, а не микс по
+          // сохранённым настройкам: один выбор «инструментальная» в «Настроить»
+          // превращал главную кнопку в вечную ленту минусов (жалоба 22.09).
+          playInfinityMix();
           break;
         case "play-vibe":
           // mood-микс с карточки «Какой сейчас вайб?» — тот же движок, что «Настроить»
@@ -6816,48 +7040,49 @@
       window.addEventListener("pointercancel", onUp);
     });
 
-    // Свайп вниз закрывает плеер/шит, на вложенных страницах — шаг назад (ТЗ §3).
-    let gestureStartY = null;
-    let gestureStartX = null;
-    let gestureScrollTop = 0;
-
-    root.addEventListener(
-      "touchstart",
-      (event) => {
-        const touch = event.touches[0];
-        gestureStartY = touch.clientY;
-        gestureStartX = touch.clientX;
-        gestureScrollTop = document.scrollingElement.scrollTop;
+    // Жесты: замок оси и полный набор из ТЗ владельца (22.09) — см. gestures.js.
+    installGestures(root, {
+      onBack() {
+        const state = getState();
+        if (state.sheetTrack) return closeSheet();
+        if (state.playerOpen) return closePlayer();
+        if (!TAB_SCREENS.has(state.screen)) goBack();
       },
-      { passive: true }
-    );
-
-    root.addEventListener("touchend", (event) => {
-      if (gestureStartY == null) return;
-      const touch = event.changedTouches[0];
-      const dy = touch.clientY - gestureStartY;
-      const dx = Math.abs(touch.clientX - gestureStartX);
-      const startedNearTop = gestureStartY < window.innerHeight * 0.5;
-      gestureStartY = null;
-      gestureStartX = null;
-      if (dy < 90 || dx > 70) return; // не выраженный свайп вниз
-
-      const state = getState();
-      if (state.sheetTrack) {
-        closeSheet();
-        return;
-      }
-      if (state.sortSheetOpen) {
-        mutate({ sortSheetOpen: false });
-        return;
-      }
-      if (state.playerOpen) {
-        closePlayer();
-        return;
-      }
-      if (!TAB_SCREENS.has(state.screen) && startedNearTop && gestureScrollTop <= 4) {
-        goBack();
-      }
+      onTrackSwipe(direction) {
+        // По обложке плеера и по мини-плееру: влево — следующий, вправо — предыдущий
+        if (direction === "next") playNext();
+        else playPrev();
+        hapticTap();
+      },
+      onSwipeUp(context) {
+        const state = getState();
+        if (context.mini && !state.playerOpen) return mutate({ playerOpen: true });
+        if (state.playerOpen && !state.queueOpen) return mutate({ queueOpen: true });
+      },
+      onSwipeDown(context) {
+        const state = getState();
+        if (state.sheetTrack) return closeSheet();
+        if (state.sortSheetOpen) return mutate({ sortSheetOpen: false });
+        if (state.playerSettingsOpen) return mutate({ playerSettingsOpen: false });
+        if (state.queueOpen) return mutate({ queueOpen: false });
+        if (state.playerOpen) return closePlayer();
+        // Страницу закрываем только жестом от верхней половины и с самого верха
+        // прокрутки: иначе любое пролистывание списка вниз выкидывало бы с экрана.
+        const fromTop = context.y < window.innerHeight * 0.5 && context.scrollTop <= 4;
+        if (!TAB_SCREENS.has(state.screen) && fromTop) goBack();
+      },
+      onRowSwipe(row, direction) {
+        const id = Number(row.dataset.id);
+        const track = findTrack(id);
+        if (!track) return;
+        if (direction === "right") {
+          addToQueue(track); // стандарт Apple Music/Spotify: вправо — в очередь
+          showToast("Добавлено в очередь");
+        } else {
+          handleToggleLibrary(id, false); // влево — в медиатеку/из неё
+        }
+        hapticTap();
+      },
     });
 
     // Пробел — play/pause (десктопная отладка)

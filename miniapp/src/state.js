@@ -3,8 +3,11 @@ import {
   shuffle,
   recordListen,
   getMix,
+  getInfinityMix,
   getTrackById,
   getTracks,
+  liveStreamUrl,
+  queueLiveFetch,
 } from "./api.js";
 import { pushRecentTrack, getRecSettings } from "./prefs.js";
 import { isOffline, offlineBlobUrl } from "./offline.js";
@@ -45,6 +48,7 @@ const state = {
   currentTrack: null,
   isPlaying: false,
   shuffleMode: true,
+  infinityMix: false, // очередь собрана Infinity Mix — её доливают, а не зацикливают
   repeatMode: false, // повтор текущего трека (audio.loop)
   playerOpen: false,
   queueOpen: false, // панель «Очередь» в плеере (скрины VK доп копи/)
@@ -185,8 +189,11 @@ audio.addEventListener("error", () => {
   // очередь на переминт, и через минуту он играет. Об этом и говорим — иначе
   // «попробуйте позже» звучит как «сломалось навсегда».
   if (consecutiveErrors >= 4) {
+    // Раньше здесь было «Восстанавливаем эти треки — попробуйте через минуту».
+    // Владелец 22.09: «такого вообще не должно быть, и надписи этой не должно
+    // быть вообще». Сервер теперь дотягивает трек прямо в запросе, а четыре
+    // промаха подряд — это сеть, а не каталог: молча останавливаемся.
     state.isPlaying = false;
-    showToast("Восстанавливаем эти треки — попробуйте через минуту");
     notify();
     return;
   }
@@ -197,8 +204,7 @@ audio.addEventListener("error", () => {
     refreshAndPlay(track);
     return;
   }
-  showToast("Не удалось загрузить трек — пропускаю");
-  playNext();
+  playNext(); // молча: человек не должен читать про наши промахи
 });
 
 audio.addEventListener("playing", () => {
@@ -235,9 +241,23 @@ function applyScrollTop(value) {
   });
 }
 
+// Значения полей экрана на момент ухода с него. 🔴 Без этого «Назад» показывал
+// вечную загрузку: в стеке лежал patch, с которым экран ОТКРЫВАЛИ
+// (`{playlistsStatus:"loading", collectionTracks: []}`), и возврат честно
+// восстанавливал именно его — спиннер поверх стёртых данных, и обновить их было
+// некому. Жалоба владельца 22.09: «бесконечная загрузка страницы когда жмёшь
+// назад». Теперь запоминаем то, чем экран стал, а не то, с чего начинался.
+function snapshotOf(patch) {
+  const snapshot = {};
+  for (const key of Object.keys(patch || {})) snapshot[key] = state[key];
+  return snapshot;
+}
+
 export function navigateTo(screen, patch = {}) {
   trackClient("screen_view", { props: { screen } });
-  navStack[navStack.length - 1].scroll = readScrollTop();
+  const current = navStack[navStack.length - 1];
+  current.scroll = readScrollTop();
+  current.snapshot = snapshotOf(current.patch);
   navStack.push({ screen, patch, scroll: 0 });
   Object.assign(state, patch);
   state.screen = screen;
@@ -252,7 +272,7 @@ export function goBack() {
   }
   navStack.pop();
   const top = navStack[navStack.length - 1];
-  Object.assign(state, top.patch);
+  Object.assign(state, top.snapshot || top.patch);
   state.screen = top.screen;
   notify();
   applyScrollTop(top.scroll);
@@ -328,15 +348,13 @@ async function refreshAndPlay(track) {
   // Живой трек из источника (id «live:…») в базе не лежит: обновлять ссылку негде.
   // Раньше здесь уходил /track/live:… и получал 422 — лишний запрос перед тем же пропуском.
   if (typeof track.id === "string" && track.id.startsWith("live:")) {
-    showToast("Не удалось загрузить трек — пропускаю");
-    playNext();
+    playNext(); // поток источника не отдался — молча идём дальше
     return;
   }
   try {
     const fresh = await getTrackById(track.id);
     if (state.currentTrack !== track) return; // трек сменился, пока ходили за ссылкой
     if (!fresh.audio_url) {
-      showToast("У трека нет аудио");
       playNext();
       return;
     }
@@ -344,7 +362,6 @@ async function refreshAndPlay(track) {
     playFrom(resolveAudioUrl(track), track);
   } catch {
     if (state.currentTrack !== track) return;
-    showToast("Не удалось загрузить трек — пропускаю");
     playNext();
   }
 }
@@ -410,6 +427,7 @@ function startTrack(index) {
 
 // Единая точка запуска очереди для всех разделов (Player Engine, ТЗ §7-8).
 export function playTrack(track, contextList) {
+  state.infinityMix = false;
   const source = contextList && contextList.length ? contextList : [track];
   if (state.shuffleMode) {
     state.queue = [track, ...shuffle(source.filter((t) => t.id !== track.id))];
@@ -422,6 +440,81 @@ export function playTrack(track, contextList) {
 
 export function playAll() {
   playMix(state.catalog, "В базе пока нет треков");
+}
+
+// ---------- Infinity Mix: бесконечная лента без повторов ----------
+// Владелец 22.09: «надо чтобы рандомные треки, абсолютно рандомные, даже
+// которых нет в базе, без повторов». Поэтому лента не кончается: когда до
+// конца очереди остаётся INFINITY_REFILL_AT треков, фоном докладываем
+// следующую порцию. Сервер сам помнит показанное неделю и не повторяется.
+
+const INFINITY_REFILL_AT = 5;
+let infinityLoading = false;
+
+function mixItemToTrack(item) {
+  if (item.track_id) {
+    return {
+      id: item.track_id,
+      title: item.title,
+      artist: item.artist,
+      duration: item.duration,
+      cover_url: item.cover_url,
+      audio_url: item.audio_url || null,
+    };
+  }
+  return {
+    id: `live:${item.ref}`,
+    title: item.title,
+    artist: item.artist,
+    duration: item.duration,
+    cover_url: item.cover_url,
+    audio_url: liveStreamUrl(item.ref),
+    live_ref: item.ref,
+  };
+}
+
+export async function playInfinityMix() {
+  if (infinityLoading) return;
+  infinityLoading = true;
+  showToast("Собираю Infinity Mix…");
+  try {
+    const data = await getInfinityMix();
+    const list = (data.items || []).map(mixItemToTrack);
+    if (!list.length) {
+      showToast("Не удалось собрать микс");
+      return;
+    }
+    state.infinityMix = true;
+    state.queue = list; // порядок уже собран сервером: каталог первым, он играет сразу
+    startTrack(0);
+    state.playerOpen = true;
+    notify();
+  } catch {
+    showToast("Не удалось собрать микс");
+  } finally {
+    infinityLoading = false;
+  }
+}
+
+// Докладываем ленту молча — человек не должен видеть ни спиннера, ни паузы.
+async function refillInfinityMix() {
+  if (infinityLoading || !state.infinityMix) return;
+  infinityLoading = true;
+  try {
+    const data = await getInfinityMix();
+    const known = new Set(state.queue.map((t) => String(t.id)));
+    const fresh = (data.items || [])
+      .map(mixItemToTrack)
+      .filter((t) => !known.has(String(t.id)));
+    if (fresh.length) {
+      state.queue = state.queue.concat(fresh);
+      notify();
+    }
+  } catch {
+    // Сеть отвалилась — лента доиграет то, что уже в очереди
+  } finally {
+    infinityLoading = false;
+  }
 }
 
 // Персональный микс под сохранённые настройки рекомендаций (настроение/тип/язык).
@@ -452,6 +545,7 @@ export function playMix(list, emptyMessage = "Здесь пока нет тре�
     showToast(emptyMessage);
     return;
   }
+  state.infinityMix = false;
   state.queue = shuffle(list);
   startTrack(0);
   state.playerOpen = true;
@@ -479,7 +573,17 @@ export function playNext() {
     }
   }
   let next = state.queueIndex + 1;
-  if (next >= state.queue.length) {
+  if (state.infinityMix) {
+    // Лента бесконечная: доливаем заранее, чтобы стык был неслышным
+    if (state.queue.length - next <= INFINITY_REFILL_AT) refillInfinityMix();
+    if (next >= state.queue.length) {
+      showToast("Догружаю ещё треки…");
+      refillInfinityMix().then(() => {
+        if (state.infinityMix && next < state.queue.length) startTrack(next);
+      });
+      return;
+    }
+  } else if (next >= state.queue.length) {
     // очередь закончилась — новая случайная из того же пула (ТЗ §5)
     state.queue = shuffle(state.queue);
     next = 0;

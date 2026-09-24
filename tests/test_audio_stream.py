@@ -95,11 +95,13 @@ async def test_failed_download_is_404_and_leaves_no_tmp(env, monkeypatch, tmp_pa
         Path(destination).write_bytes(b"half")
         raise RuntimeError("telegram down")
 
-    async def no_heal(_track_id):
+    async def no_revive(_track_id):
         return None
 
     monkeypatch.setattr(audio_router.BotApi, "download", broken)
-    monkeypatch.setattr(audio_router, "_heal_dead_file_id", no_heal)
+    # Оживление трека проверяется отдельно (test_track_revive.py): здесь важно,
+    # что при полном отказе мы отвечаем 404 и не оставляем недокачанный кусок.
+    monkeypatch.setattr(audio_router, "_revive_track", no_revive)
     response = await env.get(build_audio_url(2))
     assert response.status_code == 404
     assert not list(tmp_path.glob("*.tmp"))

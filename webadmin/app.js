@@ -6,10 +6,91 @@ const screen = document.getElementById("screen");
 const state = { tab: "overview", days: 30, users: { q: "", offset: 0 }, tracks: { q: "", offset: 0 } };
 const PAGE = 50;
 
-async function api(path) {
-  const response = await fetch(path);
-  if (!response.ok) throw new Error(`${path}: ${response.status}`);
+async function api(path, options) {
+  const response = await fetch(path, options);
+  if (response.status === 401) {
+    renderLogin();
+    throw new Error("нужен вход");
+  }
+  if (!response.ok) {
+    let detail = `${path}: ${response.status}`;
+    try {
+      const payload = await response.json();
+      if (payload && payload.detail) detail = payload.detail;
+    } catch {
+      // тело не JSON — оставляем код ответа
+    }
+    throw new Error(detail);
+  }
   return response.json();
+}
+
+function post(path, body) {
+  return api(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body || {}),
+  });
+}
+
+// --- Вход: пароль, затем одноразовый код из Telegram (решение владельца 22.09) ---
+
+let loginStage = "password";
+
+function renderLogin(message) {
+  document.getElementById("tabs").style.display = "none";
+  screen.innerHTML = `
+    <div class="login">
+      <h2>${loginStage === "password" ? "Вход в админку" : "Код из Telegram"}</h2>
+      <p class="muted">${
+        loginStage === "password"
+          ? "Пароль знаете только вы. Вторым шагом бот пришлёт одноразовый код."
+          : "Код действует 5 минут и сгорает после первой попытки."
+      }</p>
+      <input id="login-input" type="password" autocomplete="off"
+        placeholder="${loginStage === "password" ? "Пароль" : "6 цифр"}" />
+      <button id="login-go">${loginStage === "password" ? "Дальше" : "Войти"}</button>
+      ${message ? `<p class="error">${esc(message)}</p>` : ""}
+    </div>
+  `;
+  const input = document.getElementById("login-input");
+  input.focus();
+  const submit = async () => {
+    const value = input.value.trim();
+    if (!value) return;
+    try {
+      if (loginStage === "password") {
+        await post("/api/login", { password: value });
+        loginStage = "code";
+        renderLogin();
+      } else {
+        await post("/api/login/code", { code: value });
+        loginStage = "password";
+        document.getElementById("tabs").style.display = "";
+        async function boot() {
+  try {
+    const session = await fetch("/api/session").then((r) => r.json());
+    if (!session.authorized) {
+      loginStage = session.code_pending ? "code" : "password";
+      renderLogin();
+      return;
+    }
+  } catch {
+    // сессия не отвечает — покажем обычную ошибку в render()
+  }
+  render();
+}
+
+boot();
+      }
+    } catch (error) {
+      renderLogin(error.message);
+    }
+  };
+  document.getElementById("login-go").addEventListener("click", submit);
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") submit();
+  });
 }
 
 const esc = (value) =>
@@ -106,7 +187,7 @@ async function renderUsers() {
       <span class="muted">найдено: ${num(data.total)}</span>
     </div>
     <table><thead><tr>
-      <th>Кто</th><th>id</th><th>Пришёл</th><th>Premium</th><th>Прослушиваний</th><th>Язык</th><th>Статус</th>
+      <th>Кто</th><th>id</th><th>Пришёл</th><th>Premium</th><th>Прослушиваний</th><th>Язык</th><th>Статус</th><th>Premium вручную</th>
     </tr></thead><tbody>
       ${data.items
         .map(
@@ -118,6 +199,11 @@ async function renderUsers() {
             <td>${num(u.listens)}</td>
             <td>${esc(u.language)}</td>
             <td>${u.blocked ? '<span class="pill bad">заблокировал бота</span>' : '<span class="pill">активен</span>'}</td>
+            <td class="actions">
+              <button class="mini" data-premium="${u.telegram_id}" data-days="30">+30д</button>
+              <button class="mini" data-premium="${u.telegram_id}" data-days="365">+год</button>
+              <button class="mini danger" data-premium="${u.telegram_id}" data-days="0">снять</button>
+            </td>
           </tr>`
         )
         .join("")}
@@ -125,6 +211,24 @@ async function renderUsers() {
     ${pager(data.total, offset, "users")}`;
   bindSearch("users");
   bindPager("users");
+  // Выдача Premium руками: подтверждение обязательно — это чужая подписка,
+  // а кнопки стоят вплотную к строке поиска.
+  screen.querySelectorAll("button[data-premium]").forEach((button) =>
+    button.addEventListener("click", async () => {
+      const days = Number(button.dataset.days);
+      const who = button.dataset.premium;
+      const question = days
+        ? `Выдать Premium на ${days} дней пользователю ${who}?`
+        : `Снять Premium у пользователя ${who}?`;
+      if (!window.confirm(question)) return;
+      try {
+        await post(`/api/users/${who}/premium`, { days });
+        render();
+      } catch (error) {
+        window.alert(error.message);
+      }
+    })
+  );
 }
 
 async function renderTracks() {
@@ -218,7 +322,46 @@ function bindPager(key) {
   );
 }
 
-const VIEWS = { overview: renderOverview, users: renderUsers, tracks: renderTracks, money: renderMoney };
+async function renderBroadcast() {
+  screen.innerHTML = `
+    <div class="broadcast">
+      <h2>Рассылка</h2>
+      <p class="muted">Уйдёт всем, кто не заблокировал бота. Два шага: сперва
+        покажем охват, отправка — отдельным подтверждением.</p>
+      <textarea id="bc-text" rows="8" placeholder="Текст сообщения"></textarea>
+      <button id="bc-check">Посчитать охват</button>
+      <div id="bc-result" class="muted"></div>
+    </div>`;
+  const result = document.getElementById("bc-result");
+  document.getElementById("bc-check").addEventListener("click", async () => {
+    const text = document.getElementById("bc-text").value.trim();
+    if (!text) return;
+    try {
+      const preview = await post("/api/broadcast", { text, confirm: false });
+      result.innerHTML = `Получат сообщение: <b>${num(preview.reach)}</b> человек.
+        <button id="bc-send" class="danger">Отправить</button>`;
+      document.getElementById("bc-send").addEventListener("click", async () => {
+        if (!window.confirm(`Отправить ${num(preview.reach)} людям? Отменить будет нельзя.`)) return;
+        try {
+          await post("/api/broadcast", { text, confirm: true });
+          result.textContent = "Рассылка запущена.";
+        } catch (error) {
+          result.textContent = error.message;
+        }
+      });
+    } catch (error) {
+      result.textContent = error.message;
+    }
+  });
+}
+
+const VIEWS = {
+  overview: renderOverview,
+  users: renderUsers,
+  tracks: renderTracks,
+  money: renderMoney,
+  broadcast: renderBroadcast,
+};
 
 async function render() {
   try {
@@ -237,4 +380,18 @@ document.getElementById("tabs").addEventListener("click", (event) => {
   render();
 });
 
-render();
+async function boot() {
+  try {
+    const session = await fetch("/api/session").then((r) => r.json());
+    if (!session.authorized) {
+      loginStage = session.code_pending ? "code" : "password";
+      renderLogin();
+      return;
+    }
+  } catch {
+    // страница открыта, а сервера нет — обычная ошибка покажется в render()
+  }
+  render();
+}
+
+boot();

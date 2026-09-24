@@ -128,38 +128,100 @@ async def _load_audio_bytes(
     return None
 
 
-async def _heal_dead_file_id(track_id: int) -> None:
-    """Гасит мёртвый file_id и ставит восстановление трека в очередь.
+# Оживление трека прямо в запросе. Один замок на трек: десять слушателей
+# одного мёртвого id не должны запустить десять скачиваний.
+_revive_locks: dict[int, asyncio.Lock] = {}
+# Сколько ждём воркер. Больше — и человек решит, что приложение зависло; меньше —
+# не успевает даже быстрый путь SoundCloud вместе с минтом.
+_REVIVE_WAIT_SECONDS = 25.0
+_REVIVE_POLL_SECONDS = 1.0
 
-    🔴 Зачем. `file_id` принадлежит боту, который загрузил файл. После переезда
-    на @muz_damn_bot (05.08) идентификаторы всего старого каталога стали чужими,
-    и Telegram отвечает «wrong file_id or the file is temporarily unavailable».
 
-    В боте самолечение было с самого переезда (`handlers/delivery.py`), а здесь
-    его не было: API просто отдавал 404. Mini App на 404 переходит к следующему
-    треку — у которого id точно так же мёртв, — и получается бесконечное
-    «не удалось запустить трек, пропускаю». Именно это владелец увидел 15.08.
+async def _fast_bytes(source_url: str) -> bytes | None:
+    """Быстрый путь SoundCloud: прямая ссылка на mp3, без yt-dlp и без ffmpeg.
 
-    Лечим тем же способом: помечаем id мёртвым и просим воркер переминтить трек
-    из источника. Текущий запрос всё равно вернёт 404 — байтов сейчас нет
-    физически, — но через несколько секунд трек оживает уже для всех.
+    ⚠️ Только SoundCloud и только progressive-mp3. Всё остальное (YouTube, HLS)
+    тянет yt-dlp с перекодировкой, а ffmpeg в процессе API дважды ронял прод по
+    OOM — такую работу делает воркер, а мы его ждём.
     """
-    from app.db.models import Track as TrackModel
-
+    if "soundcloud.com" not in (source_url or "").lower():
+        return None
     try:
-        async with session_factory() as session:
-            track = await session.get(TrackModel, track_id)
-            if track is None or not track.tg_file_id:
-                return  # уже вылечен параллельным запросом
-            track.tg_file_id = None
-            track.meta_synced = False
-            await session.commit()
+        from app.services.soundcloud_fast import fast_download
+
+        audio = await run_in_threadpool(fast_download, source_url)
+    except Exception:  # noqa: BLE001 — источник лёг: остаётся путь через воркер
+        logger.warning("Быстрое оживление не удалось: %s", source_url, exc_info=True)
+        return None
+    return audio.data if audio is not None else None
+
+
+async def _revive_track(track_id: int) -> Path | None:
+    """Достаёт байты трека, у которого умер file_id, и кладёт их в кэш.
+
+    🔴 Зачем это в запросе, а не «поставили задачу и извинились». Владелец
+    22.09: «надо исправить баг то что он пишет восстанавливаю треки попробуйте
+    позже, такого вообще не должно быть… если его нет в базе и он не заминченый,
+    то пусть загрузится и включится». Раньше здесь был 404 и надпись в Mini App;
+    теперь трек доезжает в этом же запросе за пару секунд.
+    """
+    lock = _revive_locks.setdefault(track_id, asyncio.Lock())
+    try:
+        async with lock:
+            storage_key = f"tracks/{track_id}"
+            hit = await run_in_threadpool(cache_file, storage_key)
+            if hit is not None:
+                return hit  # оживил параллельный запрос, пока ждали замок
+
+            async with session_factory() as session:
+                track = await session.get(Track, track_id)
+                if track is None:
+                    return None
+                source_url = track.source_url
+                had_file_id = bool(track.tg_file_id)
+                if had_file_id:
+                    # Гасим мёртвый id: пока он в базе, бот и инлайн будут
+                    # отдавать по нему тот же отказ.
+                    track.tg_file_id = None
+                    track.meta_synced = False
+                    await session.commit()
+
+            data = await _fast_bytes(source_url or "")
+            if data:
+                await run_in_threadpool(cache_put, storage_key, data)
+                hit = await run_in_threadpool(cache_file, storage_key)
+                if hit is not None:
+                    # Минт всё равно нужен: кэш на диске вытесняется, а file_id — нет
+                    _enqueue_repair(track_id)
+                    return hit
+
+            # Быстрый путь не сработал — просим воркер и ждём его результата
+            if not _enqueue_repair(track_id):
+                return None
+            deadline = asyncio.get_event_loop().time() + _REVIVE_WAIT_SECONDS
+            while asyncio.get_event_loop().time() < deadline:
+                await asyncio.sleep(_REVIVE_POLL_SECONDS)
+                async with session_factory() as session:
+                    fresh = await session.get(Track, track_id)
+                    file_id = fresh.tg_file_id if fresh else None
+                if file_id:
+                    return await _download_from_telegram(storage_key, file_id)
+            logger.warning("Оживление track=%s не уложилось в ожидание", track_id)
+            return None
+    finally:
+        if not lock.locked():
+            _revive_locks.pop(track_id, None)
+
+
+def _enqueue_repair(track_id: int) -> bool:
+    try:
         from app.tasks.queue_client import enqueue
 
         enqueue("search.repair_track", track_id=track_id)
-        logger.warning("Мёртвый file_id у track=%s — поставил восстановление", track_id)
+        return True
     except Exception:  # noqa: BLE001 — брокер лёг: вылечим при следующем обращении
         logger.warning("Не удалось поставить восстановление track=%s", track_id, exc_info=True)
+        return False
 
 
 def _parse_range(range_header: str, size: int) -> tuple[int, int]:
@@ -312,11 +374,16 @@ async def stream_track_audio(
         _media_type(track),
     )
     if response is None:
-        # Байтов нет и архива нет — почти наверняка мёртвый file_id от старого
-        # бота. Ставим восстановление, чтобы следующий человек получил трек.
-        if track.tg_file_id and not track.storage_path:
-            await _heal_dead_file_id(track.id)
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Файл трека недоступен")
+        # Байтов нет и архива нет — мёртвый file_id от старого бота либо трек,
+        # который так и не заминтился. Оживляем прямо здесь: человек ждёт
+        # секунды и слышит трек, вместо «попробуйте позже».
+        path = await _revive_track(track.id)
+        if path is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Файл трека недоступен")
+        accel = _accel_redirect(path, _media_type(track))
+        return accel if accel is not None else _file_response(
+            path, request.headers.get("range"), _media_type(track)
+        )
     return response
 
 

@@ -128,12 +128,29 @@ def is_stars_configured() -> bool:
     return settings.stars_rub_rate > 0
 
 
+def markup_rub(amount_rub: int) -> int:
+    """Сумма с наценкой за оплату звёздами/TON (решение владельца, +15%).
+
+    Рубли должны оставаться самым дешёвым способом: у звёзд Telegram удерживает
+    свою долю при выводе, а TON ещё и скачет в курсе между выставлением и
+    приходом. Наценка округляется ВВЕРХ — иначе на мелких суммах она просто
+    исчезала бы в округлении.
+    """
+    from app.config import settings
+
+    pct = max(0, settings.crypto_markup_pct)
+    if not pct:
+        return amount_rub
+    return math.ceil(amount_rub * (100 + pct) / 100)
+
+
 def _stars_exact(amount_rub: int) -> int:
     from app.config import settings
 
     rate = settings.stars_rub_rate
     if rate <= 0:
         raise ValueError("Курс звезды не задан (STARS_RUB_RATE)")
+    amount_rub = markup_rub(amount_rub)
     # round(…, 6) до ceil обязателен: 49 / 0.7 в плавающей точке даёт
     # 70.00000000000001, и голый ceil запросил бы у человека 71 звезду вместо 70.
     return max(1, math.ceil(round(amount_rub / rate, 6)))

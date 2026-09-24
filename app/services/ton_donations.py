@@ -100,10 +100,16 @@ def parse_memo(comment: str | None) -> tuple[int, int, bool] | None:
 
 
 def ton_for_rub(amount_rub: int) -> float:
-    """Сколько TON просить за нужную сумму в рублях."""
+    """Сколько TON попросить за сумму в рублях — с наценкой владельца (+15%).
+
+    Наценка та же, что у звёзд: рубли должны оставаться самым дешёвым способом
+    поддержать, а курс TON между выставлением счёта и приходом успевает уехать.
+    """
+    from app.services.donations import markup_rub
+
     if settings.ton_rub_per_ton <= 0:
         raise ValueError("Курс TON не задан (TON_RUB_PER_TON)")
-    return round(amount_rub / settings.ton_rub_per_ton, 4)
+    return round(markup_rub(amount_rub) / settings.ton_rub_per_ton, 4)
 
 
 def rub_for_nano(nano: int, rate: int) -> int:

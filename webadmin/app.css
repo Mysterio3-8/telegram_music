@@ -81,3 +81,15 @@ button.page[disabled] { opacity: 0.4; cursor: default; }
   main { padding: 14px; }
   th { top: 96px; }
 }
+
+/* Вход и действия (22.09) */
+.login { max-width: 360px; margin: 80px auto; display: grid; gap: 12px; }
+.login input { padding: 12px; font-size: 16px; border-radius: 8px; border: 1px solid #333; background: #111; color: #eee; }
+.login button, .broadcast button, button.mini {
+  padding: 10px 14px; border-radius: 8px; border: 0; background: #3b7bfe; color: #fff; cursor: pointer;
+}
+button.mini { padding: 4px 8px; font-size: 12px; margin-right: 4px; }
+button.danger, button.mini.danger { background: #b3373b; }
+td.actions { white-space: nowrap; }
+.broadcast { max-width: 640px; display: grid; gap: 12px; }
+.broadcast textarea { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #333; background: #111; color: #eee; }

@@ -155,6 +155,52 @@ async def fetch_yandex(url: str) -> list[TransferItem]:
     return items
 
 
+# --- ВКонтакте ---
+#
+# ⚠️ Владелец просил принимать ссылку и от ВК (22.09), но аудио у ВК закрыто:
+# неавторизованному отдают страницу-заглушку («у нас возникли проблемы»), а
+# официальное API не выдаёт прав на audio сторонним приложениям вовсе. Проверено
+# запросом с нашего IP: ни og-тегов, ни списка треков в ответе нет.
+# Поэтому пробуем то, что иногда открыто, и говорим честно, когда пусто —
+# молча вернуть «ничего не нашли» нельзя, человек решит, что сломан перенос.
+
+_VK_JSON_TRACK_RE = re.compile(
+    r'"artist"\s*:\s*"([^"]{1,120})"\s*,\s*"title"\s*:\s*"([^"]{1,200})"'
+)
+
+
+def _unescape(text: str) -> str:
+    return text.replace("&amp;", "&").replace("&quot;", '"').replace("&#39;", "'").strip()
+
+
+def parse_vk_html(html: str) -> list[TransferItem]:
+    """Пары «артист/название» из публичной страницы плейлиста, если она открыта."""
+    items = [
+        TransferItem(_unescape(artist), _unescape(title))
+        for artist, title in _VK_JSON_TRACK_RE.findall(html)
+    ]
+    if items:
+        return dedupe(items)
+    match = re.search(r'<meta property="og:description" content="([^"]+)"', html)
+    if match:
+        return parse_text_list(match.group(1).replace("&#10;", "\n").replace(", ", "\n"))
+    return []
+
+
+async def fetch_vk(url: str) -> list[TransferItem]:
+    try:
+        html = await _fetch_text(url)
+    except Exception:  # noqa: BLE001 — ВК закрывает страницу целиком
+        html = ""
+    items = parse_vk_html(html) if html else []
+    if not items:
+        raise TransferSourceError(
+            "ВКонтакте не открывает плейлисты без входа в аккаунт — разобрать ссылку нечем.\n"
+            "Перенесите из Spotify или Яндекс Музыки: их ссылки работают."
+        )
+    return items
+
+
 # --- Текстовый список (VK и любой другой сервис) ---
 
 _TEXT_SEPARATORS = (" — ", " – ", " - ", " — ", "—", "–")
@@ -197,8 +243,11 @@ async def fetch_playlist(url: str) -> list[TransferItem]:
     if service == "yandex":
         return await fetch_yandex(url)
     if service == "vk":
+        return await fetch_vk(url)
+    if service == "soundcloud":
         raise TransferSourceError(
-            "ВКонтакте не отдаёт плейлисты без входа в аккаунт.\n"
-            "Скопируйте список треков и пришлите текстом — строками «Артист — Название»."
+            "Ссылку SoundCloud пришлите боту в чат — он скачает треки напрямую."
         )
-    raise TransferSourceError("Не узнал сервис. Поддерживаю Spotify и Яндекс.Музыку.")
+    raise TransferSourceError(
+        "Не узнал сервис. Присылайте ссылку из Spotify, Яндекс Музыки или ВКонтакте."
+    )

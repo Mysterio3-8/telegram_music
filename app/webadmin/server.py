@@ -13,10 +13,12 @@ SSH-туннель (`python -m app.webadmin`), то есть пропуск — 
 """
 from __future__ import annotations
 
+import logging
+
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query, status
+from fastapi import Body, Cookie, Depends, FastAPI, Header, HTTPException, Query, Response, status
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import func, or_, select
@@ -31,6 +33,9 @@ from app.services.revenue import collect_revenue
 from app.services.search_index import normalize_search_query
 from app.services.track_lookup.ranking import to_latin
 from app.services.stats import collect_stats
+from app.webadmin import auth
+
+logger = logging.getLogger(__name__)
 
 UI_DIR = Path(__file__).resolve().parents[2] / "webadmin"
 
@@ -41,9 +46,26 @@ async def get_session() -> AsyncSession:
 
 
 async def check_token(x_admin_token: str | None = Header(default=None)) -> None:
+    """Старый рубеж по заголовку. Оставлен для скриптов и на случай, когда
+    пароль ещё не заведён: тогда админка работает как раньше, по SSH-туннелю."""
     expected = getattr(settings, "webadmin_token", "") or ""
     if expected and x_admin_token != expected:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Неверный токен админки")
+
+
+async def guard(
+    x_admin_token: str | None = Header(default=None),
+    admin_session: str | None = Cookie(default=None),
+) -> None:
+    """Пропуск к данным: пароль + код в Telegram, если пароль настроен.
+
+    Пароль не задан → остаётся прежний порядок (SSH-туннель плюс заголовок).
+    Так обновление не запирает владельца снаружи собственной админки до того,
+    как он успеет прописать пароль.
+    """
+    await check_token(x_admin_token)
+    if auth.password_configured():
+        await auth.require_session(admin_session)
 
 
 def _utcnow() -> datetime:
@@ -53,11 +75,10 @@ def _utcnow() -> datetime:
 def create_app() -> FastAPI:
     app = FastAPI(title="Infinity Music — админка", docs_url=None, redoc_url=None)
 
-    @app.get("/api/overview")
+    @app.get("/api/overview", dependencies=[Depends(guard)])
     async def overview(
         days: int = Query(default=30, ge=1, le=365),
         session: AsyncSession = Depends(get_session),
-        _: None = Depends(check_token),
     ) -> dict:
         report = await build_analytics_report(session, days)
         stats = await collect_stats(session)
@@ -98,13 +119,12 @@ def create_app() -> FastAPI:
             "series": series,
         }
 
-    @app.get("/api/users")
+    @app.get("/api/users", dependencies=[Depends(guard)])
     async def users(
         q: str = Query(default=""),
         limit: int = Query(default=50, ge=1, le=200),
         offset: int = Query(default=0, ge=0),
         session: AsyncSession = Depends(get_session),
-        _: None = Depends(check_token),
     ) -> dict:
         query = select(User)
         needle = q.strip()
@@ -151,13 +171,12 @@ def create_app() -> FastAPI:
             ],
         }
 
-    @app.get("/api/tracks")
+    @app.get("/api/tracks", dependencies=[Depends(guard)])
     async def tracks(
         q: str = Query(default=""),
         limit: int = Query(default=50, ge=1, le=200),
         offset: int = Query(default=0, ge=0),
         session: AsyncSession = Depends(get_session),
-        _: None = Depends(check_token),
     ) -> dict:
         query = select(Track)
         needle = q.strip()
@@ -210,11 +229,10 @@ def create_app() -> FastAPI:
             ],
         }
 
-    @app.get("/api/money")
+    @app.get("/api/money", dependencies=[Depends(guard)])
     async def money(
         limit: int = Query(default=50, ge=1, le=200),
         session: AsyncSession = Depends(get_session),
-        _: None = Depends(check_token),
     ) -> dict:
         payments = (
             await session.execute(
@@ -256,6 +274,137 @@ def create_app() -> FastAPI:
                 for d, tid, name in donations
             ],
         }
+
+    # ---------- вход ----------
+
+    @app.get("/api/session")
+    async def session_state(admin_session: str | None = Cookie(default=None)) -> dict:
+        """Состояние входа для страницы: нужен ли пароль и есть ли живая сессия."""
+        return {
+            "password_required": auth.password_configured(),
+            "authorized": not auth.password_configured() or auth.valid_session(admin_session),
+            "code_pending": auth.challenge_pending(),
+        }
+
+    @app.post("/api/login")
+    async def login(password: str = Body(embed=True)) -> dict:
+        """Шаг 1: пароль. Верный — шлём одноразовый код в Telegram владельцу.
+
+        ⚠️ Ответ одинаков по времени и по форме для верного и неверного пароля
+        ровно настолько, насколько это возможно без усложнения: разницу даёт
+        только текст. Перебор всё равно упирается в общий счётчик попыток.
+        """
+        auth.raise_if_locked()
+        if not auth.password_configured():
+            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Пароль админки не настроен")
+        if not auth.verify_password(password):
+            auth.note_failure()
+            raise auth.AuthError("Неверный пароль")
+        code = auth.start_challenge()
+        chat_id = settings.webadmin_code_chat_id
+        if not chat_id:
+            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Некуда слать код: пуст ADMIN_IDS")
+        try:
+            from app.services.bot_api import BotApi
+
+            async with BotApi() as bot:
+                await bot.send_message(
+                    chat_id,
+                    f"Код входа в админку: {code}\n"
+                    f"Действует 5 минут. "
+                    "Если вы не открывали админку — кто-то знает пароль, смените его.",
+                )
+        except Exception as exc:  # noqa: BLE001 — Telegram лёг: честно говорим, а не молчим
+            logger.warning("Код админки не ушёл: %s", exc)
+            raise HTTPException(
+                status.HTTP_502_BAD_GATEWAY, "Не удалось отправить код в Telegram"
+            ) from None
+        return {"stage": "code"}
+
+    @app.post("/api/login/code")
+    async def login_code(response: Response, code: str = Body(embed=True)) -> dict:
+        auth.raise_if_locked()
+        if not auth.check_challenge(code):
+            auth.note_failure()
+            raise auth.AuthError("Неверный код")
+        auth.reset_failures()
+        response.set_cookie(
+            auth.SESSION_COOKIE,
+            auth.issue_session(),
+            max_age=auth.SESSION_TTL_SECONDS,
+            httponly=True,
+            samesite="strict",
+        )
+        return {"authorized": True}
+
+    @app.post("/api/logout")
+    async def logout(response: Response) -> dict:
+        response.delete_cookie(auth.SESSION_COOKIE)
+        return {"authorized": False}
+
+    # ---------- действия ----------
+
+    @app.post("/api/users/{telegram_id}/premium", dependencies=[Depends(guard)])
+    async def grant_premium(
+        telegram_id: int,
+        days: int = Body(embed=True, default=30),
+        session: AsyncSession = Depends(get_session),
+    ) -> dict:
+        """Выдать или снять Premium руками.
+
+        Отрицательные дни допустимы намеренно: так подписка укорачивается, а
+        `days=0` снимает её совсем. Иначе пришлось бы лезть в базу руками —
+        именно этого владелец и просил избежать.
+        """
+        if not -3650 <= days <= 3650:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Слишком большой срок")
+        user = await session.scalar(select(User).where(User.telegram_id == telegram_id))
+        if user is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Пользователь не найден")
+        now = _utcnow()
+        if days == 0:
+            user.premium_until = None
+            user.premium = False
+        else:
+            base = user.premium_until if user.premium_until and user.premium_until > now else now
+            user.premium_until = base + timedelta(days=days)
+            user.premium = user.premium_until > now
+        await session.commit()
+        logger.info("Админка: premium user=%s days=%s", telegram_id, days)
+        return {
+            "telegram_id": telegram_id,
+            "premium_until": user.premium_until.isoformat() if user.premium_until else None,
+        }
+
+    @app.post("/api/broadcast", dependencies=[Depends(guard)])
+    async def broadcast(
+        text: str = Body(embed=True),
+        confirm: bool = Body(embed=True, default=False),
+        session: AsyncSession = Depends(get_session),
+    ) -> dict:
+        """Рассылка всем неотписавшимся. Без confirm возвращает только охват.
+
+        ⚠️ Два шага намеренно: отправить письмо тысячам людей нельзя случайным
+        кликом. Первый запрос говорит, скольким уйдёт, второй — отправляет.
+        """
+        text = (text or "").strip()
+        if not text:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Пустой текст")
+        reach = await session.scalar(
+            select(func.count()).select_from(User).where(User.bot_blocked.is_(False))
+        )
+        if not confirm:
+            return {"reach": reach or 0, "sent": False}
+        try:
+            from app.tasks.queue_client import enqueue
+
+            enqueue("broadcast.send", text=text, photo_file_id=None)
+        except Exception as exc:  # noqa: BLE001 — брокер лёг
+            logger.warning("Рассылка из админки не поставилась: %s", exc)
+            raise HTTPException(
+                status.HTTP_503_SERVICE_UNAVAILABLE, "Очередь недоступна — рассылка не запущена"
+            ) from None
+        return {"reach": reach or 0, "sent": True}
 
     @app.get("/")
     async def index() -> FileResponse:

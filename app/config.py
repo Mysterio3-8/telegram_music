@@ -121,6 +121,12 @@ class Settings(BaseSettings):
     # бы на неизвестную величину. Курс фиксируется в каждом донате (колонка
     # stars рядом с amount_rub), поэтому смена курса прошлое не переписывает.
     stars_rub_rate: float = 0.0
+    # Наценка на «неудобные» способы оплаты — звёзды и TON. Решение владельца
+    # (21.09): «давай чуть-чуть прибавим там где-то +15%… то что за рубли
+    # дешевле». Рубли остаются самым дешёвым способом поддержать, а комиссия
+    # вывода звёзд и курсовые скачки TON перестают съедать сбор.
+    # 0 — наценки нет.
+    crypto_markup_pct: int = 15
 
     # Канал, куда уходит пост о цели сбора и где бот его перерисовывает.
     # 0 → берём news_channel_id; если пуст и он — публикация недоступна.
@@ -333,6 +339,17 @@ class Settings(BaseSettings):
     # лишь через SSH-туннель, но если туннель прокинут наружу по ошибке —
     # без этого заголовка страница не отдаст данные. Пусто = проверки нет.
     webadmin_token: str = ""
+    # Вход в админку (22.09, решение владельца «пароль + код в Telegram»).
+    # Лучше задавать ХЕШ: `python -m app.cli.webadmin_password` печатает строку
+    # для .env. Открытый WEBADMIN_PASSWORD поддержан для быстрой настройки.
+    webadmin_password_hash: str = ""
+    webadmin_password: str = ""
+    # Куда слать одноразовый код. 0 → первому админу из ADMIN_IDS.
+    webadmin_code_chat: int = 0
+
+    @property
+    def webadmin_code_chat_id(self) -> int | None:
+        return self.webadmin_code_chat or self.first_admin_id
 
     @property
     def health_alert_id(self) -> int | None:

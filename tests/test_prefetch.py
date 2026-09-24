@@ -20,12 +20,16 @@ def _cands(count):
     ]
 
 
-def test_pick_takes_top_three_without_known():
-    cands = _cands(10)
-    assert [c.url for c in prefetch.pick_for_prefetch(cands, set())] == [c.url for c in cands[:3]]
-    # Уже залитый из верха не заменяется седьмым: качаем только то, что видят первым
+def test_pick_takes_shown_page_without_known():
+    # Прогреваем всю показанную страницу (владелец 21.09: «выдаётся 20 треков…
+    # минтятся и остальные»), а не первые три, как было до 22.09.
+    cands = _cands(30)
+    picked = prefetch.pick_for_prefetch(cands, set())
+    assert [c.url for c in picked] == [c.url for c in cands[: prefetch.PREFETCH_TOP]]
+    # Уже залитый из верха не заменяется следующим за страницей: качаем ровно то,
+    # что человек видит, а не добираем хвост выдачи
     picked = prefetch.pick_for_prefetch(cands, {cands[0].url})
-    assert [c.url for c in picked] == [cands[1].url, cands[2].url]
+    assert [c.url for c in picked] == [c.url for c in cands[1 : prefetch.PREFETCH_TOP]]
 
 
 def test_without_redis_no_slot(monkeypatch):
@@ -114,7 +118,7 @@ async def test_schedule_skips_known_and_queues_rest(factory, monkeypatch):
 
     monkeypatch.setattr(search_fetch, "search_prefetch", FakeTask)
     await quick_search._schedule_prefetch(cands, telegram_id=7)
-    assert [row["url"] for row in sent["candidates"]] == [cands[1].url, cands[2].url]
+    assert [row["url"] for row in sent["candidates"]] == [c.url for c in cands[1:]]
     assert sent["telegram_id"] == 7 and sent["expires"] == 60
 
 

@@ -68,6 +68,9 @@ class LiveTrackOut(BaseModel):
     source: str
     cover_url: str | None = None
     track_id: int | None = None
+    # Заполнен только у треков каталога: подписанная ссылка на наши байты.
+    # У живого кандидата аудио идёт через /stream/{ref}, ссылку строит клиент.
+    audio_url: str | None = None
 
 
 class LiveSearchOut(BaseModel):
@@ -125,6 +128,37 @@ async def personal_mix(
 ) -> LiveSearchOut:
     candidates = await build_personal_mix(session, user.id)
     return LiveSearchOut(items=await _to_outs(session, candidates))
+
+
+@router.get("/mix/infinity", response_model=LiveSearchOut)
+async def infinity_mix(
+    user: User = Depends(require_premium), session: AsyncSession = Depends(get_db)
+) -> LiveSearchOut:
+    """Бесконечная лента: каталог вперемешку с живыми треками из источника.
+
+    Отдельный маршрут от `/mix` намеренно. `/mix` уважает сохранённые настройки
+    рекомендаций, и один выбор «язык = инструментальная» превращал его в вечную
+    ленту минусов (жалоба владельца 22.09). Здесь настроек нет вовсе.
+    """
+    from app.api.security import build_audio_url
+    from app.services.infinity_mix import build_infinity_mix
+
+    tracks, candidates = await build_infinity_mix(session, user.id)
+    items = [
+        LiveTrackOut(
+            ref="",
+            title=track.title or "",
+            artist=track.artist or "",
+            duration=track.duration or 0,
+            source="db",
+            cover_url=track.cover_url,
+            track_id=track.id,
+            audio_url=build_audio_url(track.id),
+        )
+        for track in tracks
+    ]
+    items.extend(await _to_outs(session, candidates))
+    return LiveSearchOut(items=items)
 
 
 @router.post("/search/live/{ref}/fetch")

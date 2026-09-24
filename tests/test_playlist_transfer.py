@@ -143,3 +143,36 @@ async def test_transfer_downloads_missing(session, monkeypatch):
 
     assert report.downloaded == 1
     assert calls == [("vid12345678", 555)]
+
+
+# --- ВКонтакте по ссылке (владелец 22.09: «через ВК также, только ссылка») ---
+
+
+def test_vk_html_with_json_tracks_is_parsed():
+    from app.services.playlist_transfer.parsers import parse_vk_html
+
+    html = '{"artist":"Kizaru","title":"Fendi"},{"artist":"Big Baby Tape","title":"Gimme"}'
+    items = parse_vk_html(html)
+    assert [(i.artist, i.title) for i in items] == [
+        ("Kizaru", "Fendi"),
+        ("Big Baby Tape", "Gimme"),
+    ]
+
+
+def test_vk_wall_page_says_plainly_that_it_is_closed(monkeypatch):
+    """ВК отдаёт заглушку — лучше честный отказ, чем пустой перенос без причины."""
+    import asyncio
+
+    from app.services.playlist_transfer.parsers import TransferSourceError, fetch_vk
+
+    async def wall(_url):
+        return "<html><body>login required</body></html>"
+
+    monkeypatch.setattr(parsers, "_fetch_text", wall)
+
+    async def run():
+        with pytest.raises(TransferSourceError) as err:
+            await fetch_vk("https://vk.com/music/playlist/1_2")
+        assert "ВКонтакте" in str(err.value)
+
+    asyncio.run(run())

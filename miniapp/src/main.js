@@ -59,6 +59,7 @@ import {
   playMix,
   playQueueIndex,
   playRecommended,
+  playInfinityMix,
   playVibe,
   playNext,
   playPrev,
@@ -83,6 +84,7 @@ import { renderPlayerScreen } from "./components/playerScreen.js";
 import { renderTrackSheet } from "./components/trackSheet.js";
 import { renderPlaylistPicker } from "./components/playlistPicker.js";
 import { icon } from "./components/icons.js";
+import { installGestures } from "./gestures.js";
 import { escapeHtml } from "./components/trackRow.js";
 import { renderHome } from "./screens/home.js";
 import { renderSearch, renderSearchResults } from "./screens/search.js";
@@ -1467,7 +1469,10 @@ root.addEventListener("click", (event) => {
       navigateTo("mytracks", { myTracksTab: "downloaded", myTracksQuery: "", myTracksEdit: false });
       break;
     case "play-recommended":
-      playRecommended();
+      // Кнопка на главной — именно бесконечная случайная лента, а не микс по
+      // сохранённым настройкам: один выбор «инструментальная» в «Настроить»
+      // превращал главную кнопку в вечную ленту минусов (жалоба 22.09).
+      playInfinityMix();
       break;
     case "play-vibe":
       // mood-микс с карточки «Какой сейчас вайб?» — тот же движок, что «Настроить»
@@ -1975,48 +1980,49 @@ root.addEventListener("pointerdown", (event) => {
   window.addEventListener("pointercancel", onUp);
 });
 
-// Свайп вниз закрывает плеер/шит, на вложенных страницах — шаг назад (ТЗ §3).
-let gestureStartY = null;
-let gestureStartX = null;
-let gestureScrollTop = 0;
-
-root.addEventListener(
-  "touchstart",
-  (event) => {
-    const touch = event.touches[0];
-    gestureStartY = touch.clientY;
-    gestureStartX = touch.clientX;
-    gestureScrollTop = document.scrollingElement.scrollTop;
+// Жесты: замок оси и полный набор из ТЗ владельца (22.09) — см. gestures.js.
+installGestures(root, {
+  onBack() {
+    const state = getState();
+    if (state.sheetTrack) return closeSheet();
+    if (state.playerOpen) return closePlayer();
+    if (!TAB_SCREENS.has(state.screen)) goBack();
   },
-  { passive: true }
-);
-
-root.addEventListener("touchend", (event) => {
-  if (gestureStartY == null) return;
-  const touch = event.changedTouches[0];
-  const dy = touch.clientY - gestureStartY;
-  const dx = Math.abs(touch.clientX - gestureStartX);
-  const startedNearTop = gestureStartY < window.innerHeight * 0.5;
-  gestureStartY = null;
-  gestureStartX = null;
-  if (dy < 90 || dx > 70) return; // не выраженный свайп вниз
-
-  const state = getState();
-  if (state.sheetTrack) {
-    closeSheet();
-    return;
-  }
-  if (state.sortSheetOpen) {
-    mutate({ sortSheetOpen: false });
-    return;
-  }
-  if (state.playerOpen) {
-    closePlayer();
-    return;
-  }
-  if (!TAB_SCREENS.has(state.screen) && startedNearTop && gestureScrollTop <= 4) {
-    goBack();
-  }
+  onTrackSwipe(direction) {
+    // По обложке плеера и по мини-плееру: влево — следующий, вправо — предыдущий
+    if (direction === "next") playNext();
+    else playPrev();
+    hapticTap();
+  },
+  onSwipeUp(context) {
+    const state = getState();
+    if (context.mini && !state.playerOpen) return mutate({ playerOpen: true });
+    if (state.playerOpen && !state.queueOpen) return mutate({ queueOpen: true });
+  },
+  onSwipeDown(context) {
+    const state = getState();
+    if (state.sheetTrack) return closeSheet();
+    if (state.sortSheetOpen) return mutate({ sortSheetOpen: false });
+    if (state.playerSettingsOpen) return mutate({ playerSettingsOpen: false });
+    if (state.queueOpen) return mutate({ queueOpen: false });
+    if (state.playerOpen) return closePlayer();
+    // Страницу закрываем только жестом от верхней половины и с самого верха
+    // прокрутки: иначе любое пролистывание списка вниз выкидывало бы с экрана.
+    const fromTop = context.y < window.innerHeight * 0.5 && context.scrollTop <= 4;
+    if (!TAB_SCREENS.has(state.screen) && fromTop) goBack();
+  },
+  onRowSwipe(row, direction) {
+    const id = Number(row.dataset.id);
+    const track = findTrack(id);
+    if (!track) return;
+    if (direction === "right") {
+      addToQueue(track); // стандарт Apple Music/Spotify: вправо — в очередь
+      showToast("Добавлено в очередь");
+    } else {
+      handleToggleLibrary(id, false); // влево — в медиатеку/из неё
+    }
+    hapticTap();
+  },
 });
 
 // Пробел — play/pause (десктопная отладка)

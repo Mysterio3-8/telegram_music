@@ -183,6 +183,13 @@ export function liveStreamUrl(ref) {
   return `/stream/${encodeURIComponent(ref)}`;
 }
 
+// Infinity Mix — бесконечная лента: каталог вперемешку с живыми треками из
+// источника. Отдельно от getMix: у того есть сохранённые настройки, и один
+// выбор «инструментальная» превращал микс в вечную ленту минусов.
+export function getInfinityMix() {
+  return request("/mix/infinity");
+}
+
 export function getProfile() {
   return request("/profile");
 }

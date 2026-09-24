@@ -117,8 +117,11 @@ def test_rub_for_nano_zero_rate(wallet_ready):
 
 
 def test_ton_for_rub(wallet_ready):
-    assert ton_donations.ton_for_rub(300) == 1.0
-    assert ton_donations.ton_for_rub(150) == 0.5
+    # С 22.09 к TON добавляется наценка владельца (+15%): рубли остаются самым
+    # дешёвым способом поддержать, а курс между счётом и приходом успевает уехать.
+    assert ton_donations.ton_for_rub(300) == 1.15
+    # 150 ₽ с наценкой — 173 ₽ (округление вверх), это 0.5767 TON
+    assert ton_donations.ton_for_rub(150) == 0.5767
 
 
 # --- разбор транзакций ---
