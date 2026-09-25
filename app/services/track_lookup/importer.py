@@ -52,6 +52,33 @@ def download_candidate(candidate: Candidate) -> DownloadedAudio | None:
 
 
 MAX_DOWNLOAD_ATTEMPTS = 6
+# Замена отличается по длительности больше чем на 12% — это уже другая запись:
+# ускоренная версия короче на 20–25%, slowed длиннее, ремикс — как повезёт.
+_DURATION_TOLERANCE = 0.12
+# Ниже этого счёта «замена» — просто другой трек из выдачи того же артиста
+_REPLACEMENT_MIN_SCORE = 0.45
+
+
+def is_same_recording(original: Candidate, query: str, alternative: Candidate) -> bool:
+    """Годится ли соседний аплоад вместо недоступного оригинала.
+
+    Прогон 25.09: альбом Pop Smoke (официальные треки под DRM) пришёл почти
+    целиком подменённым — «Slowed + Reverb», «(Fast)», «Piano Cover», чужие
+    ремиксы и «Type Beat». Перебор брал любого соседа из выдачи без проверки.
+    Лучше честное «не удалось скачать», чем ускоренная копия под видом трека.
+    """
+    from app.services.track_lookup.ranking import match_score, version_penalty
+    from app.services.title_quality import is_beat_or_instrumental
+
+    wanted = original.full_title
+    if version_penalty(wanted, alternative.full_title) < 1.0:
+        return False
+    if is_beat_or_instrumental(alternative.full_title) and not is_beat_or_instrumental(wanted):
+        return False
+    if original.duration and alternative.duration:
+        if abs(alternative.duration - original.duration) > original.duration * _DURATION_TOLERANCE:
+            return False
+    return match_score(query, alternative) >= _REPLACEMENT_MIN_SCORE
 
 
 def _interleave(*groups: list[Candidate]) -> list[Candidate]:
@@ -119,6 +146,9 @@ def download_with_fallback(candidate: Candidate) -> DownloadedAudio | None:
         if alternative.url in tried:
             continue
         tried.add(alternative.url)
+        if not is_same_recording(candidate, query, alternative):
+            logger.info("Замена отклонена, другая запись: «%s»", alternative.full_title)
+            continue
         attempts += 1
         if attempts > MAX_DOWNLOAD_ATTEMPTS:
             break

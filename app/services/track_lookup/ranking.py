@@ -178,7 +178,18 @@ def version_penalty(query: str, title: str) -> float:
     title_latin = to_latin(title)
     if any(marker in title_latin for marker in _VERSION_MARKERS):
         return _VERSION_PENALTY
+    if _SPEED_TAG.search(title) and not _SPEED_TAG.search(query):
+        return _VERSION_PENALTY
     return 1.0
+
+
+# «Diana (Fast)», «Tunnel Vision [sped]». Только в скобках: голое слово «fast»
+# бывает и в настоящем названии («Fast Car»), а в скобках это всегда пометка
+# ускоренной версии (прогон 25.09: альбом Pop Smoke пришёл пятью «(Fast)»).
+_SPEED_TAG = re.compile(
+    r"[\(\[]\s*(?:super\s*)?(?:fast(?:er)?|sped|speed\s*up|pitch(?:ed)?(?:\s*up)?|ускоренн\w*)\s*[\)\]]",
+    re.I,
+)
 
 
 def is_track_duration(seconds: int) -> bool:
