@@ -35,16 +35,40 @@ export async function login() {
   if (!initData) {
     throw new ApiError("Откройте приложение из Telegram", 401);
   }
-  const response = await fetch(`${API_BASE}/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ init_data: initData }),
-  });
+  const response = await loginWithRetry(initData);
   if (!response.ok) {
     throw new ApiError("Не удалось войти", response.status);
   }
   const data = await response.json();
   accessToken = data.access_token;
+}
+
+// Живой прогон 25.09: каждый деплой перезапускает API на ~4 секунды, и всякий,
+// кто открыл плеер в это окно, видел «Не удалось войти». Сервер в этот момент
+// отвечает 502 или рвёт соединение — это повод тихо повторить, а не показывать
+// ошибку. 401/403 не повторяем: там вход действительно не годится.
+const LOGIN_RETRY_DELAYS_MS = [700, 1500, 3000];
+const RETRYABLE_STATUS = new Set([502, 503, 504]);
+
+async function loginWithRetry(initData) {
+  let lastError = null;
+  for (let attempt = 0; attempt <= LOGIN_RETRY_DELAYS_MS.length; attempt += 1) {
+    if (attempt > 0) {
+      await new Promise((resolve) => setTimeout(resolve, LOGIN_RETRY_DELAYS_MS[attempt - 1]));
+    }
+    try {
+      const response = await fetch(`${API_BASE}/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ init_data: initData }),
+      });
+      if (!RETRYABLE_STATUS.has(response.status)) return response;
+      lastError = new ApiError("Не удалось войти", response.status);
+    } catch (error) {
+      lastError = error; // сеть оборвалась — тоже повторяем
+    }
+  }
+  throw lastError;
 }
 
 // Сколько ждём ответ сервера. Без предела зависшее соединение держало экран на
