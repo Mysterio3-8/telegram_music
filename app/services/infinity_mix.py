@@ -46,6 +46,12 @@ SEEDS_PER_CALL = 2  # сколько сидов опрашиваем за оди
 LIVE_TIMEOUT_SECONDS = 6.0
 
 
+# Длиннее — это не трек, а альбом одним файлом, концерт или подкаст (в каталоге
+# нашлись записи на 50 минут, прогон 25.09). Четверть часа с запасом покрывает
+# длинные треки.
+MIX_MAX_SECONDS = 15 * 60
+
+
 async def _catalog_part(session: AsyncSession, user_id: int, limit: int) -> list[Track]:
     """Случайные живые треки каталога, которых человек не слышал за неделю.
 
@@ -72,6 +78,8 @@ async def _catalog_part(session: AsyncSession, user_id: int, limit: int) -> list
             continue
         if is_probably_junk(track.title or ""):
             continue
+        if (track.duration or 0) > MIX_MAX_SECONDS:
+            continue  # альбом одним файлом или концерт на час — не трек для ленты
         picked.append(track)
         if len(picked) >= limit:
             break

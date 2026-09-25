@@ -124,3 +124,18 @@ async def test_go_plus_previews_are_not_in_mix(session, monkeypatch):
     monkeypatch.setattr("app.services.search_cache.search_with_cache", mixed)
     _catalog, live = await infinity_mix.build_infinity_mix(session, user.id, size=6)
     assert [c.title for c in live] == ["Full"]
+
+
+async def test_non_music_and_hour_long_files_are_not_in_mix(session):
+    """Прогон 25.09: интервью, документалка и альбомы одним файлом в ленте."""
+    user = await _user(session)
+    session.add_all(
+        [
+            Track(title="Interview with The Messer Chups", artist="M", duration=300, tg_file_id="f1"),
+            Track(title="Ivan Grozny (Full Album)", artist="D", duration=3084, tg_file_id="f2"),
+            Track(title="Дежавю", artist="kizaru", duration=170, tg_file_id="f3"),
+        ]
+    )
+    await session.commit()
+    catalog, _ = await infinity_mix.build_infinity_mix(session, user.id, size=6, with_live=False)
+    assert [t.title for t in catalog] == ["Дежавю"]
