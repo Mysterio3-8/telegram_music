@@ -270,7 +270,7 @@ def repair_track(self, track_id: int, chat_id: int | None = None) -> None:
     ffmpeg в процессе бота дважды ронял прод по OOM.
     """
     from app.db.models import Track
-    from app.services.track_repair import repair_track_file_id
+    from app.services.track_repair import mark_failed, repair_track_file_id
 
     async def _run(session):
         track = await session.get(Track, track_id)
@@ -279,6 +279,7 @@ def repair_track(self, track_id: int, chat_id: int | None = None) -> None:
         bot = Bot(token=settings.bot_token)
         try:
             if not await repair_track_file_id(session, bot, track):
+                mark_failed(track_id)
                 if chat_id is not None:
                     await bot.send_message(
                         chat_id, f"❌ Не удалось восстановить «{track.artist} — {track.title}»."

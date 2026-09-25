@@ -2,7 +2,7 @@
 
 // Источник: miniapp/src/**. Пересборка: python tools/build_miniapp.py
 
-// отпечаток исходников: 7ea04e88ea7b95dc
+// отпечаток исходников: 57c7c636cf3783d2
 
 (function () {
   "use strict";
@@ -1143,7 +1143,12 @@
       clearTimeout(listenTimer);
       if (typeof track.id !== "number" || track.id <= 0) return; // минусы и live:… не пишем
       listenTimer = setTimeout(() => {
-        if (state.currentTrack === track && !audio.paused) recordListen(track.id);
+        // currentTime обязателен: пока трек грузится (или сервер его оживляет),
+        // аудио не на паузе, но не звучит — прогон 25.09 нашёл «прослушивания» у
+        // треков, которые так и не заиграли.
+        if (state.currentTrack === track && !audio.paused && audio.currentTime >= 3) {
+          recordListen(track.id);
+        }
       }, LISTEN_AFTER_MS);
     }
 

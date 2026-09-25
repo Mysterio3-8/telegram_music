@@ -133,7 +133,12 @@ async def _load_audio_bytes(
 _revive_locks: dict[int, asyncio.Lock] = {}
 # Сколько ждём воркер. Больше — и человек решит, что приложение зависло; меньше —
 # не успевает даже быстрый путь SoundCloud вместе с минтом.
-_REVIVE_WAIT_SECONDS = 25.0
+# 12, а не 25: нетерпеливый человек не ждёт тишину полминуты (прогон 25.09).
+# Не успел воркер — плеер идёт дальше, а трек доминтится и заиграет в следующий раз.
+_REVIVE_WAIT_SECONDS = 12.0
+# После таймаута повторный запрос того же трека (плеер перезапрашивает ссылку
+# один раз) не должен ждать второй раз
+_REVIVE_RETRY_PAUSE_SECONDS = 90
 _REVIVE_POLL_SECONDS = 1.0
 # 🔴 Сколько оживлений идёт одновременно на весь процесс. Замок выше — на ОДИН
 # трек; без общего потолка плейлист из сотни мёртвых треков, пролистанный
@@ -210,7 +215,12 @@ async def _revive_track(track_id: int) -> Path | None:
                     _enqueue_repair(track_id)
                     return hit
 
-            # Быстрый путь не сработал — просим воркер и ждём его результата
+            # Быстрый путь не сработал — просим воркер и ждём его результата.
+            # Недавно уже не вышло — не ждём: плеер сразу перейдёт к следующему.
+            from app.services.track_repair import recently_failed
+
+            if await run_in_threadpool(recently_failed, track_id):
+                return None
             if not _enqueue_repair(track_id):
                 return None
             deadline = asyncio.get_event_loop().time() + _REVIVE_WAIT_SECONDS
@@ -221,7 +231,13 @@ async def _revive_track(track_id: int) -> Path | None:
                     file_id = fresh.tg_file_id if fresh else None
                 if file_id:
                     return await _download_from_telegram(storage_key, file_id)
+                if await run_in_threadpool(recently_failed, track_id):
+                    logger.info("Оживление track=%s: воркер не нашёл копию — отказ сразу", track_id)
+                    return None
             logger.warning("Оживление track=%s не уложилось в ожидание", track_id)
+            from app.services.track_repair import mark_failed
+
+            await run_in_threadpool(mark_failed, track_id, _REVIVE_RETRY_PAUSE_SECONDS)
             return None
     finally:
         if not lock.locked():

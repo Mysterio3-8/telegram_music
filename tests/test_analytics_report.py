@@ -159,3 +159,16 @@ async def test_miniapp_events_accept_only_client_names_without_premium(api):
     too_many = {"events": [{"name": "screen_view"}] * 51}
     assert client.post("/analytics/events", headers=auth, json=too_many).status_code == 422
     assert client.post("/analytics/events", json=body).status_code in (401, 403)
+
+
+def test_report_has_no_raw_dicts():
+    """Прогон 25.09: владелец видел «{'bot': 62, 'worker': 54}» в отчёте."""
+    from app.cli.analytics import AnalyticsReport, format_report
+
+    report = AnalyticsReport(days=7)
+    report.listens_by_source.update({"bot": 62, "worker": 54, "miniapp": 33})
+    report.reminders_by_kind.update({"comeback": 3})
+    text = format_report(report)
+    assert "{" not in text
+    assert "в боте 62, выдача поиска 54, Mini App 33" in text
+    assert "«вернись» 3" in text

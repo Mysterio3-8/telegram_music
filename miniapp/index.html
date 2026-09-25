@@ -4,6 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
     <meta name="theme-color" content="#0f0f10" />
+    <!--
+      Тёмный фон с первого кадра: до загрузки стилей окно Mini App в Telegram
+      Desktop стояло белым ~1.5 сек (живой прогон 25.09).
+    -->
+    <meta name="color-scheme" content="dark" />
+    <style>html,body{background:#0f0f10;margin:0}</style>
     <title>Infinity Music — музыкальный плеер</title>
     <meta
       name="description"
@@ -16,7 +22,12 @@
       property="og:description"
       content="Поиск треков, личная библиотека, плейлисты и плеер внутри Telegram."
     />
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <!--
+      defer: синхронный скрипт с telegram.org держал первую отрисовку, пока не
+      скачается (из России этот хост бывает медленным). Порядок сохраняется —
+      отложенные скрипты исполняются в порядке документа, бандл ниже.
+    -->
+    <script src="https://telegram.org/js/telegram-web-app.js" defer></script>
     <!--
       Mini App едет одним файлом: modules грузились по одному (47 запросов в три
       круга ожидания — браузер узнаёт о зависимости, только прочитав импортёра).

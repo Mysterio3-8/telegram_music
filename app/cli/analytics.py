@@ -385,6 +385,24 @@ def split_message(text: str, limit: int = TELEGRAM_LIMIT) -> list[str]:
     return chunks
 
 
+# Подписи вместо внутренних ключей: отчёт читает владелец в Telegram, а не
+# инженер — сырой словарь Python («{'bot': 62, 'worker': 54}») там был
+# нечитаем (живой прогон 25.09).
+_SOURCE_LABELS = {"bot": "в боте", "worker": "выдача поиска", "miniapp": "Mini App"}
+_REMINDER_LABELS = {
+    "comeback": "«вернись»",
+    "ends_in_4": "Premium кончится через 4 дня",
+    "ends_tomorrow": "Premium кончится завтра",
+}
+
+
+def _labelled(counts: dict[str, int], labels: dict[str, str]) -> str:
+    if not counts:
+        return "—"
+    ordered = sorted(counts.items(), key=lambda item: -item[1])
+    return ", ".join(f"{labels.get(key, key)} {count}" for key, count in ordered)
+
+
 def format_report(r: AnalyticsReport) -> str:
     lines = [
         f"=== Аналитика за {r.days} дн. ===",
@@ -397,7 +415,7 @@ def format_report(r: AnalyticsReport) -> str:
         "",
         "ПРОСЛУШИВАНИЯ",
         f"  {r.listens} прослушиваний у {r.listeners} человек, скачиваний {r.downloads}",
-        f"  по источникам: {r.listens_by_source or '—'}",
+        f"  где слушали: {_labelled(r.listens_by_source, _SOURCE_LABELS)}",
         f"  Mini App: открытий {r.app_opens}, сессий {r.sessions} у {r.session_users} человек, "
         f"длина медиана {_mins(r.session_median_sec)}, в среднем {_mins(r.session_avg_sec)}",
         f"  Mini App: дослушали {r.completes}, пропустили {r.skips} ({_pct(r.skips, r.completes + r.skips)} пропусков)",
@@ -416,7 +434,7 @@ def format_report(r: AnalyticsReport) -> str:
         f"  Premium активен у {r.premium_active}; пробный период брали {r.trials_total} "
         f"(платящих из них по окну — {_pct(r.paying_users, r.trials_total)})",
         f"  пэйвол показан {r.paywall_views} раз, «поделиться» нажато {r.shares}",
-        f"  напоминания: {r.reminders_by_kind or '—'}; вернулись за 48 ч "
+        f"  напоминания: {_labelled(r.reminders_by_kind, _REMINDER_LABELS)}; вернулись за 48 ч "
         f"{r.reminders_returned[0]}/{r.reminders_returned[1]} ({_pct(*r.reminders_returned)})",
     ]
     return "\n".join(lines)

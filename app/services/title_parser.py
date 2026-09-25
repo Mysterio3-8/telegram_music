@@ -41,8 +41,16 @@ def _clean(text: str) -> str:
     return text.strip(" -–—|·•")
 
 
+# Номер дорожки из альбомного аплоада: «1. Big Baby Tape - Dragonborn». Без
+# чистки «1. Big Baby Tape» становился отдельным артистом, и копия трека не
+# склеивалась с оригиналом (живой прогон 25.09). Только с точкой или скобкой:
+# «50 Cent» и «2 Chainz» — имена, а не номера.
+_TRACK_NUMBER = re.compile(r"^\s*\d{1,2}\s*[.)]\s+(?=\S)")
+
+
 def parse_title(video_title: str, fallback_artist: str) -> tuple[str, str]:
     """Возвращает (исполнитель, название). Без разделителя — исполнитель это fallback."""
+    video_title = _TRACK_NUMBER.sub("", video_title or "")
     parts = _SEPARATOR.split(video_title.strip(), maxsplit=1)
     if len(parts) == 2:
         artist = _clean(parts[0])

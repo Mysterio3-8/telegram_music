@@ -97,6 +97,7 @@ async def test_known_track_comes_back_with_track_id(api):
                 title="Fake ID",
                 artist="Kizaru",
                 duration=175,
+                tg_file_id="alive",
                 search_index=build_search_index("Kizaru", "Fake ID"),
             )
         )
@@ -104,6 +105,27 @@ async def test_known_track_comes_back_with_track_id(api):
 
     items = client.get("/search/live", params={"q": "кизару"}, headers=auth(token)).json()["items"]
     assert items[0]["track_id"] is not None  # играем мгновенно по file_id, не потоком
+
+
+@pytest.mark.asyncio
+async def test_dead_catalog_copy_plays_live_stream(api):
+    """Прогон 25.09: запись каталога без файла держала плеер на 0:00."""
+    client, token, factory = api
+    async with factory() as session:
+        from app.services.search_index import build_search_index
+
+        session.add(
+            Track(
+                title="Fake ID",
+                artist="Kizaru",
+                duration=175,
+                search_index=build_search_index("Kizaru", "Fake ID"),
+            )
+        )
+        await session.commit()
+
+    items = client.get("/search/live", params={"q": "кизару"}, headers=auth(token)).json()["items"]
+    assert items[0]["track_id"] is None
 
 
 def test_live_search_requires_auth(api):

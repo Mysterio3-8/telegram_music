@@ -88,10 +88,22 @@ async def _to_outs(session: AsyncSession, candidates: list[Candidate]) -> list[L
             duration=candidate.duration,
             source=candidate.source,
             cover_url=candidate.cover_url,
-            track_id=track.id if track else None,
+            track_id=track.id if track and _worth_catalog(track, candidate) else None,
         )
         for candidate, (artist, title), track in zip(candidates, metadata, existing)
     ]
+
+
+def _worth_catalog(track, candidate: Candidate) -> bool:
+    """Играть копию из каталога или живой поток источника.
+
+    Прогон 25.09: «Pop Smoke — Dior» из поиска сопоставился с треком каталога,
+    у которого file_id умер, а архива нет, и плеер висел на 0:00, пока API ждал
+    оживления. Живой поток играет сразу, поэтому пустую запись каталога обходим.
+    Исключение — превью Go+: поток даст 30 секунд, а оживление каталога ищет
+    полную копию.
+    """
+    return bool(track.tg_file_id or track.storage_path) or candidate.snippet
 
 
 @router.get("/search/live", response_model=LiveSearchOut, dependencies=[Depends(require_premium)])

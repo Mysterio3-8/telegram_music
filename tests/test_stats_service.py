@@ -100,3 +100,24 @@ async def test_premium_active_excludes_expired(session):
     stats = await collect_stats(session)
 
     assert stats.premium_active == 1
+
+
+async def test_playable_and_weekly_active_are_honest(session):
+    """Прогон 25.09: «все доступны для прослушивания» при 182 треках без файла."""
+    from app.db.models import SearchQuery
+
+    user = await make_user(session)
+    idle = await make_user(session, telegram_id=2)
+    alive = Track(title="A", artist="X", duration=200, tg_file_id="id")
+    dead = Track(title="D", artist="X", duration=200)
+    session.add_all([alive, dead])
+    await session.commit()
+    await record_event(session, user.id, alive.id, "listen")
+    session.add(SearchQuery(user_id=user.id, query="x"))
+    await session.commit()
+
+    stats = await collect_stats(session)
+    assert stats.tracks_total == 2
+    assert stats.tracks_playable == 1
+    assert stats.users_active_week == 1  # второй только заходил
+    assert idle.id != user.id

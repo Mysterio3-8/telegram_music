@@ -125,3 +125,48 @@ async def test_worker_mint_is_awaited(env, monkeypatch):
     response = await client.get(build_audio_url(1))
     assert response.status_code == 200
     assert response.content == DATA
+
+
+async def test_worker_failure_answers_at_once(env, monkeypatch):
+    """Прогон 25.09: воркер сдавался за 1.6 сек, а API ждал ещё 25 — плеер на 0:00."""
+    import time
+
+    from app.services import track_repair
+
+    client, _factory = env
+    failed = set()
+
+    async def nothing(_url):
+        return None
+
+    def enqueue(track_id):
+        failed.add(track_id)  # воркер тут же не справился
+        return True
+
+    monkeypatch.setattr(audio_router, "_fast_bytes", nothing)
+    monkeypatch.setattr(audio_router, "_REVIVE_POLL_SECONDS", 0.01)
+    monkeypatch.setattr(audio_router, "_REVIVE_WAIT_SECONDS", 5.0)
+    monkeypatch.setattr(audio_router, "_enqueue_repair", enqueue)
+    monkeypatch.setattr(track_repair, "recently_failed", lambda track_id: track_id in failed)
+
+    started = time.monotonic()
+    response = await client.get(build_audio_url(1))
+    assert response.status_code == 404
+    assert time.monotonic() - started < 2
+
+
+async def test_recent_failure_skips_worker(env, monkeypatch):
+    from app.services import track_repair
+
+    client, _factory = env
+    queued = []
+
+    async def nothing(_url):
+        return None
+
+    monkeypatch.setattr(audio_router, "_fast_bytes", nothing)
+    monkeypatch.setattr(audio_router, "_enqueue_repair", lambda track_id: queued.append(track_id) or True)
+    monkeypatch.setattr(track_repair, "recently_failed", lambda track_id: True)
+    response = await client.get(build_audio_url(1))
+    assert response.status_code == 404
+    assert queued == []  # недавно не вышло — воркер впустую не гоняем

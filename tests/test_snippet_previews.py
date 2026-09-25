@@ -83,3 +83,27 @@ def test_dedup_prefers_full_copy_over_preview():
     other = Candidate(source="soundcloud", url="https://sc/o", title="Gangstas", artist="Pop Smoke", duration=190)
     result = dedup_candidates([preview, other, full])
     assert [c.url for c in result] == ["https://sc/reupload", "https://sc/o"]
+
+
+def test_dead_catalog_copy_yields_live_stream():
+    """Прогон 25.09: Dior из поиска вёл в мёртвую запись каталога — 0:00."""
+    from types import SimpleNamespace
+
+    from app.api.routers.live_search import _worth_catalog
+
+    live = Candidate(source="soundcloud", url="https://sc/d", title="Dior", duration=216)
+    preview = Candidate(source="soundcloud", url="https://sc/p", title="Dior", duration=216, snippet=True)
+    dead = SimpleNamespace(tg_file_id=None, storage_path=None)
+    alive = SimpleNamespace(tg_file_id="id", storage_path=None)
+    assert _worth_catalog(alive, live)
+    assert not _worth_catalog(dead, live)  # живой поток играет сразу
+    assert _worth_catalog(dead, preview)  # поток дал бы 30 сек — пусть каталог ищет копию
+
+
+def test_track_number_prefix_is_not_part_of_artist():
+    from app.services.title_parser import parse_title
+
+    assert parse_title("1. Big Baby Tape - Dragonborn", "x") == ("Big Baby Tape", "Dragonborn")
+    assert parse_title("12) Kizaru - Зеркало", "x") == ("Kizaru", "Зеркало")
+    assert parse_title("50 Cent - In Da Club", "x") == ("50 Cent", "In Da Club")
+    assert parse_title("2 Chainz - Birthday Song", "x")[0] == "2 Chainz"

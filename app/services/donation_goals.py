@@ -191,11 +191,18 @@ async def goal_top(
     return [(user, int(amount)) for user, amount in result.all()]
 
 
-def progress_percent(raised: int, target: int) -> int:
-    """Процент сбора, целым числом. Больше 100 не срезается — сбор бывает сверх цели."""
+def progress_percent(raised: int, target: int) -> int | float:
+    """Процент сбора, целым числом. Больше 100 не срезается — сбор бывает сверх цели.
+
+    Меньше процента — с одним знаком: «0%» рядом с «собрано 149 ₽» читался как
+    «не собрано ничего» (живой прогон 25.09).
+    """
     if target <= 0:
         return 0
-    return int(raised * 100 / target)
+    exact = raised * 100 / target
+    if 0 < exact < 1:
+        return max(0.1, round(exact, 1))
+    return int(exact)
 
 
 def progress_bar(raised: int, target: int, width: int = BAR_WIDTH) -> str:

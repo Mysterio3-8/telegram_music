@@ -161,7 +161,7 @@ async def test_goal_top_counts_only_its_own_goal(session):
 
 @pytest.mark.parametrize(
     "raised,target,percent",
-    [(0, 1000, 0), (500, 1000, 50), (1000, 1000, 100), (1400, 1000, 140)],
+    [(0, 1000, 0), (500, 1000, 50), (1000, 1000, 100), (1400, 1000, 140), (149, 25000, 0.6), (1, 25000, 0.1)],
 )
 def test_progress_percent(raised, target, percent):
     assert goals.progress_percent(raised, target) == percent

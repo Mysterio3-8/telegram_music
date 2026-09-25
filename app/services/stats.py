@@ -2,10 +2,10 @@
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select, union
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Artist, Track, TrackEvent, User
+from app.db.models import Artist, SearchQuery, Track, TrackEvent, User
 from app.services.storage_cleanup import count_reclaimable
 
 
@@ -90,6 +90,11 @@ class ProjectStats:
     reclaimable_bytes: int
     junk_count: int  # не похоже на музыку: короче track_min_seconds / длиннее track_max_seconds
     artists_total: int  # артистов-сущностей в каталоге (цель массового парсера — 10k)
+    # Живой прогон 25.09: админка писала «все доступны для прослушивания», а у
+    # 182 из 8871 не было ни file_id, ни архива. И «активных за всё время» было
+    # всегда равно числу пользователей — ничего не говорило.
+    tracks_playable: int = 0  # есть file_id или архив — играет сразу
+    users_active_week: int = 0  # искали или слушали за 7 дней
 
 
 async def _count(session: AsyncSession, stmt) -> int:
@@ -124,4 +129,22 @@ async def collect_stats(session: AsyncSession) -> ProjectStats:
         reclaimable_bytes=reclaimable_bytes,
         junk_count=junk.count,
         artists_total=await _count(session, select(func.count()).select_from(Artist)),
+        tracks_playable=await _count(
+            session,
+            select(func.count())
+            .select_from(Track)
+            .where(or_(Track.tg_file_id.is_not(None), Track.storage_path.is_not(None))),
+        ),
+        users_active_week=await _count(
+            session,
+            select(func.count()).select_from(
+                union(
+                    select(TrackEvent.user_id).where(TrackEvent.created_at >= now - timedelta(days=7)),
+                    select(SearchQuery.user_id).where(
+                        SearchQuery.created_at >= now - timedelta(days=7),
+                        SearchQuery.user_id.is_not(None),
+                    ),
+                ).subquery()
+            ),
+        ),
     )
