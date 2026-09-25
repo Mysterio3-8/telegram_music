@@ -12,6 +12,7 @@ from app.services.fingerprint import compute_fingerprint_from_bytes
 from app.services.track_meta import build_filename, embed_cover, retag_audio
 from app.services.uploads import DUPLICATE_DURATION_TOLERANCE, find_by_fingerprint, find_duplicate
 from app.storage.base import StorageBackend
+from app.services.tg_retry import with_flood_retry
 
 if TYPE_CHECKING:
     from aiogram import Bot
@@ -176,12 +177,15 @@ async def import_instrumental_via_telegram_mint(
         return existing, False
 
     tagged = retag_audio(data, file_format, title, artist)
-    sent = await bot.send_audio(
-        archive_chat_id,
-        BufferedInputFile(tagged, filename=build_filename(artist, title, file_format)),
-        title=title,
-        performer=artist,
-        duration=duration or None,
+    sent = await with_flood_retry(
+        lambda: bot.send_audio(
+            archive_chat_id,
+            BufferedInputFile(tagged, filename=build_filename(artist, title, file_format)),
+            title=title,
+            performer=artist,
+            duration=duration or None,
+        ),
+        "минт минуса",
     )
     instrumental = Instrumental(
         title=title.strip(),
@@ -360,16 +364,19 @@ async def import_via_telegram_mint(
     tagged = retag_audio(data, file_format, title, artist)
     if cover:
         tagged = embed_cover(tagged, file_format, cover)
-    sent = await bot.send_audio(
-        archive_chat_id,
-        BufferedInputFile(tagged, filename=build_filename(artist, title, file_format)),
-        title=title,
-        performer=artist,
-        duration=duration or None,
-        # Миниатюру Telegram надо отдать ОТДЕЛЬНО: вшитую в файл обложку плеер не
-        # показывает, если она крупная (у SoundCloud «original» — больше мегабайта).
-        # Именно поэтому трек выглядел без обложки, хотя внутри она была.
-        thumbnail=BufferedInputFile(thumbnail, filename="cover.jpg") if thumbnail else None,
+    sent = await with_flood_retry(
+        lambda: bot.send_audio(
+            archive_chat_id,
+            BufferedInputFile(tagged, filename=build_filename(artist, title, file_format)),
+            title=title,
+            performer=artist,
+            duration=duration or None,
+            # Миниатюру Telegram надо отдать ОТДЕЛЬНО: вшитую в файл обложку плеер не
+            # показывает, если она крупная (у SoundCloud «original» — больше мегабайта).
+            # Именно поэтому трек выглядел без обложки, хотя внутри она была.
+            thumbnail=BufferedInputFile(thumbnail, filename="cover.jpg") if thumbnail else None,
+        ),
+        "минт трека",
     )
     track = await create_track_from_telegram(
         session,

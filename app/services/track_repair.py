@@ -20,6 +20,7 @@ from app.db.models import Track
 from app.services.track_lookup import find_track
 from app.services.track_lookup.importer import download_with_fallback
 from app.services.track_meta import build_filename, retag_audio
+from app.services.tg_retry import with_flood_retry
 
 logger = logging.getLogger(__name__)
 
@@ -78,12 +79,15 @@ async def repair_track_file_id(session: AsyncSession, bot: Bot, track: Track) ->
         return False
 
     tagged = retag_audio(audio.data, track.format, track.title, track.artist)
-    sent = await bot.send_audio(
-        settings.effective_archive_chat_id,
-        BufferedInputFile(tagged, filename=build_filename(track.artist, track.title, track.format)),
-        title=track.title,
-        performer=track.artist,
-        duration=track.duration or None,
+    sent = await with_flood_retry(
+        lambda: bot.send_audio(
+            settings.effective_archive_chat_id,
+            BufferedInputFile(tagged, filename=build_filename(track.artist, track.title, track.format)),
+            title=track.title,
+            performer=track.artist,
+            duration=track.duration or None,
+        ),
+        "восстановление трека",
     )
     if sent.audio is None:
         return False

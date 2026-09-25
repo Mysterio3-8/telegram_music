@@ -40,6 +40,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.db.models import Track, User
 from app.services.track_meta import build_filename
+from app.services.tg_retry import with_flood_retry
 
 logger = logging.getLogger(__name__)
 
@@ -153,15 +154,20 @@ async def _mint(bot: Bot, track: Track, data: bytes, file_format: str) -> str | 
     """
     file = BufferedInputFile(data, filename=build_filename(track.artist, track.title, file_format))
     if file_format in PLAYABLE_FORMATS:
-        sent = await bot.send_audio(
-            settings.effective_archive_chat_id,
-            file,
-            title=track.title,
-            performer=track.artist,
-            duration=track.duration or None,
+        sent = await with_flood_retry(
+            lambda: bot.send_audio(
+                settings.effective_archive_chat_id,
+                file,
+                title=track.title,
+                performer=track.artist,
+                duration=track.duration or None,
+            ),
+            "минт оригинала",
         )
         return sent.audio.file_id if sent.audio else None
-    sent = await bot.send_document(settings.effective_archive_chat_id, file)
+    sent = await with_flood_retry(
+        lambda: bot.send_document(settings.effective_archive_chat_id, file), "минт оригинала"
+    )
     return sent.document.file_id if sent.document else None
 
 
