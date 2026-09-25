@@ -19,7 +19,18 @@ from app.config import settings
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Telegram Music API", version="1.0")
+    # 🔴 Документация API закрыта (аудит снаружи 24.09): /api/docs, /api/redoc и
+    # /api/openapi.json отдавались всем — полная карта маршрутов, параметров и
+    # схем ответов. Атакующему это экономит всю разведку. Mini App она не нужна,
+    # а разработчику доступна локально: API_DOCS=true в .env.
+    docs_on = settings.api_docs
+    app = FastAPI(
+        title="Infinity Music API",
+        version="1.0",
+        docs_url="/docs" if docs_on else None,
+        redoc_url="/redoc" if docs_on else None,
+        openapi_url="/openapi.json" if docs_on else None,
+    )
 
     if settings.cors_origins_list:
         app.add_middleware(

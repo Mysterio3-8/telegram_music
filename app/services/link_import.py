@@ -55,6 +55,51 @@ def extract_url(text: str) -> str | None:
     return match.group(0).rstrip(".,;)") if match else None
 
 
+def is_public_url(url: str) -> bool:
+    """Ссылка ведёт в открытый интернет, а не внутрь нашего сервера.
+
+    🔴 SSRF (аудит 24.09). Сюда попадает ЛЮБАЯ ссылка, присланная боту, и
+    yt-dlp послушно идёт по ней с сервера. `http://127.0.0.1:8011/api/users` —
+    это наша веб-админка, `http://127.0.0.1:8010/` — API, а в облаке по
+    169.254.169.254 живут метаданные машины. Поэтому: только http(s), только
+    стандартные порты, и КАЖДЫЙ адрес, в который резолвится имя, обязан быть
+    публичным — иначе злоумышленник заведёт домен, указывающий на 127.0.0.1.
+
+    ⚠️ Остаточный риск честно: редирект источника внутрь сети yt-dlp выполнит сам,
+    и сменить IP между нашей проверкой и запросом (DNS-rebinding) можно. Закрыть
+    это полностью можно только сетевым правилом для процесса воркера.
+    """
+    import ipaddress
+    import socket
+    from urllib.parse import urlsplit
+
+    try:
+        parts = urlsplit((url or "").strip())
+    except ValueError:
+        return False
+    if parts.scheme not in ("http", "https") or not parts.hostname:
+        return False
+    if parts.username or parts.password:
+        return False
+    if parts.port not in (None, 80, 443):
+        return False
+    try:
+        infos = socket.getaddrinfo(parts.hostname, parts.port or 443, proto=socket.IPPROTO_TCP)
+    except (OSError, UnicodeError):
+        return False
+    addresses = {info[4][0] for info in infos}
+    if not addresses:
+        return False
+    for address in addresses:
+        try:
+            ip = ipaddress.ip_address(address.split("%", 1)[0])
+        except ValueError:
+            return False
+        if not ip.is_global:
+            return False
+    return True
+
+
 def drm_service_name(url: str) -> str | None:
     """«Spotify» / «Apple Music» / … — если ссылка на площадку с DRM. Иначе None."""
     text = (url or "").lower()
@@ -85,6 +130,9 @@ def download_any(url: str) -> tuple[DownloadedAudio, str] | None:
     """
     from app.services.disk import enough_free_disk
 
+    if not is_public_url(url):
+        logger.warning("Ссылка отклонена: ведёт не в открытый интернет")
+        return None
     if not enough_free_disk():
         return None
     with tempfile.TemporaryDirectory() as tmp:
@@ -126,6 +174,9 @@ def download_any(url: str) -> tuple[DownloadedAudio, str] | None:
 
 def list_any_entries(url: str) -> list[LinkEntry]:
     """Треки плейлиста/профиля без скачивания. Пустой список — не разобрали."""
+    if not is_public_url(url):
+        logger.warning("Ссылка отклонена: ведёт не в открытый интернет")
+        return []
     opts = {**_base_opts(), "extract_flat": "in_playlist", "skip_download": True}
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:

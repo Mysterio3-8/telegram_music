@@ -355,7 +355,48 @@ async function renderBroadcast() {
   });
 }
 
+// Рефералы: для конкурса «30 друзей» подписка выдаётся по колонке «засчитано»
+async function renderReferrals() {
+  const data = await api("/api/referrals?limit=100");
+  screen.innerHTML = `
+    <p class="muted">Всего пришло по ссылкам: <b>${num(data.total_invited)}</b>.
+      «Засчитано» — только те, кто реально пользовался ботом и не заблокировал его:
+      по этой колонке и выдаётся подписка за конкурс.</p>
+    <table><thead><tr>
+      <th class="wide">Кто пригласил</th><th>id</th><th>Привёл</th><th>Засчитано</th><th>Конкурс 30+</th><th></th>
+    </tr></thead><tbody>
+      ${data.items
+        .map(
+          (r) => `<tr>
+            <td class="wide">${esc(r.name)}${r.username ? ` <span class="muted">@${esc(r.username)}</span>` : ""}</td>
+            <td class="muted">${esc(r.telegram_id)}</td>
+            <td>${num(r.invited)}</td>
+            <td><b>${num(r.counted)}</b></td>
+            <td>${r.counted > 30 ? '<span class="pill good">выполнил</span>' : "—"}</td>
+            <td class="actions">${
+              r.counted > 30
+                ? `<button class="mini" data-premium="${r.telegram_id}" data-days="30">выдать месяц</button>`
+                : ""
+            }</td>
+          </tr>`
+        )
+        .join("")}
+    </tbody></table>`;
+  screen.querySelectorAll("button[data-premium]").forEach((button) =>
+    button.addEventListener("click", async () => {
+      if (!window.confirm(`Выдать месяц Premium пользователю ${button.dataset.premium}?`)) return;
+      try {
+        await post(`/api/users/${button.dataset.premium}/premium`, { days: 30 });
+        button.replaceWith("выдано ✓");
+      } catch (error) {
+        window.alert(error.message);
+      }
+    })
+  );
+}
+
 const VIEWS = {
+  referrals: renderReferrals,
   overview: renderOverview,
   users: renderUsers,
   tracks: renderTracks,

@@ -275,6 +275,50 @@ def create_app() -> FastAPI:
             ],
         }
 
+    @app.get("/api/referrals", dependencies=[Depends(guard)])
+    async def referrals(
+        limit: int = Query(default=50, ge=1, le=200),
+        session: AsyncSession = Depends(get_session),
+    ) -> dict:
+        """Кто сколько привёл — для конкурса «30 друзей» (владелец 21.09).
+
+        Два числа, и разница между ними — главное: «привёл» — все, кто нажал
+        /start по ссылке; «засчитано» — те, кто реально пользовался ботом и не
+        заблокировал его (тот же счёт, что у наград). Подписку выдаём по второму.
+        """
+        from app.services.gamification import count_referrals
+
+        rows = (
+            await session.execute(
+                select(User.referred_by, func.count())
+                .where(User.referred_by.is_not(None))
+                .group_by(User.referred_by)
+                .order_by(func.count().desc())
+                .limit(limit)
+            )
+        ).all()
+        inviters = {
+            u.telegram_id: u
+            for u in (
+                await session.scalars(select(User).where(User.telegram_id.in_([r[0] for r in rows] or [0])))
+            ).all()
+        }
+        items = []
+        for telegram_id, invited in rows:
+            owner = inviters.get(telegram_id)
+            items.append(
+                {
+                    "telegram_id": telegram_id,
+                    "name": (owner.first_name or owner.username or "—") if owner else "—",
+                    "username": owner.username if owner else None,
+                    "invited": invited,
+                    "counted": await count_referrals(session, telegram_id),
+                }
+            )
+        items.sort(key=lambda item: item["counted"], reverse=True)
+        total = await session.scalar(select(func.count()).select_from(User).where(User.referred_by.is_not(None)))
+        return {"total_invited": total or 0, "items": items}
+
     # ---------- вход ----------
 
     @app.get("/api/session")

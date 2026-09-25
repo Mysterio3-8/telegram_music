@@ -135,6 +135,20 @@ _revive_locks: dict[int, asyncio.Lock] = {}
 # не успевает даже быстрый путь SoundCloud вместе с минтом.
 _REVIVE_WAIT_SECONDS = 25.0
 _REVIVE_POLL_SECONDS = 1.0
+# 🔴 Сколько оживлений идёт одновременно на весь процесс. Замок выше — на ОДИН
+# трек; без общего потолка плейлист из сотни мёртвых треков, пролистанный
+# подряд, запускал бы сотню скачиваний до 60 МБ в памяти разом — на боксе с
+# 961 МБ, где воркеры уже падали по OOM. Остальные ждут своей очереди.
+_REVIVE_CONCURRENCY = 2
+_revive_slots: asyncio.Semaphore | None = None
+
+
+def _revive_gate() -> asyncio.Semaphore:
+    # Семафор создаётся лениво: при импорте модуля событийного цикла ещё нет
+    global _revive_slots
+    if _revive_slots is None:
+        _revive_slots = asyncio.Semaphore(_REVIVE_CONCURRENCY)
+    return _revive_slots
 
 
 async def _fast_bytes(source_url: str) -> bytes | None:
@@ -186,7 +200,8 @@ async def _revive_track(track_id: int) -> Path | None:
                     track.meta_synced = False
                     await session.commit()
 
-            data = await _fast_bytes(source_url or "")
+            async with _revive_gate():
+                data = await _fast_bytes(source_url or "")
             if data:
                 await run_in_threadpool(cache_put, storage_key, data)
                 hit = await run_in_threadpool(cache_file, storage_key)

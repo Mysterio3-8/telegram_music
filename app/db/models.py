@@ -126,6 +126,11 @@ class Track(Base):
     # ночь: 11 треков из 100 оказались уже живыми, 17 не нашлись — 28% бюджета
     # ушло в повтор, и доля растёт до полной остановки ремонта.
     repair_checked_at: Mapped[datetime | None] = mapped_column()
+    # Когда метаданные (альбом, обложка, артист) последний раз сверяли с
+    # источником. Ставится ВСЕГДА, даже когда источник ничего не добавил: у
+    # большинства треков альбома нет и не будет, и без отметки ночное
+    # дообогащение вечно перебирало бы одни и те же записи.
+    meta_checked_at: Mapped[datetime | None] = mapped_column()
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
     __table_args__ = (
@@ -152,6 +157,12 @@ class Track(Base):
             "repair_checked_at",
             sqlite_where=text("repair_checked_at IS NOT NULL"),
             postgresql_where=text("repair_checked_at IS NOT NULL"),
+        ),
+        Index(
+            "ix_tracks_meta_checked",
+            "meta_checked_at",
+            sqlite_where=text("meta_checked_at IS NOT NULL"),
+            postgresql_where=text("meta_checked_at IS NOT NULL"),
         ),
     )
 

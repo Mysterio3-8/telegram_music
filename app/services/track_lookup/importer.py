@@ -164,6 +164,8 @@ async def import_candidate(
     # по ссылке, а не по «исполнитель — название»: заголовок в выдаче и в
     # скачанном файле расходятся, и сверка по нему промахивалась.
     existing = await find_track_by_source_url(session, candidate.url)
+    if existing is None:
+        existing = await _wait_foreign_import(session, candidate.url)
     if existing is not None:
         if save_to_library:
             user = await _user_by_telegram_id(session, telegram_id)
@@ -172,6 +174,54 @@ async def import_candidate(
         logger.info("Кандидат уже в базе: %s → track=%s", candidate.url, existing.id)
         return existing, False
 
+    from app.services import import_lock
+
+    # Замок ставим сами только сейчас: его держатель уже проверил базу и никого
+    # не ждёт. Второй пришедший увидит замок в _wait_foreign_import выше.
+    locked = import_lock.acquire(candidate.url)
+    try:
+        return await _download_and_import(session, bot, candidate, telegram_id, save_to_library)
+    finally:
+        if locked:
+            import_lock.release(candidate.url)
+
+
+# Сколько ждём чужой импорт той же ссылки, прежде чем качать самим. Дольше
+# самого медленного пути (yt-dlp + ffmpeg + минт) смысла нет: значит, тот
+# импорт упал, и замок висит до истечения.
+_FOREIGN_WAIT_SECONDS = 90.0
+_FOREIGN_POLL_SECONDS = 1.0
+
+
+async def _wait_foreign_import(session: AsyncSession, url: str) -> Track | None:
+    """Ссылку уже качает другой поток или процесс — дожидаемся его трека.
+
+    🔴 Без этого 23.09 появилась пара 33007/33008 «BONES — Dashboard»: две
+    записи одной ссылки с разницей в секунду.
+    """
+    from app.services import import_lock
+    from app.services.search import find_track_by_source_url
+
+    if not import_lock.is_locked(url):
+        return None
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + _FOREIGN_WAIT_SECONDS
+    while loop.time() < deadline:
+        await asyncio.sleep(_FOREIGN_POLL_SECONDS)
+        # ⚠️ Новая транзакция на каждой проверке: в WAL сессия видит снимок,
+        # сделанный на первом чтении, и чужую вставку не заметила бы никогда.
+        await session.rollback()
+        track = await find_track_by_source_url(session, url)
+        if track is not None:
+            return track
+        if not import_lock.is_locked(url):
+            break  # чужой импорт закончился неудачей — пробуем сами
+    return await find_track_by_source_url(session, url)
+
+
+async def _download_and_import(
+    session: AsyncSession, bot: Bot, candidate: Candidate, telegram_id: int, save_to_library: bool
+) -> tuple[Track, bool]:
     audio = await asyncio.to_thread(download_with_fallback, candidate)
     if audio is None:
         raise UserImportRejected(

@@ -104,3 +104,27 @@ def test_token_guards_when_set(admin, monkeypatch):
     monkeypatch.setattr(settings, "webadmin_token", "s3cret-token")
     assert client.get("/api/users").status_code == 401
     assert client.get("/api/users", headers={"X-Admin-Token": "s3cret-token"}).status_code == 200
+
+
+def test_referrals_show_invited_and_counted_separately(admin):
+    """Для конкурса «30 друзей»: пришёл по ссылке ≠ засчитан. Гость в фикстуре
+    заблокировал бота — он пришёл, но в зачёт не идёт."""
+    client, app = admin
+    import asyncio
+
+    from app.webadmin.server import get_session
+
+    async def mark():
+        gen = app.dependency_overrides[get_session]()
+        session = await gen.__anext__()
+        from sqlalchemy import update
+
+        await session.execute(update(User).where(User.telegram_id == 778).values(referred_by=777))
+        await session.commit()
+        await gen.aclose()
+
+    asyncio.run(mark())
+    data = client.get("/api/referrals").json()
+    assert data["total_invited"] == 1
+    row = data["items"][0]
+    assert row["telegram_id"] == 777 and row["invited"] == 1 and row["counted"] == 0

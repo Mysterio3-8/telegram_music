@@ -176,3 +176,28 @@ def test_vk_wall_page_says_plainly_that_it_is_closed(monkeypatch):
         assert "ВКонтакте" in str(err.value)
 
     asyncio.run(run())
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://127.0.0.1:8011/api/users?vk.com",
+        "https://evil.example/vk.com/music/playlist/1_2",
+        "https://vk.com.evil.example/music/playlist/1_2",
+        "https://vk.com:8011/music/playlist/1_2",
+        "https://user:pass@vk.com/music/playlist/1_2",
+        "file:///etc/passwd#vk.com",
+    ],
+)
+def test_vk_link_cannot_point_the_server_elsewhere(url):
+    """🔴 SSRF: ссылку ВК сервер запрашивает как есть, поэтому хост проверяется строго."""
+    from app.services.playlist_transfer.parsers import safe_vk_url
+
+    with pytest.raises(TransferSourceError):
+        safe_vk_url(url)
+
+
+def test_real_vk_link_passes_and_is_forced_to_https():
+    from app.services.playlist_transfer.parsers import safe_vk_url
+
+    assert safe_vk_url("http://vk.com/music/playlist/-1_2_abc") == "https://vk.com/music/playlist/-1_2_abc"

@@ -187,9 +187,33 @@ def parse_vk_html(html: str) -> list[TransferItem]:
     return []
 
 
+_VK_HOSTS = {"vk.com", "m.vk.com", "www.vk.com", "vk.ru", "m.vk.ru", "www.vk.ru"}
+
+
+def safe_vk_url(url: str) -> str:
+    """Ссылка ВК, которую безопасно запрашивать с сервера.
+
+    🔴 SSRF (аудит 24.09). Сервис узнаётся по подстроке «vk.com» где угодно в
+    ссылке, а ВК — единственный, чью ссылку мы запрашиваем КАК ЕСТЬ (Spotify и
+    Яндекс собирают адрес сами из id). Значит, `http://127.0.0.1:8011/?vk.com`
+    заставил бы сервер сходить в собственную админку. Поэтому: только https,
+    только хосты ВК, без порта и логина в адресе.
+    """
+    from urllib.parse import urlsplit
+
+    parts = urlsplit((url or "").strip())
+    host = (parts.hostname or "").lower()
+    if parts.scheme not in ("https", "http") or host not in _VK_HOSTS:
+        raise TransferSourceError("Это не ссылка ВКонтакте.")
+    if parts.port or parts.username or parts.password:
+        raise TransferSourceError("Это не ссылка ВКонтакте.")
+    return f"https://{host}{parts.path}" + (f"?{parts.query}" if parts.query else "")
+
+
 async def fetch_vk(url: str) -> list[TransferItem]:
+    safe = safe_vk_url(url)
     try:
-        html = await _fetch_text(url)
+        html = await _fetch_text(safe)
     except Exception:  # noqa: BLE001 — ВК закрывает страницу целиком
         html = ""
     items = parse_vk_html(html) if html else []
