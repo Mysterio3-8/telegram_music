@@ -75,4 +75,7 @@ ExecStart=-/opt/tg-music-bot/.venv/bin/python -m app.cli.catalog_enrich --artist
 # ⚠️ Префикс «-»: проверка не должна ронять обслуживание. Она стоит после всего
 # полезного, но systemd обрывает Type=oneshot на первой упавшей команде, а ей по
 # смыслу положено завершаться с ошибкой, когда всё плохо.
+# Свежий yt-dlp перед проверкой выходов: YouTube ломает старые версии, и 25.09
+# прод три месяца жил на yt-dlp от 04.07 — 403 на каждое скачивание.
+ExecStart=-/bin/bash /opt/tg-music-bot/deploy/update-ytdlp.sh
 ExecStart=-/opt/tg-music-bot/.venv/bin/python -m app.cli.youtube_exits --check

@@ -50,3 +50,24 @@ def test_speed_tag_only_in_brackets():
     assert version_penalty("fast car", "Tracy Chapman Fast Car") == 1.0
     assert version_penalty("tunnel vision", "Tunnel Vision (Outro)(Fast)") < 1.0
     assert version_penalty("пачка", "Пачка (ускоренная версия)") < 1.0
+
+
+def test_relaxed_pass_takes_same_title_in_other_length():
+    """Прогон 25.09: «New Choppa» 2:06 на SoundCloud, все полные копии — 2:52."""
+    from app.services.track_lookup.importer import _replacement_order
+
+    original = _c("New Choppa (feat. A$AP Rocky)", artist="Playboi Carti", duration=126)
+    query = "Playboi Carti New Choppa (feat. A$AP Rocky)"
+    longer = _c("New Choppa (feat. A$AP Rocky)", artist="Playboi Carti", duration=172)
+    exact = _c("New Choppa (feat. A$AP Rocky)", artist="Playboi Carti", duration=127)
+    flip = _c("New Choppa ft. A$AP Rocky (FURTHA FLIP)", artist="Playboi Carti", duration=145)
+    loop = _c("New Choppa (feat. A$AP Rocky)", artist="Playboi Carti", duration=717)
+    order = _replacement_order(original, query, [longer, flip, loop, exact])
+    assert [c.duration for c in order] == [127, 172]  # точная сперва, пометка и 12-минутная — нет
+
+
+def test_relaxed_pass_never_takes_marked_versions():
+    from app.services.track_lookup.importer import _replacement_order
+
+    fast = _c("Diana Ft. King Combs(Fast)", duration=210)
+    assert _replacement_order(ORIGINAL, QUERY, [fast]) == []

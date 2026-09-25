@@ -59,9 +59,22 @@ MAX_DOWNLOAD_ATTEMPTS = 6
 _DURATION_TOLERANCE = 0.12
 # Ниже этого счёта «замена» — просто другой трек из выдачи того же артиста
 _REPLACEMENT_MIN_SCORE = 0.45
+# Второй, мягкий проход — когда строгих замен нет или ни одна не скачалась.
+# Живой прогон 25.09: официальный «New Choppa» на SoundCloud длится 2:06, а все
+# полные копии — 2:52; строгий порог отсёк их, и человек получил 30-секундное
+# превью. Без пометок версий и с тем же названием разница в длине — это чаще
+# другое издание (интро, радио-версия), чем подделка.
+_RELAXED_DURATION_TOLERANCE = 0.4
+_RELAXED_MIN_SCORE = 0.9
 
 
-def is_same_recording(original: Candidate, query: str, alternative: Candidate) -> bool:
+def is_same_recording(
+    original: Candidate,
+    query: str,
+    alternative: Candidate,
+    tolerance: float = _DURATION_TOLERANCE,
+    min_score: float = _REPLACEMENT_MIN_SCORE,
+) -> bool:
     """Годится ли соседний аплоад вместо недоступного оригинала.
 
     Прогон 25.09: альбом Pop Smoke (официальные треки под DRM) пришёл почти
@@ -78,9 +91,27 @@ def is_same_recording(original: Candidate, query: str, alternative: Candidate) -
     if is_beat_or_instrumental(alternative.full_title) and not is_beat_or_instrumental(wanted):
         return False
     if original.duration and alternative.duration:
-        if abs(alternative.duration - original.duration) > original.duration * _DURATION_TOLERANCE:
+        if abs(alternative.duration - original.duration) > original.duration * tolerance:
             return False
-    return match_score(query, alternative) >= _REPLACEMENT_MIN_SCORE
+    return match_score(query, alternative) >= min_score
+
+
+def _replacement_order(original: Candidate, query: str, alternatives: list[Candidate]) -> list[Candidate]:
+    """Сперва точные копии, за ними — то же название в другой длине (см. выше)."""
+    strict, relaxed = [], []
+    for alternative in alternatives:
+        if alternative.snippet:
+            continue  # та же беда, что у оригинала, — попытку не тратим
+        if is_same_recording(original, query, alternative):
+            strict.append(alternative)
+        elif is_same_recording(
+            original, query, alternative,
+            tolerance=_RELAXED_DURATION_TOLERANCE, min_score=_RELAXED_MIN_SCORE,
+        ):
+            relaxed.append(alternative)
+        else:
+            logger.info("Замена отклонена, другая запись: «%s»", alternative.full_title)
+    return strict + relaxed
 
 
 def _interleave(*groups: list[Candidate]) -> list[Candidate]:
@@ -142,17 +173,14 @@ def download_with_fallback(candidate: Candidate) -> DownloadedAudio | None:
             logger.warning("Замена: источник %s не ответил", source.__name__, exc_info=True)
             groups.append([])
 
-    tried = {candidate.url}
-    attempts = 0
+    seen = {candidate.url}
+    unique: list[Candidate] = []
     for alternative in _interleave(*groups):
-        if alternative.url in tried:
-            continue
-        tried.add(alternative.url)
-        if alternative.snippet:
-            continue  # та же беда, что у оригинала, — попытку не тратим
-        if not is_same_recording(candidate, query, alternative):
-            logger.info("Замена отклонена, другая запись: «%s»", alternative.full_title)
-            continue
+        if alternative.url not in seen:
+            seen.add(alternative.url)
+            unique.append(alternative)
+    attempts = 0
+    for alternative in _replacement_order(candidate, query, unique):
         attempts += 1
         if attempts > MAX_DOWNLOAD_ATTEMPTS:
             break

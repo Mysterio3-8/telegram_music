@@ -169,6 +169,16 @@ def check() -> int:
             f"YouTube: живым остался ОДИН выход VPN из {len(proxies)}. "
             "Пока работает, но запас кончился — пора обновить узлы."
         )
+    elif len(alive) < len(proxies):
+        # 25.09: мёртвые 10821 и 10808 стояли ПЕРВЫМИ, попыток на ролик две — и
+        # скачивание с YouTube падало почти всегда, хотя живые выходы были.
+        # Проверка молчала: «хоть один жив». Мёртвый выход в списке — это
+        # потерянные попытки на каждом треке, о нём надо знать.
+        dead = [proxy for proxy in proxies if proxy not in alive]
+        _alert(
+            f"YouTube: мертвы выходы {', '.join(dead)}. Живые первыми:\n"
+            f"YOUTUBE_PROXY={','.join(alive)}"
+        )
     logger.info("Живых выходов: %d из %d", len(alive), len(proxies))
     return 0
 

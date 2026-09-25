@@ -65,7 +65,7 @@ li .t small{color:var(--muted);font-size:13px}
 
 <div class="wrap">
 <header>
-  <span class="stamp">Infinity Music · @muz_damn_bot · обновлено 25.09.2026</span>
+  <span class="stamp">Infinity Music · @muz_damn_bot · обновлено 26.09.2026</span>
   <h1>Готовность по приоритетам</h1>
   <p class="sub">Проценты — по сделанному и проверенному вживую, а не по написанному коду. Источник цифр — живой прогон 25.09 в твоём Telegram Desktop, замеры на проде и 1 119 автотестов. Подробный список по кнопкам — в docs/qa/ЧЕКЛИСТ.md.</p>
   <div class="legend">
@@ -176,6 +176,8 @@ li .t small{color:var(--muted);font-size:13px}
   </div>
   <ul class="items">
     <li><span class="st done">✓</span><span class="t">Нажал один трек — прогревается вся выдача, присылается один</span></li>
+    <li><span class="st done">✓</span><span class="t">YouTube снова качает<small>yt-dlp три месяца не обновлялся — 403 на каждое скачивание, 84 провала за сутки; теперь обновляется при деплое и ночью, мёртвые выходы VPN убраны из начала списка</small></span></li>
+    <li><span class="st done">✓</span><span class="t">Замена недоступного трека в два прохода<small>сперва точная копия (±12%), затем то же название в другой длине (±40%) — но никогда не slowed/fast/remix/cover</small></span></li>
     <li><span class="st done">✓</span><span class="t">Русское имя находит латинского артиста<small>«биг бейби тейп драгонборн» → Big Baby Tape — Dragonborn; имя берётся из базы артистов по звучанию</small></span></li>
     <li><span class="st done">✓</span><span class="t">Замена недоступного трека — только та же запись<small>без пометок версий, длительность ±12%</small></span></li>
     <li><span class="st done">✓</span><span class="t">Номер дорожки «1. » больше не часть имени артиста</span></li>
