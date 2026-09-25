@@ -275,6 +275,20 @@ def create_app() -> FastAPI:
             ],
         }
 
+    @app.get("/api/funnel", dependencies=[Depends(guard)])
+    async def funnel(
+        days: int = Query(default=30, ge=1, le=365),
+        session: AsyncSession = Depends(get_session),
+    ) -> dict:
+        """Путь новичка: пришёл → нашёл трек → вернулся → заплатил. Только числа."""
+        from app.services.business_funnel import build_funnel
+
+        steps = await build_funnel(session, days)
+        return {
+            "days": days,
+            "steps": [{"key": s.key, "label": s.label, "people": s.people} for s in steps],
+        }
+
     @app.get("/api/referrals", dependencies=[Depends(guard)])
     async def referrals(
         limit: int = Query(default=50, ge=1, le=200),

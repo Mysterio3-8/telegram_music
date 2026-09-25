@@ -395,7 +395,35 @@ async function renderReferrals() {
   );
 }
 
+// Воронка новичка: где теряем людей (владелец 21.09 — «приходят ли люди,
+// остаются ли, это самое главное»). Процент — от пришедших, «−» — сколько
+// отвалилось на шаге по сравнению с предыдущим.
+async function renderFunnel() {
+  const data = await api(`/api/funnel?days=${state.days}`);
+  const top = data.steps.length ? data.steps[0].people || 1 : 1;
+  let previous = null;
+  const rows = data.steps
+    .map((step) => {
+      const share = Math.round((step.people * 100) / top);
+      const lost = previous !== null && previous > step.people ? previous - step.people : 0;
+      previous = step.people;
+      return `<tr>
+        <td class="wide">${esc(step.label)}</td>
+        <td><b>${num(step.people)}</b></td>
+        <td><div class="bar"><span style="width:${share}%"></span></div> ${share}%</td>
+        <td class="muted">${lost ? `−${num(lost)}` : ""}</td>
+      </tr>`;
+    })
+    .join("");
+  screen.innerHTML = `
+    <p class="muted">Люди, пришедшие за последние ${data.days} дн. Только числа — без имён.
+      Самый большой «−» и есть место, где мы теряем людей.</p>
+    <table><thead><tr><th class="wide">Шаг</th><th>Людей</th><th>От пришедших</th><th>Отвалилось</th></tr></thead>
+    <tbody>${rows}</tbody></table>`;
+}
+
 const VIEWS = {
+  funnel: renderFunnel,
   referrals: renderReferrals,
   overview: renderOverview,
   users: renderUsers,

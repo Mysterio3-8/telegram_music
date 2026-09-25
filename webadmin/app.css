@@ -93,3 +93,5 @@ button.danger, button.mini.danger { background: #b3373b; }
 td.actions { white-space: nowrap; }
 .broadcast { max-width: 640px; display: grid; gap: 12px; }
 .broadcast textarea { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #333; background: #111; color: #eee; }
+.bar { display: inline-block; width: 120px; height: 8px; background: #222; border-radius: 4px; vertical-align: middle; overflow: hidden; }
+.bar span { display: block; height: 100%; background: #3b7bfe; }
