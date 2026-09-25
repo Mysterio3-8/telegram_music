@@ -3997,6 +3997,10 @@ html {
 
 .artist-album {
   flex: 0 0 128px;
+  /* Без этого min-width:auto растягивал карточку по длинному названию в одну
+     строку, и оно наезжало на соседнюю (живой прогон 25.09) */
+  min-width: 0;
+  max-width: 128px;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -4036,6 +4040,9 @@ html {
 .artist-album__count {
   font-size: 11.5px;
   color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Карточка артиста: подписка, последний релиз, синглы, похожие */

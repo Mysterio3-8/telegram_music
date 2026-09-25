@@ -9,7 +9,7 @@ Telegram-клиент автоматически проигрывает след
 from aiogram import F, Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery
 
 from app.i18n import t
 from app.config import settings
@@ -37,10 +37,16 @@ async def _send_batch(
     user: User,
     tracks: list[Track],
     next_callback: str | None,
-    continue_label: str = t("player.next"),
+    continue_label: str | None = None,
 ) -> int:
-    """Отправляет пачку аудио; кнопка продолжения — под последним. Возвращает число отправленных."""
-    last_message: Message | None = None
+    """Отправляет пачку аудио; кнопки продолжения — последним сообщением. Возвращает число отправленных.
+
+    Прогон 25.09: кнопки вешались на последнее аудио, а следом за ним
+    `send_track_audio` шлёт обложку файлом — «Дальше / Остановить» уезжали вверх,
+    и последним в чате оказывалась картинка. Поэтому кнопки идут отдельно, в самом
+    конце. Подпись по умолчанию берётся при вызове: `t()` в значении по умолчанию
+    считался один раз при импорте и навсегда оставался русским.
+    """
     sent = 0
     for track in tracks:
         message = await send_track_audio(
@@ -48,14 +54,11 @@ async def _send_batch(
         )
         if message is not None:
             sent += 1
-            last_message = message
-    if last_message is not None and next_callback is not None:
-        try:
-            await last_message.edit_reply_markup(
-                reply_markup=queue_continue_keyboard(next_callback, continue_label)
-            )
-        except TelegramBadRequest:
-            pass
+    if sent and next_callback is not None:
+        await callback.message.answer(
+            t("player.batch_sent", sent=sent),
+            reply_markup=queue_continue_keyboard(next_callback, continue_label or t("player.next")),
+        )
     return sent
 
 

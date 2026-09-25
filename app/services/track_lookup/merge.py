@@ -24,16 +24,21 @@ def dedup_candidates(candidates: list[Candidate]) -> list[Candidate]:
     они не схлопывались, потому что ключом служило имя аккаунта; теперь артист
     разбирается из заголовка, и копии наконец видны как копии.
 
-    Остаётся первый — он же лучший: список уже отранжирован.
+    Остаётся первый — он же лучший: список уже отранжирован. Исключение — превью
+    Go+ (30 сек): полная копия того же трека встаёт на его место, иначе человек
+    слушал бы обрывок, хотя целый трек лежал строчкой ниже (прогон 25.09).
     """
     result: list[Candidate] = []
-    seen: set[str] = set()
+    position: dict[str, int] = {}
     for candidate in candidates:
         key = dedup_key(candidate)
-        if key and key in seen:
+        if key and key in position:
+            index = position[key]
+            if result[index].snippet and not candidate.snippet:
+                result[index] = candidate
             continue
         if key:
-            seen.add(key)
+            position[key] = len(result)
         result.append(candidate)
     return result
 

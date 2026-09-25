@@ -186,6 +186,7 @@ MESSAGES: dict[str, str] = {
     "card.edit_admin": "✏️ Редактировать (админ)",
     # --- плеер и очередь
     "player.next": "▶️ Дальше",
+    "player.batch_sent": "🎧 Отправлено треков: {sent}",
     "player.stop": "⏹ Остановить",
     "player.library_empty_add": "Библиотека пуста — добавьте треки",
     "player.mix_started": "🎶 Микс запущен",

@@ -169,6 +169,7 @@ MESSAGES: dict[str, str] = {
     "card.share": "📤 Compartir",
     "card.edit_admin": "✏️ Editar (admin)",
     "player.next": "▶️ Siguiente",
+    "player.batch_sent": "🎧 Pistas enviadas: {sent}",
     "player.stop": "⏹ Parar",
     "player.library_empty_add": "Tu biblioteca está vacía — añade pistas",
     "player.mix_started": "🎶 Mix iniciado",

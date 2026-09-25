@@ -75,7 +75,7 @@ async def get_me() -> dict | None:
     return await _call("getMe")
 
 
-def _payload(telegram_id: int, anonymous: bool) -> str:
+def _payload(telegram_id: int, anonymous: bool, base_rub: int | None = None) -> str:
     """Наши данные, которые Crypto Pay вернёт вместе с оплаченным счётом.
 
     Своего хранилища «ожидаемых платежей» не заводим: счёт может быть оплачен
@@ -83,18 +83,28 @@ def _payload(telegram_id: int, anonymous: bool) -> str:
     здесь не нужна — в отличие от комментария к переводу, это поле заполняем МЫ,
     и обратно оно приходит от Crypto Pay, а не от человека.
     """
-    return f"{telegram_id}:{1 if anonymous else 0}"
+    tail = f":{base_rub}" if base_rub else ""
+    return f"{telegram_id}:{1 if anonymous else 0}{tail}"
 
 
 def parse_payload(raw: str | None) -> tuple[int, bool] | None:
     """«12345:1» → (12345, True). None — поле пустое или испорчено."""
     if not raw:
         return None
-    user_raw, _, anon_raw = str(raw).partition(":")
+    user_raw, _, rest = str(raw).partition(":")
+    anon_raw = rest.partition(":")[0]
     # isascii рядом с isdigit: «²» проходит isdigit(), но int() на нём падает.
     if not (user_raw.isascii() and user_raw.isdigit()):
         return None
     return int(user_raw), anon_raw == "1"
+
+
+def payload_base_rub(raw: str | None) -> int | None:
+    """Сумма доната БЕЗ наценки из «12345:0:49». None — старый счёт без неё."""
+    base = str(raw or "").split(":")
+    if len(base) < 3 or not (base[2].isascii() and base[2].isdigit()):
+        return None
+    return int(base[2]) or None
 
 
 async def create_invoice(
@@ -112,17 +122,26 @@ async def create_invoice(
         logger.error("Crypto Pay: сумма %s вне допустимых границ", amount_rub)
         return None
 
+    from app.services.donations import markup_rub
+
+    # +15% к рублям, как у звёзд (решение владельца 22.09): рубли — самый
+    # дешёвый способ. Живой прогон 25.09 нашёл, что TON шёл без наценки. В сбор
+    # идёт исходная сумма — она в payload, как у звёзд.
+    charged = markup_rub(amount_rub)
     result = await _call(
         "createInvoice",
         {
             "currency_type": "fiat",
             "fiat": "RUB",
-            "amount": str(amount_rub),
+            "amount": str(charged),
             # Только TON: остальные монеты владелец не просил, а лишний выбор на
             # экране оплаты — лишний повод передумать.
             "accepted_assets": "TON",
-            "description": f"Поддержка проекта — {amount_rub} ₽",
-            "payload": _payload(telegram_id, anonymous),
+            "description": (
+                f"Поддержка проекта — {amount_rub} ₽"
+                + (f" + {charged - amount_rub} ₽ за оплату в TON" if charged > amount_rub else "")
+            ),
+            "payload": _payload(telegram_id, anonymous, amount_rub),
             "expires_in": INVOICE_TTL_SEC,
             "paid_btn_name": "openBot",
             "paid_btn_url": f"https://t.me/{settings.bot_username}",
@@ -236,6 +255,9 @@ async def apply_paid_invoice(session, invoice: dict) -> bool:
         return False
 
     amount_rub = invoice_amount_rub(invoice)
+    base = payload_base_rub(invoice.get("payload"))
+    if amount_rub is not None and base is not None and base <= amount_rub:
+        amount_rub = base  # в сбор — без наценки за способ оплаты
     if amount_rub is None:
         logger.error("Crypto Pay %s: не разобрал сумму %r", invoice_id, invoice.get("amount"))
         return False

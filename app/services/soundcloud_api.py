@@ -212,8 +212,9 @@ def _to_candidate(item: dict) -> Candidate | None:
         source="soundcloud",
         url=url,
         title=parsed_title or title,
-        # duration приходит в миллисекундах
-        duration=int(item.get("duration") or 0) // 1000,
+        # duration приходит в миллисекундах; у превью это 30 сек, настоящая
+        # длина — в full_duration
+        duration=int(item.get("full_duration") or item.get("duration") or 0) // 1000,
         artist=artist or None,
         uploader=uploader or None,
         cover_url=artwork or None,
@@ -225,7 +226,16 @@ def _to_candidate(item: dict) -> Candidate | None:
         ),
         official=official,
         hq_available=hq_available,
+        snippet=is_snippet(item),
     )
+
+
+def is_snippet(item: dict) -> bool:
+    """Источник отдаст только превью: платный Go+ трек или поток короче трека."""
+    if str(item.get("policy") or "").upper() == "SNIP":
+        return True
+    full, stream = int(item.get("full_duration") or 0), int(item.get("duration") or 0)
+    return bool(full and stream and full - stream > 5000)
 
 
 def search_tracks(query: str, limit: int = 5) -> list[Candidate]:

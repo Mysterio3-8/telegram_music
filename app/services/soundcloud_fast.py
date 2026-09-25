@@ -46,7 +46,7 @@ def _fetch_bytes(url: str) -> bytes | None:
 def fast_download(url: str) -> DownloadedAudio | None:
     """Трек по ссылке SoundCloud. None — быстрый путь не вышел, зовите yt-dlp."""
     from app.services.mojibake import repair
-    from app.services.soundcloud_api import api_get
+    from app.services.soundcloud_api import api_get, is_snippet
 
     try:
         track = api_get("/resolve", {"url": url})
@@ -54,6 +54,11 @@ def fast_download(url: str) -> DownloadedAudio | None:
             return None
         if track.get("kind") != "track":
             return None  # ссылка на сет или профиль — это не наш путь
+        if is_snippet(track):
+            # Превью Go+ на 30 сек под видом трека хуже, чем отказ: отказ
+            # запускает поиск полной копии (download_with_fallback)
+            logger.info("Быстрое скачивание: %s — только превью Go+, пропускаю", url)
+            return None
         stream = _progressive_mp3(track)
         if not stream and track.get("id"):
             # У карточки из поиска список вариантов бывает урезан — берём полную

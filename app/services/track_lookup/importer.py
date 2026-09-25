@@ -37,6 +37,8 @@ NOT_FOUND_MESSAGE = (
 def download_candidate(candidate: Candidate) -> DownloadedAudio | None:
     """Загружает найденный трек из его источника — всегда в mp3 (приоритет владельца:
     пользователю уходит только mp3, с оригинальной обложкой источника)."""
+    if candidate.source == SOURCE_SOUNDCLOUD and candidate.snippet:
+        return None  # оба пути SoundCloud отдадут 30-секундное превью
     if candidate.source == SOURCE_SOUNDCLOUD:
         # Сперва прямой путь через API v2: 0,5 сек против 7,0 сек у yt-dlp
         # (замер прода 21.09). Не вышло — ниже прежний путь, он умеет HLS и DRM.
@@ -146,6 +148,8 @@ def download_with_fallback(candidate: Candidate) -> DownloadedAudio | None:
         if alternative.url in tried:
             continue
         tried.add(alternative.url)
+        if alternative.snippet:
+            continue  # та же беда, что у оригинала, — попытку не тратим
         if not is_same_recording(candidate, query, alternative):
             logger.info("Замена отклонена, другая запись: «%s»", alternative.full_title)
             continue

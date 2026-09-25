@@ -36,6 +36,22 @@ logger = logging.getLogger(__name__)
 
 CONFIDENT_MATCH = 0.3
 
+# Прогон 25.09: «big baby tape dragonborn» отвечал 16 сек — SoundCloud нашёл
+# трек за доли секунды, а мы ждали YouTube, у которого оборвалось соединение.
+# Нетерпеливый человек уходит через пять секунд, поэтому ждём ограниченно.
+YOUTUBE_GRACE = 1.5  # SoundCloud песню уже нашёл
+YOUTUBE_MAX_WAIT = 6.0  # SoundCloud не нашёл — YouTube последняя надежда
+
+
+async def _youtube_within(task: "asyncio.Future[list[Candidate]]", seconds: float) -> list[Candidate]:
+    """Результат YouTube, если он успел; иначе пусто. Поток доработает сам —
+    отменить yt-dlp посреди запроса нельзя, но и ждать его человек не обязан."""
+    try:
+        return await asyncio.wait_for(asyncio.shield(task), timeout=seconds)
+    except asyncio.TimeoutError:
+        logger.info("Живой поиск: YouTube не успел за %.1f сек, отдаём без него", seconds)
+        return []
+
 
 def _safe_search(provider, query: str, limit: int) -> list[Candidate]:
     try:
@@ -145,15 +161,21 @@ async def search_candidates(query: str, limit: int | None = None) -> list[Candid
         enough = _confident_count(query, soundcloud) >= settings.youtube_fallback_min_results
         if enough and _title_found(query, soundcloud):
             return _ordered(query, soundcloud)
-        youtube = await asyncio.to_thread(_safe_search, search_youtube, query, per_source)
+        youtube = await _youtube_within(
+            asyncio.ensure_future(asyncio.to_thread(_safe_search, search_youtube, query, per_source)),
+            YOUTUBE_MAX_WAIT,
+        )
     else:
         # Латиница — западный репертуар: оба источника сразу и параллельно, время
         # ответа равно медленному из двух, а не их сумме. Ждать, пока SoundCloud
         # «наберёт мало», тут нельзя: он набирает много, только всё под DRM.
-        soundcloud, youtube = await asyncio.gather(
-            _search_soundcloud_variants(query, per_source),
-            asyncio.to_thread(_safe_search, search_youtube, query, per_source),
+        youtube_task = asyncio.ensure_future(
+            asyncio.to_thread(_safe_search, search_youtube, query, per_source)
         )
+        soundcloud = await _search_soundcloud_variants(query, per_source)
+        # SoundCloud песню нашёл — YouTube ждём совсем недолго: он лишь добавка
+        found = _title_found(query, soundcloud) and _confident_count(query, soundcloud) > 0
+        youtube = await _youtube_within(youtube_task, YOUTUBE_GRACE if found else YOUTUBE_MAX_WAIT)
     music = [item for item in _visible_candidates(query, youtube) if looks_like_music(item)]
     return _ordered(query, merge_candidates(soundcloud, music))
 
@@ -244,6 +266,13 @@ async def _search_soundcloud_variants(query: str, limit: int) -> list[Candidate]
     latin = to_latin(query)
     if latin != query.lower():
         variants.append(latin)
+        # «биг бейби тейп» побуквенно — «big beybi teyp», а на SoundCloud он
+        # «Big Baby Tape»: имя берём из нашей базы артистов (прогон 25.09)
+        from app.services.track_lookup.artist_alias import latin_variant
+
+        alias = await asyncio.to_thread(latin_variant, query)
+        if alias and alias.lower() not in {variant.lower() for variant in variants}:
+            variants.append(alias)
     results = await asyncio.gather(
         *(
             asyncio.to_thread(_safe_search, search_soundcloud, variant, limit)

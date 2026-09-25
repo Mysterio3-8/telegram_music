@@ -38,11 +38,14 @@ export function pushRecentTrack(track) {
   if (!track) return;
   // audio_url НЕ сохраняем: подписанная ссылка живёт 6 часов, протухшая копия
   // в localStorage давала «трек недоступен». Плеер резолвит свежую по id.
+  // Обложку храним: ссылка CDN не протухает, а без неё «История
+  // прослушивания» рисовала заглушки (живой прогон 25.09).
   const slim = {
     id: track.id,
     title: track.title,
     artist: track.artist,
     duration: track.duration,
+    cover_url: track.cover_url || null,
   };
   const rest = getRecentTracks().filter((t) => t.id !== track.id);
   writeJson(RECENT_TRACKS_KEY, [slim, ...rest].slice(0, RECENT_TRACKS_LIMIT));

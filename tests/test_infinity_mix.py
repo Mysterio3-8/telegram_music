@@ -108,3 +108,19 @@ async def test_empty_catalog_still_returns_live(session, monkeypatch):
     catalog, live = await infinity_mix.build_infinity_mix(session, user.id, size=6)
     assert catalog == []
     assert live and live[0].title == "Y"
+
+
+async def test_go_plus_previews_are_not_in_mix(session, monkeypatch):
+    """Прогон 25.09: «New Choppa» играл 0:30 — превью Go+ в ленте."""
+    user = await _user(session)
+
+    async def mixed(_seed):
+        return [
+            Candidate(source="soundcloud", url="https://sc/p", title="Preview", duration=183,
+                      artist="X", snippet=True),
+            Candidate(source="soundcloud", url="https://sc/f", title="Full", duration=200, artist="X"),
+        ]
+
+    monkeypatch.setattr("app.services.search_cache.search_with_cache", mixed)
+    _catalog, live = await infinity_mix.build_infinity_mix(session, user.id, size=6)
+    assert [c.title for c in live] == ["Full"]

@@ -113,7 +113,8 @@ async def _live_part(session: AsyncSession, user_id: int, limit: int) -> list[Ca
     except asyncio.TimeoutError:
         logger.info("Infinity Mix: источник не успел за %s сек — отдаём каталог", LIVE_TIMEOUT_SECONDS)
         return []
-    mixed = interleave(list(groups))
+    # Превью Go+ (30 сек) в ленте — это обрыв музыки на полуслове
+    mixed = [c for c in interleave(list(groups)) if not c.snippet]
     random.shuffle(mixed)
     return mixed[:limit]
 

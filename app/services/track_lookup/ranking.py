@@ -63,6 +63,11 @@ class Candidate:
     # (extract_flat) этих полей не отдаёт, там всегда False — то есть при
     # отказе API оригинал просто не предлагается, а поиск работает как прежде.
     hq_available: bool = False
+    # Платный трек SoundCloud Go+ (policy=SNIP): без подписки источник отдаёт
+    # только 30 секунд. Прогон 25.09: такие превью играли в Infinity Mix как
+    # полноценные треки («New Choppa» — 0:30). Качать и стримить их нельзя —
+    # только искать полную копию рядом.
+    snippet: bool = False
 
     @property
     def full_title(self) -> str:

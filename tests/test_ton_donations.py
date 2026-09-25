@@ -331,3 +331,40 @@ async def test_invoice_for_unknown_user_is_not_recorded(session, crypto_ready):
 async def test_invoice_without_payload_is_not_recorded(session, crypto_ready):
     await _user(session)
     assert await crypto_pay.apply_paid_invoice(session, _invoice(payload=None)) is False
+
+
+# --- Наценка TON через Crypto Pay (живой прогон 25.09: шёл без +15%) ---
+
+
+async def test_crypto_pay_invoice_has_markup(crypto_ready, monkeypatch):
+    sent = {}
+
+    async def fake_call(method, params=None):
+        sent.update(params or {})
+        return {"invoice_id": 1, "bot_invoice_url": "https://t.me/CryptoBot?start=x"}
+
+    monkeypatch.setattr(settings, "crypto_markup_pct", 15, raising=False)
+    monkeypatch.setattr(crypto_pay, "_call", fake_call)
+    assert await crypto_pay.create_invoice(555, 49) is not None
+    assert sent["amount"] == "57"  # 49 × 1.15 = 56.35 → вверх
+    assert crypto_pay.parse_payload(sent["payload"]) == (555, False)
+    assert crypto_pay.payload_base_rub(sent["payload"]) == 49
+    assert "8 ₽ за оплату в TON" in sent["description"]
+
+
+def test_payload_with_base_keeps_anonymous_flag():
+    assert crypto_pay.parse_payload(crypto_pay._payload(555, True, 49)) == (555, True)
+    assert crypto_pay.payload_base_rub("555:1") is None
+    assert crypto_pay.payload_base_rub("555:1:abc") is None
+
+
+async def test_goal_gets_amount_without_markup(session, crypto_ready, quiet_goals):
+    await _user(session)
+    await crypto_pay.apply_paid_invoice(session, _invoice(amount="57", payload="555:0:49"))
+    assert (await session.execute(select(Donation))).scalar_one().amount_rub == 49
+
+
+async def test_forged_base_above_paid_is_ignored(session, crypto_ready, quiet_goals):
+    await _user(session)
+    await crypto_pay.apply_paid_invoice(session, _invoice(amount="57", payload="555:0:5000"))
+    assert (await session.execute(select(Donation))).scalar_one().amount_rub == 57
