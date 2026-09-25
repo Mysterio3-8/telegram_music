@@ -1,0 +1,241 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Готовность Infinity Music</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --ground:#F3F4F7; --surface:#FFFFFF; --ink:#141821; --muted:#5B6272; --line:#E1E4EB;
+  --accent:#262BFF; --accent-soft:#E6E7FF;
+  --good:#1C8A4E; --good-soft:#E3F4EA; --warn:#A86F00; --warn-soft:#FBF0D9; --bad:#C23B3B; --bad-soft:#FBE6E6;
+  --track:#E7E9EF;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --ground:#0E1016; --surface:#161922; --ink:#E6E8EE; --muted:#9097A6; --line:#262A36;
+    --accent:#8C8FFF; --accent-soft:#23254A;
+    --good:#4CC486; --good-soft:#15291F; --warn:#E0A83A; --warn-soft:#2E2412; --bad:#F07A7A; --bad-soft:#321818;
+    --track:#242836;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --ground:#0E1016; --surface:#161922; --ink:#E6E8EE; --muted:#9097A6; --line:#262A36;
+  --accent:#8C8FFF; --accent-soft:#23254A;
+  --good:#4CC486; --good-soft:#15291F; --warn:#E0A83A; --warn-soft:#2E2412; --bad:#F07A7A; --bad-soft:#321818;
+  --track:#242836;
+}
+*{box-sizing:border-box}
+body{background:var(--ground);color:var(--ink);font:15px/1.5 "IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif}
+.wrap{max-width:980px;margin:0 auto;padding-inline:16px;padding-block:28px 48px;display:grid;gap:20px}
+header{display:grid;gap:6px}
+h1{font:600 30px/1.15 "IBM Plex Sans Condensed","Arial Narrow",sans-serif;margin:0;text-wrap:balance;letter-spacing:-.01em}
+.sub{color:var(--muted);margin:0;max-width:68ch}
+.stamp{font:500 12px/1 "IBM Plex Mono",ui-monospace,monospace;color:var(--muted);letter-spacing:.04em;text-transform:uppercase}
+.overview{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}
+.ov{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:grid;gap:8px;text-decoration:none;color:inherit}
+.ov:focus-visible,.ov:hover{border-color:var(--accent);outline:none}
+.ov .k{font:500 12px/1.2 "IBM Plex Sans",sans-serif;color:var(--muted)}
+.ov .v{font:500 26px/1 "IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
+.bar{height:6px;border-radius:3px;background:var(--track);overflow:hidden}
+.bar i{display:block;height:100%;border-radius:3px;background:var(--accent)}
+.bar i.good{background:var(--good)} .bar i.warn{background:var(--warn)} .bar i.bad{background:var(--bad)}
+section.p{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px 18px 8px;display:grid;gap:12px}
+.ph{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 14px;justify-content:space-between}
+.ph h2{font:600 20px/1.2 "IBM Plex Sans Condensed","Arial Narrow",sans-serif;margin:0}
+.ph .rank{font:500 12px/1 "IBM Plex Mono",monospace;color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+.pct{font:500 20px/1 "IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
+.metrics{display:flex;flex-wrap:wrap;gap:8px}
+.m{font:400 13px/1.3 "IBM Plex Mono",monospace;background:var(--accent-soft);color:var(--ink);padding:5px 9px;border-radius:6px}
+.m b{font-weight:500}
+ul.items{list-style:none;margin:0;padding:0;display:grid}
+ul.items li{display:grid;grid-template-columns:26px 1fr;gap:10px;padding:9px 0;border-top:1px solid var(--line);align-items:start}
+.st{width:22px;height:22px;border-radius:6px;display:grid;place-items:center;font:600 13px/1 "IBM Plex Mono",monospace}
+.st.done{background:var(--good-soft);color:var(--good)}
+.st.part{background:var(--warn-soft);color:var(--warn)}
+.st.todo{background:var(--bad-soft);color:var(--bad)}
+li .t{display:grid;gap:2px}
+li .t small{color:var(--muted);font-size:13px}
+.legend{display:flex;flex-wrap:wrap;gap:14px;color:var(--muted);font-size:13px;align-items:center}
+.legend span{display:inline-flex;gap:6px;align-items:center}
+.note{border-left:3px solid var(--warn);background:var(--warn-soft);padding:10px 14px;border-radius:0 8px 8px 0;font-size:14px}
+@media (max-width:480px){h1{font-size:25px}.ov .v{font-size:22px}}
+@media (prefers-reduced-motion:no-preference){.bar i{transition:width .4s ease}}
+</style>
+
+<div class="wrap">
+<header>
+  <span class="stamp">Infinity Music · @muz_damn_bot · обновлено 25.09.2026</span>
+  <h1>Готовность по приоритетам</h1>
+  <p class="sub">Проценты — по сделанному и проверенному вживую, а не по написанному коду. Источник цифр — живой прогон 25.09 в твоём Telegram Desktop, замеры на проде и 1 119 автотестов. Подробный список по кнопкам — в docs/qa/ЧЕКЛИСТ.md.</p>
+  <div class="legend">
+    <span><span class="st done">✓</span>сделано и проверено</span>
+    <span><span class="st part">~</span>частично / ждёт проверки</span>
+    <span><span class="st todo">·</span>не сделано</span>
+  </div>
+</header>
+
+<nav class="overview" aria-label="Сводка">
+  <a class="ov" href="#p1"><span class="k">1 · Скорость</span><span class="v">65%</span><span class="bar"><i class="warn" style="width:65%"></i></span></a>
+  <a class="ov" href="#p2"><span class="k">2 · Инфраструктура</span><span class="v">35%</span><span class="bar"><i class="bad" style="width:35%"></i></span></a>
+  <a class="ov" href="#p3"><span class="k">3 · Дизайн</span><span class="v">15%</span><span class="bar"><i class="bad" style="width:15%"></i></span></a>
+  <a class="ov" href="#p4"><span class="k">4 · Функции</span><span class="v">45%</span><span class="bar"><i class="warn" style="width:45%"></i></span></a>
+  <a class="ov" href="#p5"><span class="k">5 · Треки в базу</span><span class="v">70%</span><span class="bar"><i class="warn" style="width:70%"></i></span></a>
+  <a class="ov" href="#p6"><span class="k">6 · Безопасность</span><span class="v">70%</span><span class="bar"><i class="warn" style="width:70%"></i></span></a>
+  <a class="ov" href="#p7"><span class="k">7 · Рефакторинг</span><span class="v">5%</span><span class="bar"><i class="bad" style="width:5%"></i></span></a>
+  <a class="ov" href="#p8"><span class="k">8 · Бизнес</span><span class="v">45%</span><span class="bar"><i class="warn" style="width:45%"></i></span></a>
+</nav>
+
+<section class="p" id="p1">
+  <div class="ph"><div><span class="rank">Приоритет 1</span><h2>Скорость для пользователя: без лагов, всё сразу</h2></div><span class="pct">65%</span></div>
+  <div class="metrics">
+    <span class="m">старт Mini App <b>~3 → 0.7 с</b></span>
+    <span class="m">поиск латиницей <b>16.4 → 1.95 с</b></span>
+    <span class="m">список в боте <b>~1 с</b></span>
+    <span class="m">трек в чат <b>≤3 с</b></span>
+    <span class="m">Infinity Mix <b>&lt;1 с</b></span>
+    <span class="m">тишина на мёртвом треке <b>до 50 → ≤12 с</b></span>
+  </div>
+  <ul class="items">
+    <li><span class="st done">✓</span><span class="t">Белое окно при старте плеера убрано<small>скрипт Telegram блокировал отрисовку, а фона до стилей не было — 1.5 с белого экрана</small></span></li>
+    <li><span class="st done">✓</span><span class="t">Поиск не ждёт зависший YouTube<small>SoundCloud нашёл трек — YouTube ждём 1.5 с, а не до конца</small></span></li>
+    <li><span class="st done">✓</span><span class="t">Недоступный трек не держит тишину<small>воркер сдавался за 1.6 с, а API ждал 25 и ещё 25 на повтор; теперь отказ сразу и переход к следующему</small></span></li>
+    <li><span class="st done">✓</span><span class="t">«Не удалось войти» на каждом обновлении сервера<small>плеер тихо повторяет вход до ~5 с</small></span></li>
+    <li><span class="st done">✓</span><span class="t">Прогрев выдачи: верх списка качается заранее, трек из базы уходит мгновенно</span></li>
+    <li><span class="st part">~</span><span class="t">Платные треки SoundCloud в поиске плеера<small>играли обрывок 30 с; теперь импортируется полная копия и играет она — выкатывается, вживую ещё не проверено</small></span></li>
+    <li><span class="st todo">·</span><span class="t">Прожать скорость остальных экранов плеера<small>настройки, документы, карточки артистов, альбомы</small></span></li>
+    <li><span class="st todo">·</span><span class="t">Замер под нагрузкой — ночью 03–05 МСК</span></li>
+  </ul>
+</section>
+
+<section class="p" id="p2">
+  <div class="ph"><div><span class="rank">Приоритет 2</span><h2>Инфраструктура: не уронить, не заспамить, 10 000 человек на текущем VPS</h2></div><span class="pct">35%</span></div>
+  <div class="metrics">
+    <span class="m">лимит API <b>20 запросов/с</b> на адрес</span>
+    <span class="m">оживлений одновременно <b>2</b></span>
+    <span class="m">перерыв при деплое <b>~4 с</b></span>
+  </div>
+  <ul class="items">
+    <li><span class="st done">✓</span><span class="t">Лимиты запросов в nginx (API, вход, вебхук)</span></li>
+    <li><span class="st done">✓</span><span class="t">Антифлуд бота: 20 действий/с → пауза 60 с</span></li>
+    <li><span class="st done">✓</span><span class="t">Один импорт на одну ссылку на все процессы<small>дубль «BONES — Dashboard» больше не повторится</small></span></li>
+    <li><span class="st done">✓</span><span class="t">Неудачное восстановление трека помнится 10 минут<small>повторные нажатия не гоняют воркер впустую</small></span></li>
+    <li><span class="st done">✓</span><span class="t">Автодеплой с откатом, сторож сервисов раз в 2 минуты</span></li>
+    <li><span class="st todo">·</span><span class="t">Нагрузочный тест: сколько людей одновременно держит бокс</span></li>
+    <li><span class="st todo">·</span><span class="t">Память каждого сервиса под нагрузкой</span></li>
+    <li><span class="st todo">·</span><span class="t">Антифлуд вживую (20 нажатий в секунду)</span></li>
+  </ul>
+</section>
+
+<section class="p" id="p3">
+  <div class="ph"><div><span class="rank">Приоритет 3</span><h2>Дизайн: ровно, удобно, телефон и компьютер</h2></div><span class="pct">15%</span></div>
+  <ul class="items">
+    <li><span class="st done">✓</span><span class="t">Длинное название альбома больше не наезжает на соседнюю карточку</span></li>
+    <li><span class="st done">✓</span><span class="t">Обложки в «Истории прослушивания» — были заглушки</span></li>
+    <li><span class="st done">✓</span><span class="t">Кнопки очереди в боте приходят последними, а не под картинкой</span></li>
+    <li><span class="st part">~</span><span class="t">Премиальный дизайн по скринам ВК<small>отложено тобой 24.09 до скринов — чеклист в docs/tasks/2026-09-24-чеклист-дизайн.md</small></span></li>
+    <li><span class="st todo">·</span><span class="t">На компьютере Escape не закрывает шторки</span></li>
+    <li><span class="st todo">·</span><span class="t">При закрытии плеера «Внесённые изменения могут быть потеряны»<small>стандартный текст Telegram от случайного закрытия — нужно твоё решение: оставить или убрать</small></span></li>
+    <li><span class="st todo">·</span><span class="t">Все иконки достижений одинаковые</span></li>
+    <li><span class="st todo">·</span><span class="t">Ширины 320 / 375 / 430 px и планшет</span></li>
+  </ul>
+</section>
+
+<section class="p" id="p4">
+  <div class="ph"><div><span class="rank">Приоритет 4</span><h2>Функции работают правильно</h2></div><span class="pct">45%</span></div>
+  <div class="metrics">
+    <span class="m">найдено вживую 25.09 <b>18</b></span>
+    <span class="m">исправлено <b>16</b>, выкатывается <b>1</b></span>
+  </div>
+  <ul class="items">
+    <li><span class="st done">✓</span><span class="t">Бот: поиск, листание, выдача трека, плейлист → «Слушать всё» → «Остановить»</span></li>
+    <li><span class="st done">✓</span><span class="t">Бот: рефералка (15 засчитано из 30), языки ru → en → ru, донаты до экрана оплаты</span></li>
+    <li><span class="st done">✓</span><span class="t">Донат в TON был без +15%<small>звёзды с наценкой, TON — нет; в сбор идёт сумма без наценки</small></span></li>
+    <li><span class="st done">✓</span><span class="t">Альбом приходил подделками<small>Pop Smoke: «(Fast)», «Slowed + Reverb», «Piano Cover», «Type Beat» вместо оригиналов под DRM</small></span></li>
+    <li><span class="st done">✓</span><span class="t">Infinity Mix без 30-секундных обрывков</span></li>
+    <li><span class="st done">✓</span><span class="t">Плеер: микс, очередь, поиск, библиотека, поиск по своим трекам, профиль</span></li>
+    <li><span class="st done">✓</span><span class="t">Прослушивание засчитывалось треку, который не заиграл</span></li>
+    <li><span class="st todo">·</span><span class="t">Загрузка своего трека, перенос по ссылке Spotify/Яндекс, инлайн-режим, минусы</span></li>
+    <li><span class="st todo">·</span><span class="t">Плеер: настройки, эквалайзер, таймер сна, офлайн, текст песни, карточки артистов</span></li>
+    <li><span class="st todo">·</span><span class="t">Свайпы пальцем на телефоне</span></li>
+  </ul>
+</section>
+
+<section class="p" id="p5">
+  <div class="ph"><div><span class="rank">Приоритет 5</span><h2>Треки в базу: названия, артисты, альбомы, обложки</h2></div><span class="pct">70%</span></div>
+  <div class="metrics">
+    <span class="m">треков <b>8 871</b></span>
+    <span class="m">ждут восстановления <b>182</b></span>
+    <span class="m">артистов <b>12 230</b></span>
+    <span class="m">прогрев <b>20</b> из выдачи</span>
+  </div>
+  <ul class="items">
+    <li><span class="st done">✓</span><span class="t">Нажал один трек — прогревается вся выдача, присылается один</span></li>
+    <li><span class="st done">✓</span><span class="t">Русское имя находит латинского артиста<small>«биг бейби тейп драгонборн» → Big Baby Tape — Dragonborn; имя берётся из базы артистов по звучанию</small></span></li>
+    <li><span class="st done">✓</span><span class="t">Замена недоступного трека — только та же запись<small>без пометок версий, длительность ±12%</small></span></li>
+    <li><span class="st done">✓</span><span class="t">Номер дорожки «1. » больше не часть имени артиста</span></li>
+    <li><span class="st done">✓</span><span class="t">Ночная привязка артистов с фото и альбомами<small>1 144 трека привязаны в первом прогоне</small></span></li>
+    <li><span class="st todo">·</span><span class="t">Лекции вместо музыки в каталоге<small>«Bing Crosby — Why should we care…», «Pet Sounds — Classic Albums»</small></span></li>
+    <li><span class="st todo">·</span><span class="t">Совместный трек считается отдельным артистом в топе профиля</span></li>
+    <li><span class="st todo">·</span><span class="t">Слить дубль «BONES — Dashboard» — ждёт твоего «да»</span></li>
+  </ul>
+</section>
+
+<section class="p" id="p6">
+  <div class="ph"><div><span class="rank">Приоритет 6</span><h2>Безопасность снаружи</h2></div><span class="pct">70%</span></div>
+  <ul class="items">
+    <li><span class="st done">✓</span><span class="t">Подделки входа отклоняются<small>пустой и чужой initData, токен без подписи, чужая подпись аудио, фальшивый вебхук оплаты</small></span></li>
+    <li><span class="st done">✓</span><span class="t">.env, .git, база и исходники недоступны; документация API закрыта</span></li>
+    <li><span class="st done">✓</span><span class="t">Ссылки на внутренние адреса сервера отклоняются</span></li>
+    <li><span class="st done">✓</span><span class="t">Владелец в ссылке потока защищён подписью<small>новое поле подделать нельзя — проверено тестом</small></span></li>
+    <li><span class="st todo">·</span><span class="t">Пароль веб-админки — задаёшь ты<small>python -m app.cli.webadmin_password → строку в .env</small></span></li>
+    <li><span class="st todo">·</span><span class="t">Повторный проход после каждого нового входа данных</span></li>
+  </ul>
+</section>
+
+<section class="p" id="p7">
+  <div class="ph"><div><span class="rank">Приоритет 7</span><h2>Рефакторинг: большие файлы и внутренние ошибки</h2></div><span class="pct">5%</span></div>
+  <div class="metrics">
+    <span class="m">main.js <b>2 037</b> строк</span>
+    <span class="m">components.css <b>~3 600</b></span>
+    <span class="m">me.py <b>792</b></span>
+  </div>
+  <ul class="items">
+    <li><span class="st done">✓</span><span class="t">Решение: дробить по ходу, частями (25.09)</span></li>
+    <li><span class="st todo">·</span><span class="t">main.js — вынести обработчики действий по экранам</span></li>
+    <li><span class="st todo">·</span><span class="t">components.css — разнести по компонентам</span></li>
+  </ul>
+</section>
+
+<section class="p" id="p8">
+  <div class="ph"><div><span class="rank">Приоритет 8</span><h2>Бизнес: статистика, админка, рост без убытка</h2></div><span class="pct">45%</span></div>
+  <div class="metrics">
+    <span class="m">пользователей <b>80</b></span>
+    <span class="m">Premium <b>4</b></span>
+    <span class="m">оплат <b>0</b></span>
+    <span class="m">донатов <b>149 ₽</b></span>
+  </div>
+  <ul class="items">
+    <li><span class="st done">✓</span><span class="t">Воронка «пришёл → нашёл трек → вернулся → заплатил» в веб-админке</span></li>
+    <li><span class="st done">✓</span><span class="t">Админка в боте говорит правду<small>«играют сразу / ждут восстановления», «активных за 7 дней», отчёт без технических записей, сбор «0.6%» вместо «0%»</small></span></li>
+    <li><span class="st done">✓</span><span class="t">Пост «Версия 1.5» в NEWS.md<small>со списком скринов «было / стало» — публикуешь ты</small></span></li>
+    <li><span class="st done">✓</span><span class="t">Пост конкурса «30 друзей» — черновик</span></li>
+    <li><span class="st todo">·</span><span class="t">Ни одной оплаты Premium — разобрать, где теряем людей, по воронке</span></li>
+    <li><span class="st todo">·</span><span class="t">Опросы и отзывы внутри плеера</span></li>
+  </ul>
+</section>
+
+<section class="p" id="rules">
+  <div class="ph"><div><span class="rank">Правила работы</span><h2>Как я работаю</h2></div></div>
+  <ul class="items">
+    <li><span class="st done">✓</span><span class="t">Тестирую сам в твоём Telegram: пишу боту, жму кнопки, открываю плеер. Оплату, рассылки и каналы подписки не трогаю</span></li>
+    <li><span class="st done">✓</span><span class="t">Нашёл баг — исправляю сразу, с тестом; выкатываю только после зелёного полного прогона</span></li>
+    <li><span class="st done">✓</span><span class="t">Компьютер беречь: тяжёлое по одному, нагрузка на сервер — только ночью</span></li>
+    <li><span class="st done">✓</span><span class="t">Каждую идею записываю в docs/ИДЕИ.md и довожу до конца; не сделанное пишу прямо</span></li>
+  </ul>
+</section>
+
+<p class="note">Честно про «100%»: вживую прожата примерно половина кнопок. Дальше — загрузка, перенос, инлайн, настройки плеера и свайпы, а ночью 03–05 МСК нагрузочный тест.</p>
+</div>
+
+</body></html>

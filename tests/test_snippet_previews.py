@@ -107,3 +107,73 @@ def test_track_number_prefix_is_not_part_of_artist():
     assert parse_title("12) Kizaru - Зеркало", "x") == ("Kizaru", "Зеркало")
     assert parse_title("50 Cent - In Da Club", "x") == ("50 Cent", "In Da Club")
     assert parse_title("2 Chainz - Birthday Song", "x")[0] == "2 Chainz"
+
+
+# --- Поиск Mini App: превью Go+ играет полную копию (прогон 25.09) ---
+
+
+def test_ref_carries_owner_only_when_given():
+    from app.services.candidate_ref import decode_ref, encode_ref, ref_owner
+
+    preview = Candidate(source="soundcloud", url="https://sc/p", title="Dior", duration=216, snippet=True)
+    ref = encode_ref(preview, owner=555)
+    assert decode_ref(ref) == preview  # владелец не ломает сам кандидат
+    assert ref_owner(ref) == 555
+    assert ref_owner(encode_ref(preview)) is None
+    assert ref_owner(ref[:-1] + ("0" if ref[-1] != "0" else "1")) is None  # подпись не сошлась
+
+
+def _run(coro):
+    import asyncio
+
+    return asyncio.run(coro)
+
+
+def test_preview_redirects_to_catalog_copy(monkeypatch):
+    from app.api.routers import live_search
+    from app.services.candidate_ref import encode_ref
+
+    preview = Candidate(source="soundcloud", url="https://sc/p", title="Dior", duration=216, snippet=True)
+
+    async def copy(_candidate):
+        return 42
+
+    monkeypatch.setattr(live_search, "_playable_copy", copy)
+    url = _run(live_search._full_copy_url(encode_ref(preview, owner=555), preview))
+    assert url.startswith("../tracks/42/audio?")
+
+
+def test_preview_imports_and_waits_for_copy(monkeypatch):
+    from app.api.routers import live_search
+    from app.services.candidate_ref import encode_ref
+    from app.tasks import search_fetch
+
+    preview = Candidate(source="soundcloud", url="https://sc/p", title="Dior", duration=216, snippet=True)
+    calls = {"n": 0}
+    queued = []
+
+    async def copy(_candidate):
+        calls["n"] += 1
+        return 7 if calls["n"] >= 3 else None  # импорт доехал на третьей проверке
+
+    monkeypatch.setattr(live_search, "_playable_copy", copy)
+    monkeypatch.setattr(live_search, "_FULL_COPY_POLL_SECONDS", 0.01)
+    monkeypatch.setattr(
+        search_fetch.search_fetch_candidate, "apply_async", lambda **kw: queued.append(kw["kwargs"])
+    )
+    url = _run(live_search._full_copy_url(encode_ref(preview, owner=555), preview))
+    assert url.startswith("../tracks/7/audio?")
+    assert queued[0]["telegram_id"] == 555 and queued[0]["save_to_library"] is False
+
+
+def test_old_ref_without_owner_keeps_preview(monkeypatch):
+    from app.api.routers import live_search
+    from app.services.candidate_ref import encode_ref
+
+    preview = Candidate(source="soundcloud", url="https://sc/p", title="Dior", duration=216, snippet=True)
+
+    async def none(_candidate):
+        return None
+
+    monkeypatch.setattr(live_search, "_playable_copy", none)
+    assert _run(live_search._full_copy_url(encode_ref(preview), preview)) is None

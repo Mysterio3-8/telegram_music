@@ -5,13 +5,14 @@
 `/search/live` — обычный JWT, `/stream/{ref}` подписан сам (тег <audio> не умеет
 слать Authorization-заголовок — та же причина, что и у /tracks/{id}/audio).
 """
+import asyncio
 import logging
 import time
 from dataclasses import asdict
 
 import aiohttp
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import RedirectResponse, StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
@@ -57,6 +58,71 @@ async def _cached_stream_url(ref: str, candidate: Candidate) -> str | None:
     return url
 
 
+# Сколько поток превью ждёт импорт полной копии. Как у оживления трека:
+# дольше человек тишину не терпит, а превью всё же лучше, чем ничего.
+_FULL_COPY_WAIT_SECONDS = 12.0
+_FULL_COPY_POLL_SECONDS = 0.5
+
+
+async def _playable_copy(candidate: Candidate) -> int | None:
+    """Играющая копия в каталоге: по ссылке источника, иначе по «артист — название»
+    (импорт мог слить кандидата с уже известным треком другой ссылки)."""
+    from app.db.base import session_factory
+    from app.services.search import find_track_by_source_url
+
+    async with session_factory() as session:
+        track = await find_track_by_source_url(session, candidate.url)
+        if track is None:
+            track = (await find_tracks_by_metadata_bulk(session, [candidate_metadata(candidate)]))[0]
+        if track is not None and (track.tg_file_id or track.storage_path):
+            return track.id
+    return None
+
+
+async def _full_copy_url(ref: str, candidate: Candidate) -> str | None:
+    """Превью Go+ (30 сек) → ссылка на полную копию того же трека.
+
+    Живой прогон 25.09: в поиске плеера платные треки SoundCloud играли
+    30-секундный обрывок. Импорт с перебором замен находит ту же запись в
+    чужом аплоаде или на YouTube (import_candidate → download_with_fallback),
+    и дальше она играет как любой трек каталога.
+
+    Ссылка относительная («../tracks/…»): Mini App ходит к API через префикс
+    /api, а build_audio_url отдаёт путь без него.
+    """
+    from app.api.security import build_audio_url
+    from app.services.candidate_ref import ref_owner
+
+    track_id = await _playable_copy(candidate)
+    if track_id is None:
+        owner = ref_owner(ref)
+        if owner is None:
+            return None  # ref старого образца — играем превью, как раньше
+        try:
+            from app.tasks.search_fetch import search_fetch_candidate
+
+            search_fetch_candidate.apply_async(
+                kwargs={
+                    "candidate": asdict(candidate),
+                    "telegram_id": owner,
+                    "chat_id": None,
+                    "save_to_library": False,
+                },
+                expires=60,
+            )
+        except Exception:  # noqa: BLE001 — очередь недоступна: остаётся превью
+            logger.warning("Превью: импорт полной копии не поставлен", exc_info=True)
+            return None
+        deadline = time.monotonic() + _FULL_COPY_WAIT_SECONDS
+        while track_id is None and time.monotonic() < deadline:
+            await asyncio.sleep(_FULL_COPY_POLL_SECONDS)
+            track_id = await _playable_copy(candidate)
+    if track_id is None:
+        logger.info("Превью %s: полная копия не успела, играем превью", candidate.url)
+        return None
+    return ".." + build_audio_url(track_id)
+
+
 class LiveTrackOut(BaseModel):
     """Кандидат живого поиска. `track_id` заполнен, если трек уже есть в базе —
     тогда Mini App играет его по обычной подписанной ссылке, минуя поток."""
@@ -77,12 +143,14 @@ class LiveSearchOut(BaseModel):
     items: list[LiveTrackOut]
 
 
-async def _to_outs(session: AsyncSession, candidates: list[Candidate]) -> list[LiveTrackOut]:
+async def _to_outs(
+    session: AsyncSession, candidates: list[Candidate], owner: int | None = None
+) -> list[LiveTrackOut]:
     metadata = [candidate_metadata(candidate) for candidate in candidates]
     existing = await find_tracks_by_metadata_bulk(session, metadata)
     return [
         LiveTrackOut(
-            ref=encode_ref(candidate),
+            ref=encode_ref(candidate, owner=owner if candidate.snippet else None),
             title=title,
             artist=artist,
             duration=candidate.duration,
@@ -106,13 +174,14 @@ def _worth_catalog(track, candidate: Candidate) -> bool:
     return bool(track.tg_file_id or track.storage_path) or candidate.snippet
 
 
-@router.get("/search/live", response_model=LiveSearchOut, dependencies=[Depends(require_premium)])
+@router.get("/search/live", response_model=LiveSearchOut)
 async def live_search(
     q: str = Query(..., min_length=1),
+    user: User = Depends(require_premium),
     session: AsyncSession = Depends(get_db),
 ) -> LiveSearchOut:
     candidates = await search_with_cache(q)
-    return LiveSearchOut(items=await _to_outs(session, candidates))
+    return LiveSearchOut(items=await _to_outs(session, candidates, owner=user.telegram_id))
 
 
 class ShelfOut(BaseModel):
@@ -125,13 +194,15 @@ async def list_shelves() -> list[ShelfOut]:
     return [ShelfOut(slug=shelf.slug, name=shelf.name) for shelf in SHELVES]
 
 
-@router.get("/shelves/{slug}", response_model=LiveSearchOut, dependencies=[Depends(require_premium)])
-async def shelf_tracks(slug: str, session: AsyncSession = Depends(get_db)) -> LiveSearchOut:
+@router.get("/shelves/{slug}", response_model=LiveSearchOut)
+async def shelf_tracks(
+    slug: str, user: User = Depends(require_premium), session: AsyncSession = Depends(get_db)
+) -> LiveSearchOut:
     shelf = get_shelf(slug)
     if shelf is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Полка не найдена")
     candidates = await build_shelf(shelf)
-    return LiveSearchOut(items=await _to_outs(session, candidates))
+    return LiveSearchOut(items=await _to_outs(session, candidates, owner=user.telegram_id))
 
 
 @router.get("/shelves/mix/personal", response_model=LiveSearchOut)
@@ -139,7 +210,7 @@ async def personal_mix(
     user: User = Depends(require_premium), session: AsyncSession = Depends(get_db)
 ) -> LiveSearchOut:
     candidates = await build_personal_mix(session, user.id)
-    return LiveSearchOut(items=await _to_outs(session, candidates))
+    return LiveSearchOut(items=await _to_outs(session, candidates, owner=user.telegram_id))
 
 
 @router.get("/mix/infinity", response_model=LiveSearchOut)
@@ -174,7 +245,7 @@ async def infinity_mix(
         )
         for track in tracks
     ]
-    items.extend(await _to_outs(session, candidates))
+    items.extend(await _to_outs(session, candidates, owner=user.telegram_id))
     return LiveSearchOut(items=items)
 
 
@@ -210,6 +281,10 @@ async def stream_candidate(ref: str, request: Request) -> Response:
     candidate = decode_ref(ref)
     if candidate is None:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Ссылка недействительна или истекла")
+    if candidate.snippet:
+        full = await _full_copy_url(ref, candidate)
+        if full is not None:
+            return RedirectResponse(full, status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 
     source_url = await _cached_stream_url(ref, candidate)
     if not source_url:
@@ -305,12 +380,14 @@ async def live_albums(q: str = Query(..., min_length=1, max_length=200)) -> list
     ]
 
 
-@router.get("/albums/live/{album_id}", response_model=LiveSearchOut, dependencies=[Depends(require_premium)])
-async def live_album_tracks(album_id: int, session: AsyncSession = Depends(get_db)) -> LiveSearchOut:
+@router.get("/albums/live/{album_id}", response_model=LiveSearchOut)
+async def live_album_tracks(
+    album_id: int, user: User = Depends(require_premium), session: AsyncSession = Depends(get_db)
+) -> LiveSearchOut:
     if not 0 < album_id < _ALBUM_ID_MAX:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Альбом не найден")
     tracks = await _album_tracks_or_404(album_id)
-    return LiveSearchOut(items=await _to_outs(session, tracks))
+    return LiveSearchOut(items=await _to_outs(session, tracks, owner=user.telegram_id))
 
 
 @router.post("/albums/live/{album_id}/library")

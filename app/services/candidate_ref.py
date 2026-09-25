@@ -31,11 +31,18 @@ def _sign(body: str) -> str:
     return digest.hexdigest()[:32]
 
 
-def encode_ref(candidate: Candidate, ttl_seconds: int = REF_TTL_SECONDS) -> str:
+def encode_ref(
+    candidate: Candidate, ttl_seconds: int = REF_TTL_SECONDS, owner: int | None = None
+) -> str:
+    """owner — telegram_id того, кому выдан ref. Кладётся только превью Go+:
+    поток по такой ссылке не играет, а импортирует полную копию от имени
+    человека, а `<audio src>` не несёт с собой токен входа."""
     payload = {
         **asdict(candidate),
         "exp": int(datetime.now(timezone.utc).timestamp()) + ttl_seconds,
     }
+    if owner:
+        payload["own"] = int(owner)
     raw = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode()
     body = base64.urlsafe_b64encode(raw).decode().rstrip("=")
     return f"{body}.{_sign(body)}"
@@ -53,7 +60,18 @@ def decode_ref(ref: str) -> Candidate | None:
         return None
     if int(payload.pop("exp", 0)) < int(datetime.now(timezone.utc).timestamp()):
         return None
+    payload.pop("own", None)
     try:
         return Candidate(**payload)
     except TypeError:  # ref от другой версии Candidate
         return None
+
+
+def ref_owner(ref: str) -> int | None:
+    """telegram_id владельца из ПРОВЕРЕННОГО ref (см. encode_ref); None — нет."""
+    if decode_ref(ref) is None:
+        return None
+    body = ref.partition(".")[0]
+    payload = json.loads(base64.urlsafe_b64decode(body + "=" * (-len(body) % 4)))
+    owner = payload.get("own")
+    return int(owner) if isinstance(owner, int) and owner > 0 else None
