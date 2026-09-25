@@ -77,7 +77,7 @@ li .t small{color:var(--muted);font-size:13px}
 
 <nav class="overview" aria-label="Сводка">
   <a class="ov" href="#p1"><span class="k">1 · Скорость</span><span class="v">65%</span><span class="bar"><i class="warn" style="width:65%"></i></span></a>
-  <a class="ov" href="#p2"><span class="k">2 · Инфраструктура</span><span class="v">35%</span><span class="bar"><i class="bad" style="width:35%"></i></span></a>
+  <a class="ov" href="#p2"><span class="k">2 · Инфраструктура</span><span class="v">45%</span><span class="bar"><i class="warn" style="width:45%"></i></span></a>
   <a class="ov" href="#p3"><span class="k">3 · Дизайн</span><span class="v">15%</span><span class="bar"><i class="bad" style="width:15%"></i></span></a>
   <a class="ov" href="#p4"><span class="k">4 · Функции</span><span class="v">45%</span><span class="bar"><i class="warn" style="width:45%"></i></span></a>
   <a class="ov" href="#p5"><span class="k">5 · Треки в базу</span><span class="v">70%</span><span class="bar"><i class="warn" style="width:70%"></i></span></a>
@@ -102,20 +102,24 @@ li .t small{color:var(--muted);font-size:13px}
     <li><span class="st done">✓</span><span class="t">Недоступный трек не держит тишину<small>воркер сдавался за 1.6 с, а API ждал 25 и ещё 25 на повтор; теперь отказ сразу и переход к следующему</small></span></li>
     <li><span class="st done">✓</span><span class="t">«Не удалось войти» на каждом обновлении сервера<small>плеер тихо повторяет вход до ~5 с</small></span></li>
     <li><span class="st done">✓</span><span class="t">Прогрев выдачи: верх списка качается заранее, трек из базы уходит мгновенно</span></li>
-    <li><span class="st part">~</span><span class="t">Платные треки SoundCloud в поиске плеера<small>играли обрывок 30 с; теперь импортируется полная копия и играет она — выкатывается, вживую ещё не проверено</small></span></li>
+    <li><span class="st part">~</span><span class="t">Платные треки SoundCloud в поиске плеера<small>играли обрывок 30 с; теперь импортируется полная копия и играет она — на проде, вживую не дожал: на компьютере мешало чужое окно</small></span></li>
+    <li><span class="st part">~</span><span class="t">Инлайн-режим отвечал 4–7 с<small>работа 0.6 с, остальное — своп; своп снят, перемерить</small></span></li>
     <li><span class="st todo">·</span><span class="t">Прожать скорость остальных экранов плеера<small>настройки, документы, карточки артистов, альбомы</small></span></li>
     <li><span class="st todo">·</span><span class="t">Замер под нагрузкой — ночью 03–05 МСК</span></li>
   </ul>
 </section>
 
 <section class="p" id="p2">
-  <div class="ph"><div><span class="rank">Приоритет 2</span><h2>Инфраструктура: не уронить, не заспамить, 10 000 человек на текущем VPS</h2></div><span class="pct">35%</span></div>
+  <div class="ph"><div><span class="rank">Приоритет 2</span><h2>Инфраструктура: не уронить, не заспамить, 10 000 человек на текущем VPS</h2></div><span class="pct">45%</span></div>
   <div class="metrics">
     <span class="m">лимит API <b>20 запросов/с</b> на адрес</span>
     <span class="m">оживлений одновременно <b>2</b></span>
     <span class="m">перерыв при деплое <b>~4 с</b></span>
+    <span class="m">своп <b>563 → 212 МБ</b></span>
+    <span class="m">память всех сервисов <b>1317 → 1071 МБ</b></span>
   </div>
   <ul class="items">
+    <li><span class="st done">✓</span><span class="t">Сервер больше не живёт в свопе<small>aiogram 3.30 съедал 151 МБ на процесс против 96 у 3.28 — закреплён на 3.28.2; бот 217 → 153 МБ, воркеры −65 МБ каждый, поддержка 140 → 98</small></span></li>
     <li><span class="st done">✓</span><span class="t">Лимиты запросов в nginx (API, вход, вебхук)</span></li>
     <li><span class="st done">✓</span><span class="t">Антифлуд бота: 20 действий/с → пауза 60 с</span></li>
     <li><span class="st done">✓</span><span class="t">Один импорт на одну ссылку на все процессы<small>дубль «BONES — Dashboard» больше не повторится</small></span></li>
@@ -123,6 +127,7 @@ li .t small{color:var(--muted);font-size:13px}
     <li><span class="st done">✓</span><span class="t">Автодеплой с откатом, сторож сервисов раз в 2 минуты</span></li>
     <li><span class="st todo">·</span><span class="t">Нагрузочный тест: сколько людей одновременно держит бокс</span></li>
     <li><span class="st todo">·</span><span class="t">Память каждого сервиса под нагрузкой</span></li>
+    <li><span class="st todo">·</span><span class="t">Веб-админка держит 80 МБ постоянно — запускать по требованию</span></li>
     <li><span class="st todo">·</span><span class="t">Антифлуд вживую (20 нажатий в секунду)</span></li>
   </ul>
 </section>
